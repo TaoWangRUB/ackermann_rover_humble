@@ -1,0 +1,29 @@
+# Define documentation team tokens and membership.
+# Use these tokens in OWNERS.yaml and frontmatter `owner` fields.
+# Replace members with actual names/emails/GitHub handles.
+
+teams:
+  architecture_team:
+    description: Owns architecture diagrams and interface docs
+    members:
+      - REPLACE_MEMBER
+  requirements_team:
+    description: Owns system/performance/safety requirements and verification
+    members:
+      - REPLACE_MEMBER
+  decisions_team:
+    description: Owns ADRs and design decision records
+    members:
+      - REPLACE_MEMBER
+  system_team:
+    description: Owns project context, assumptions, and constraints
+    members:
+      - REPLACE_MEMBER
+  prompts_team:
+    description: Owns AI workflow prompts and automation guidelines
+    members:
+      - REPLACE_MEMBER
+  software_team:
+    description: General software implementation team; use as fallback owner
+    members:
+      - REPLACE_MEMBER

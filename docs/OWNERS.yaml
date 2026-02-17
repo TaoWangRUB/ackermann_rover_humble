@@ -1,0 +1,46 @@
+# Assign doc owners by category or file.
+# Owner values should match team tokens defined in TEAMS.yaml (e.g., architecture_team).
+# Used by humans and automation to keep frontmatter owners in sync.
+
+architecture:
+  owner: architecture_team
+  agent: Copilot
+  files:
+    - architecture/overview.md
+    - architecture/node_graph.md
+    - architecture/interfaces.md
+    - architecture/failure_modes.md
+
+requirements:
+  owner: requirements_team
+  agent: Copilot
+  files:
+    - requirements/system.md
+    - requirements/performance.md
+    - requirements/safety.md
+
+decisions:
+  owner: decisions_team
+  agent: Copilot
+  files:
+    - decisions/ADR-001-ackermann.md
+    - decisions/ADR-002-nav2.md
+    - decisions/ADR-003-safety.md
+
+context:
+  owner: system_team
+  agent: Copilot
+  files:
+    - context/project_context.md
+    - context/assumptions.md
+    - context/constraints.md
+
+prompts:
+  owner: prompts_team
+  agent: Copilot
+  files:
+    - prompts/developer.md
+    - prompts/planner.md
+    - prompts/reviewer.md
+    - prompts/safety.md
+    - prompts/system.md
