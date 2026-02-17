@@ -26,7 +26,7 @@ jobs:
       - name: Run cpplint (ament)
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           source /opt/ros/humble/setup.bash
           ament_cpplint src/ackermann_control src/safety
 
