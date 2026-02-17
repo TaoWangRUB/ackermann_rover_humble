@@ -1,0 +1,3 @@
+# Git ignore rules for this repository
+# Ignore Windows alternate data stream Zone.Identifier files
+*:Zone.Identifier
