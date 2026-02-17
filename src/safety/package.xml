@@ -1,1 +1,12 @@
-<package format="3"><name>safety</name></package>
+<?xml version="1.0"?>
+<package format="3">
+	<name>safety</name>
+	<version>0.1.0</version>
+	<description>Safety watchdog for Ackermann rover</description>
+	<maintainer email="dev@example.com">Dev</maintainer>
+	<license>Apache-2.0</license>
+	<buildtool_depend>ament_cmake</buildtool_depend>
+	<depend>rclcpp</depend>
+	<depend>std_msgs</depend>
+	<depend>ackermann_msgs</depend>
+</package>
