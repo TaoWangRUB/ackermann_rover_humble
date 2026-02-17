@@ -26,10 +26,16 @@ md_links_check() {
 		while IFS= read -r link; do
 			# Extract path inside ](path)
 			path=$(echo "$link" | sed -n 's/.*](\(.*\)).*/\1/p')
-			# Only check relative repo paths
-			if [[ "$path" == ../* || "$path" == ../../* ]]; then
-				# Normalize to repo root
-				norm="$ROOT_DIR/${path#../}"
+			# Only check relative repo paths (starts with ./ or ../)
+			if [[ "$path" == ../* || "$path" == ./* ]]; then
+				norm=$(python3 - <<'PY' "$file" "$path"
+import os, sys
+file_path, rel = sys.argv[1:3]
+base = os.path.dirname(file_path)
+abs_path = os.path.normpath(os.path.join(base, rel))
+print(abs_path)
+PY
+)
 				if [[ ! -e "$norm" ]]; then
 					echo "- Broken link in ${file#$ROOT_DIR/}: $path" >> "$REPORT"
 					issues=$((issues+1))

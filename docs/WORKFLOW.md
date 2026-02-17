@@ -29,6 +29,14 @@ colcon test --event-handlers console_direct+ --packages-select ackermann_control
 colcon test-result --verbose
 ```
 
+> Tip: `scripts/ai/run_developer.sh` summarizes requirements and checklists but intentionally does not run these commands. Always execute the build/test sequence yourself (or via CI automation) before moving on.
+
+Shortcut: use [scripts/ai/run_tests.sh](../scripts/ai/run_tests.sh) to run the same sequence:
+
+```bash
+bash scripts/ai/run_tests.sh
+```
+
 ## 4) Update Docs
 - For changed behavior or interfaces, update architecture pages and requirements traceability.
 - Ensure links to code/config are correct.
