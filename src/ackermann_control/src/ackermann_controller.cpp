@@ -1,3 +1,6 @@
+// Copyright 2026 The Ackermann Rover Authors
+// SPDX-License-Identifier: Apache-2.0
+
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <ackermann_msgs/msg/ackermann_drive_stamped.hpp>
@@ -11,15 +14,20 @@ public:
     wheelbase_ = this->declare_parameter<double>("wheelbase", 0.32);
     max_steering_angle_ = this->declare_parameter<double>("max_steering_angle", 0.45);
     max_speed_ = this->declare_parameter<double>("max_speed", 2.0);
-    input_cmd_vel_topic_ = this->declare_parameter<std::string>("input_cmd_vel_topic", "/cmd_vel");
-    output_ackermann_topic_ = this->declare_parameter<std::string>("output_ackermann_topic", "/cmd_ackermann");
+    input_cmd_vel_topic_ = this->declare_parameter<std::string>(
+      "input_cmd_vel_topic", "/cmd_vel");
+    output_ackermann_topic_ = this->declare_parameter<std::string>(
+      "output_ackermann_topic", "/cmd_ackermann");
 
-    pub_ = this->create_publisher<ackermann_msgs::msg::AckermannDriveStamped>(output_ackermann_topic_, 10);
+    pub_ = this->create_publisher<ackermann_msgs::msg::AckermannDriveStamped>(
+      output_ackermann_topic_, 10);
     sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
       input_cmd_vel_topic_, 10,
       std::bind(&AckermannControllerNode::onTwist, this, std::placeholders::_1));
 
-    RCLCPP_INFO(get_logger(), "Ackermann controller started: wheelbase=%.3f, max_steering=%.3f, max_speed=%.3f",
+    RCLCPP_INFO(
+      get_logger(),
+      "Ackermann controller started: wheelbase=%.3f, max_steering=%.3f, max_speed=%.3f",
       wheelbase_, max_steering_angle_, max_speed_);
   }
 
@@ -35,7 +43,7 @@ private:
 
     double steering_angle = 0.0;
     if (std::abs(v) > 1e-3) {
-      double curvature = yaw_rate / v; // kappa = omega / v
+      double curvature = yaw_rate / v;  // kappa = omega / v
       steering_angle = std::atan(wheelbase_ * curvature);
     }
     // Clamp steering
