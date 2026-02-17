@@ -52,3 +52,7 @@ colcon build --symlink-install
 colcon test --event-handlers console_direct+ --packages-select ackermann_control safety
 colcon test-result --verbose
 ```
+
+Shortcut: `bash scripts/ai/run_tests.sh`
+
+Note: `scripts/ai/run_developer.sh` provides planning guidance only; it does not invoke these commands. Run them manually (or via your preferred automation) before committing.

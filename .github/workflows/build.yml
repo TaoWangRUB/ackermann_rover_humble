@@ -1,8 +1,68 @@
 name: build
-on: [push, pull_request]
+
+on:
+  push:
+  pull_request:
+
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
-      - run: echo Build placeholder
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup ROS 2 Humble
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+
+      - name: Install lint dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y python3-ament-lint cppcheck
+
+      - name: Run cpplint (ament)
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/ros/humble/setup.bash
+          ament_cpplint src/ackermann_control src/safety
+
+      - name: Run cppcheck static analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          cppcheck --enable=warning,performance,style --std=c++17 --error-exitcode=1 \
+            src/ackermann_control/src \
+            src/safety/src
+
+  build:
+    runs-on: ubuntu-22.04
+    needs: lint
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup ROS 2 Humble
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: humble
+
+      - name: Install package dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          rosdep update
+          rosdep install --from-paths src --ignore-src --rosdistro humble -y
+
+      - name: Build and test
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/ros/humble/setup.bash
+          colcon build --symlink-install
+          colcon test --event-handlers console_direct+ --packages-select ackermann_control safety
+          colcon test-result --verbose
