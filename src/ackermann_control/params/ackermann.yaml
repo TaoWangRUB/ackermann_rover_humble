@@ -1,0 +1,5 @@
+ackermann_controller:
+  ros__parameters:
+    wheelbase: 0.32
+    max_steering_angle: 0.45
+    max_speed: 2.0
