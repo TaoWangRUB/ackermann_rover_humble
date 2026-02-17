@@ -12,4 +12,5 @@ ament_target_dependencies(ackermann_controller
   rclcpp rclcpp_lifecycle geometry_msgs ackermann_msgs)
 
 install(TARGETS ackermann_controller DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch params DESTINATION share/${PROJECT_NAME})
 ament_package()
