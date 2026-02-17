@@ -1,0 +1,1 @@
+Defined degraded behaviors.
