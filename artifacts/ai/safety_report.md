@@ -2,8 +2,6 @@
 Prompt: docs/prompts/safety.md
 Role: Safety Reviewer
 Assigned To: Copilot
-Due Date: 2026-02-26
-Tracking Issue: #44
 
 ## Requirements
 - S1: Vehicle shall stop on fault.

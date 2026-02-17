@@ -1,3 +1,11 @@
 # Git ignore rules for this repository
 # Ignore Windows alternate data stream Zone.Identifier files
 *:Zone.Identifier
+
+# ROS 2 build artifacts
+build/
+install/
+log/
+
+# Colcon metadata
+.colcon/
