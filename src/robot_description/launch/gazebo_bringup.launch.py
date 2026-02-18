@@ -80,6 +80,20 @@ def generate_launch_description() -> LaunchDescription:
     )
     set_gz_resource_path = SetEnvironmentVariable(name='GZ_SIM_RESOURCE_PATH', value=combined_resource_path)
 
+    # Joint state publisher ensures TF tree stays populated even before Gazebo starts
+    joint_state_publisher = Node(
+        package='joint_state_publisher',
+        executable='joint_state_publisher',
+        namespace=namespace,
+        output='screen',
+        parameters=[
+            {
+                'robot_description': robot_description_config,
+                'use_sim_time': use_sim_time,
+            }
+        ],
+    )
+
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -91,6 +105,25 @@ def generate_launch_description() -> LaunchDescription:
                 'use_sim_time': use_sim_time,
             }
         ],
+    )
+
+    # Bridge Gazebo Transport topics to ROS 2 so RTAB-Map can consume them
+    bridge_topics = [
+        '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
+        '/ackmann/depth_camera/image@sensor_msgs/msg/Image[gz.msgs.Image',
+        '/ackmann/depth_camera/depth_image@sensor_msgs/msg/Image[gz.msgs.Image',
+        '/ackmann/depth_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+        '/l515/imu/raw@sensor_msgs/msg/Imu[gz.msgs.IMU',
+        '/rplidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+        '/ackmann/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+    ]
+
+    parameter_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=bridge_topics,
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
     )
 
     gazebo = IncludeLaunchDescription(
@@ -131,7 +164,9 @@ def generate_launch_description() -> LaunchDescription:
             set_ign_resource_path,
             set_gz_resource_path,
             gazebo,
+            joint_state_publisher,
             robot_state_publisher,
+            parameter_bridge,
             spawn_entity,
         ]
     )
