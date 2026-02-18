@@ -3,7 +3,7 @@ title: Architecture Overview
 status: Draft
 owner: architecture_team
 agent: Copilot
-last_updated: 2026-02-17
+last_updated: 2026-02-18
 doc_type: architecture
 ros_distro: humble
 ---
@@ -11,35 +11,43 @@ ros_distro: humble
 
 Autonomous Ackermann rover with UAV-grade autonomy stack. Primary workflow:
 
-1. **Simulation-first**: Gazebo world publishes ground-truth pose plus virtual camera, GPS, and IMU feeds. Vehicle software validates behaviors in simulation before hardware.
-2. **Perception & Localization**: RTAB-Map performs visual-inertial odometry (VIO) and loop-closure SLAM using camera + IMU + (optionally) simulated GPS for global alignment.
-3. **Planning & Control**: Nav2 planners consume RTAB-Map localization and map layers to generate paths from point A→B. Ackermann controller converts twist commands to steering/speed profiles.
-4. **Vehicle Interface**: Custom DDS bridge (px4-offboard) relays high-level velocity/attitude commands to PX4 firmware, which enforces safety limits and actuates the rover drivetrain.
+1. **Simulation-first**: `robot_bringup.launch.py` boots Gazebo via `robot_description` and keeps ROS ↔ Gazebo resources discoverable through `GZ_SIM_RESOURCE_PATH`. The ros_gz parameter bridge exports depth camera, IMU, LiDAR, odometry, and `/clock` directly into ROS 2 topics the rest of the stack consumes.
+2. **Perception & Localization**: `rtabmap_bringup` orchestrates RGB-D synchronization, IMU preprocessing, VIO/ICP odometry, robot_localization fusion, and RTAB-Map SLAM or localization-only mode. Outputs include TF (`map`→`odom`→`ackmann/base_footprint`), `/rtabmap/odom`, `/odometry/filtered`, and map data for Nav2.
+3. **Planning & Control**: Nav2 planners consume RTAB-Map localization and costmaps to generate `/cmd_vel` (aliased to `/cmd_vel_nav`). The Ackermann controller converts twist commands to steering/speed profiles on `/cmd_ackermann`.
+4. **Vehicle Interface**: The px4-offboard DDS bridge relays high-level Ackermann commands to PX4 (SITL or hardware), enforces heartbeat-based failsafes, and reports telemetry the watchdog consumes.
 
 ## Core Subsystems
 
 | Layer | Responsibilities | Key Nodes/Tools |
 | --- | --- | --- |
-| Simulation Inputs | Synthetic sensors, environment | Gazebo, sensor plugins, map assets |
-| Localization & Mapping | VIO, SLAM, TF publishing | RTAB-Map, TF tree manager |
-| Navigation & Control | Global + local planners, Ackermann control | Nav2 stack, ackermann_control package |
-| Vehicle Interface | Command translation to PX4 | px4-offboard DDS bridge, PX4 autopilot |
+| Simulation & Bridge | Gazebo physics, sensor plugins, ros_gz parameter bridge, TF priming | `gazebo_bringup.launch.py`, ros_gz_sim, ros_gz_bridge, joint_state_publisher, robot_state_publisher |
+| Sensor Conditioning | Sync RGB-D, convert depth→scan, align IMU frames, filter IMU | `rgbd_sync`, `depthimage_to_laserscan`, `imu_transformer`, `imu_filter_madgwick` |
+| Localization & Mapping | VIO/ICP odom, EKF fusion, loop-closure SLAM, TF publishing | `rtabmap_odom`, `robot_localization`, `rtabmap_slam`, `rtabmap_viz` |
+| Navigation & Control | Global + local planners, Ackermann conversion | Nav2 stack, `ackermann_control` package |
+| Safety & Vehicle Interface | Command gating, DDS bridge to PX4, telemetry | Safety watchdog, `px4-offboard` DDS bridge, PX4 firmware |
 
 ## Data Flow Summary
 
-- Gazebo → `/camera/*`, `/imu/data`, `/gps/fix`, `/ground_truth/pose`.
-- Sensor bridge nodes republish to RTAB-Map in ROS 2 friendly QoS.
-- RTAB-Map outputs `/rtabmap/odom`, `/rtabmap/mapData`, TF frames (`map`, `odom`, `base_link`).
-- Nav2 consumes RTAB-Map odometry and costmaps to output `/cmd_vel_nav`.
-- Ackermann controller converts `/cmd_vel_nav` to `/cmd_ackermann` (speed + steering).
-- px4-offboard DDS bridge reads `/cmd_ackermann`, packages setpoints for PX4 over custom DDS topics.
-- PX4 status (heartbeat, actuator feedback) loops back via DDS for health monitoring.
+- ros_gz parameter bridge exports `/ackmann/depth_camera/image`, `/ackmann/depth_camera/depth_image`, `/ackmann/depth_camera/camera_info`, `/l515/imu/raw`, `/rplidar/scan`, `/ackmann/odom`, and `/clock` into ROS 2.
+- `rgbd_sync` aligns the RGB-D stream, and `depthimage_to_laserscan` produces `/scan` so RTAB-Map can switch between vision or ICP pipelines.
+- `imu_transformer` re-frames `/l515/imu/raw` into `ackmann/base_footprint`, while `imu_filter_madgwick` provides `/imu/data` for EKF fusion.
+- `rtabmap_odom` (RGB-D or ICP) publishes `/vo_odom` or `/icp_odom`; `robot_localization` fuses them into `/odometry/filtered`, and RTAB-Map SLAM emits `/rtabmap/odom`, `/rtabmap/mapData`, and TF.
+- Nav2 consumes `/tf`, `/odometry/filtered`, and the map topics to produce `/cmd_vel` (namespaced `/cmd_vel_nav`).
+- `ackermann_control` maps `/cmd_vel_nav` to `/cmd_ackermann`, which the px4-offboard DDS bridge translates to PX4 setpoints and relays telemetry (`/px4/status`, `/px4/actuator_feedback`).
+- Safety watchdog subscribes to PX4 telemetry and RTAB-Map health to assert `/safety/fault`, forcing zero-speed commands when set.
 
 ## Simulation → Hardware Parity
 
-- **Sensors**: Gazebo plugins mimic VIO sensors; hardware swaps in real camera + IMU via same topics.
-- **Localization**: RTAB-Map configuration shared between sim and field, with parameter overrides for lens, IMU bias, etc.
-- **Vehicle Interface**: DDS bridge targets PX4 SITL in Gazebo initially, then PX4 hardware by switching DDS endpoints.
-- **Safety**: Watchdog monitors PX4 status topics; on anomalies, Ackermann controller drops to zero-speed command.
+- **Sensors**: Gazebo depth camera + IMU + LiDAR topics mirror hardware drivers. Swapping to real sensors preserves the `/ackmann/*`, `/l515/imu/raw`, and `/scan` contracts so RTAB-Map continues to function.
+- **Localization**: `rtabmap_bringup` exposes parameters for localization-only vs SLAM mode, RGB-D vs ICP odometry, and EKF tuning. Field deployments reuse the same launch with overrides for camera intrinsics, IMU bias, and scan settings.
+- **Vehicle Interface**: The DDS bridge hosts SITL endpoints by default; deploying to hardware updates `dds_domain_id` and transport endpoints only. `/cmd_ackermann` remains the canonical control contract.
+- **Safety**: Watchdog monitors `/px4/status` plus EKF/RTAB-Map diagnostics. Any stale heartbeat or low-confidence localization toggles `/safety/fault`, which `ackermann_control` currently interprets by halting the vehicle (future: gating before px4-offboard).
+
+## Gazebo ↔ RTAB-Map Integration
+
+- `robot_bringup.launch.py` composes `gazebo_bringup` and `rtabmap_slam.launch.py`, ensuring shared launch arguments (`use_sim_time`, pose, namespace) stay consistent across subsystems.
+- The ros_gz parameter bridge topics feed directly into the remaps defined inside `rtabmap_bringup`, so no intermediate republishers are required. Topic names intentionally follow the `ackmann/*` prefix to minimize collisions in multi-robot scenarios.
+- State estimation runs in three tiers: raw VIO/ICP odom, EKF-smoothed `/odometry/filtered`, and RTAB-Map's global map frame. Nav2 and downstream planners consume `/odometry/filtered` plus the RTAB-Map map server outputs.
+- Interfaces to Nav2, safety watchdog, and px4-offboard are now centralized in documentation tables below to keep integrators aligned when topics or QoS policies change.
 
 This overview drives the detailed node graph, interface contracts, and failure mode definitions in the following documents.
