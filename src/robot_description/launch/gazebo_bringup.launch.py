@@ -41,8 +41,10 @@ def generate_launch_description() -> LaunchDescription:
     gz_args = LaunchConfiguration('gz_args')
 
     resource_roots = [
+        os.path.dirname(pkg_share),  # .../share
         pkg_share,
         os.path.join(pkg_share, 'models'),
+        os.path.dirname(realsense_share),
         realsense_share,
     ]
     existing_resource_entries = [
