@@ -6,6 +6,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, TextSubstitution
 
@@ -54,6 +55,43 @@ ARGUMENTS = [
         choices=['true', 'false'],
         description='Start rtabmap_viz for monitoring.'
     ),
+    DeclareLaunchArgument(
+        'nav2',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Launch the Nav2 stack once localization is running.'
+    ),
+    DeclareLaunchArgument(
+        'nav2_params_file',
+        default_value=TextSubstitution(
+            text=os.path.join(
+                get_package_share_directory('nav2_bringup'), 'config', 'nav2_ackermann.yaml'
+            )
+        ),
+        description='Parameter file used to configure Nav2 components.'
+    ),
+    DeclareLaunchArgument(
+        'nav2_bt_xml',
+        default_value=TextSubstitution(
+            text=os.path.join(
+                get_package_share_directory('nav2_bt_navigator'),
+                'behavior_trees',
+                'navigate_w_replanning_and_recovery.xml'
+            )
+        ),
+        description='Behavior Tree XML file for NavigateToPose.'
+    ),
+    DeclareLaunchArgument(
+        'nav2_through_poses_bt',
+        default_value=TextSubstitution(
+            text=os.path.join(
+                get_package_share_directory('nav2_bt_navigator'),
+                'behavior_trees',
+                'navigate_through_poses_w_replanning_and_recovery.xml'
+            )
+        ),
+        description='Behavior Tree XML file for NavigateThroughPoses.'
+    ),
 ]
 
 
@@ -68,9 +106,14 @@ def generate_launch_description() -> LaunchDescription:
     vision = LaunchConfiguration('vision')
     localization = LaunchConfiguration('localization')
     rtabmap_viz = LaunchConfiguration('rtabmap_viz')
+    nav2_enable = LaunchConfiguration('nav2')
+    nav2_params_file = LaunchConfiguration('nav2_params_file')
+    nav2_bt_xml = LaunchConfiguration('nav2_bt_xml')
+    nav2_through_bt = LaunchConfiguration('nav2_through_poses_bt')
 
     robot_description_share = get_package_share_directory('robot_description')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
+    nav2_bringup_share = get_package_share_directory('nav2_bringup')
 
     gazebo_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -99,8 +142,21 @@ def generate_launch_description() -> LaunchDescription:
         }.items()
     )
 
+    nav2_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(nav2_bringup_share, 'launch', 'nav2_bringup.launch.py')
+        ),
+        condition=IfCondition(nav2_enable),
+        launch_arguments={
+            'params_file': nav2_params_file,
+            'bt_xml': nav2_bt_xml,
+            'navigate_through_poses_bt': nav2_through_bt,
+        }.items()
+    )
+
     ld = LaunchDescription(ARGUMENTS)
     ld.add_action(gazebo_launch)
     ld.add_action(rtabmap_launch)
+    ld.add_action(nav2_launch)
 
     return ld
