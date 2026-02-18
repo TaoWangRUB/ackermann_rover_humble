@@ -61,7 +61,7 @@ jobs:
       - name: Build and test
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           source /opt/ros/humble/setup.bash
           colcon build --symlink-install
           colcon test --event-handlers console_direct+ --packages-select ackermann_control safety
