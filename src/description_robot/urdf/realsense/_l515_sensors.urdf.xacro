@@ -71,7 +71,7 @@
       <update_rate>${gyro_fps}</update_rate>
       <visualize>false</visualize>
       <topic>/${name}/imu/raw</topic>
-      <ignition_frame_id>${name}_imu_optical_frame</ignition_frame_id>
+      <gz_frame_id>${name}_imu_optical_frame</gz_frame_id>
       <imu>
           <angular_velocity>
           <x>true</x>
