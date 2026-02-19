@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
-<robot name="ackmann" xmlns:xacro="http://ros.org/wiki/xacro"> 
-  <xacro:include filename="$(find robot_description)/urdf/common_properties.urdf.xacro" />
-  <xacro:include filename="$(find robot_description)/urdf/sensors/rplidar.urdf.xacro" />
+<robot name="ackermann" xmlns:xacro="http://ros.org/wiki/xacro"> 
+  <xacro:include filename="$(find description_robot)/urdf/common_properties.urdf.xacro" />
+  <xacro:include filename="$(find description_robot)/urdf/sensors/rplidar.urdf.xacro" />
 
   <xacro:property name="package_name" value="rebot_description"/>
   <xacro:property name="PI" value="3.14159265"/>
@@ -23,7 +23,7 @@
   <xacro:property name="rplidar_z_offset" value="${22*cm2m}"/>
 
   <xacro:arg name="base_color"    default="1.0 0.0 0.0 1.0"/>
-  <xacro:arg name="ns"    default="ackmann"/>
+  <xacro:arg name="ns"    default="ackermann"/>
   
   <!-- Custom color (for Gz and RViz) -->
   <material name="gray">
@@ -66,7 +66,7 @@
     <visual>
       <origin xyz=".1371 0 -.0115" rpy="0 0 ${PI/2}"/>
       <geometry>
-        <mesh filename="package://robot_description/models/donkey/meshes/BaseReduced.dae" scale="1 1 1"/>
+        <mesh filename="package://description_robot/models/donkey/meshes/BaseReduced.dae" scale="1 1 1"/>
       </geometry>
       <material name="base_color"> <!-- Color in IGN and Rviz2 (inside visual tag) -->
         <color rgba="$(arg base_color)"/>
@@ -126,7 +126,7 @@
       <visual name="donkey_front_left_wheel_visual">
         <origin xyz="0 0 0" rpy="0 0 ${PI}"/>
         <geometry>
-          <mesh filename="package://robot_description/models/donkey/meshes/Wheel.dae"/>
+          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae"/>
         </geometry>
       </visual>
       <collision name="front_left_wheel_collision">
@@ -183,7 +183,7 @@
       <visual name="donkey_front_right_wheel_visual">
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="package://robot_description/models/donkey/meshes/Wheel.dae"/>
+          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae"/>
         </geometry>
       </visual>
       <collision name="front_right_wheel_collision">
@@ -223,7 +223,7 @@
       <visual name="donkey_rear_left_wheel_visual">
         <origin xyz="0 0 0" rpy="0 0 ${PI}"/>
         <geometry>
-          <mesh filename="package://robot_description/models/donkey/meshes/Wheel.dae"/>
+          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae"/>
         </geometry>
       </visual>
       <collision name="rear_left_wheel_collision">
@@ -263,7 +263,7 @@
       <visual name="donkey_rear_right_wheel_visual">
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="package://robot_description/models/donkey/meshes/Wheel.dae"/>
+          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae"/>
         </geometry>
       </visual>
       <collision name="rear_right_wheel_collision">
@@ -323,12 +323,12 @@
   <xacro:property name="d435_name" value="d435i" />
   <xacro:property name="l515_name" value="l515" />
 
-  <xacro:include filename="$(find robot_description)/urdf/realsense/_d435i.urdf.xacro"/>
+  <xacro:include filename="$(find description_robot)/urdf/realsense/_d435i.urdf.xacro"/>
   <xacro:sensor_d435i name="${d435_name}" parent="$(arg ns)/base_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)">
     <origin xyz="${d435i_x_offset} 0 ${d435i_z_offset}" rpy="0 0 0"/>
   </xacro:sensor_d435i>
 
-  <xacro:include filename="$(find robot_description)/urdf/realsense/_l515.urdf.xacro" />
+  <xacro:include filename="$(find description_robot)/urdf/realsense/_l515.urdf.xacro" />
   <xacro:sensor_l515 name="${l515_name}" parent="$(arg ns)/base_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)" add_plug="$(arg add_plug)" use_mesh="$(arg use_mesh)">
     <origin xyz="${l515_x_offset} 0 ${l515_z_offset}" rpy="0 0 0"/>
   </xacro:sensor_l515>
@@ -461,6 +461,10 @@
       <odom_topic>encoder</odom_topic>
     </plugin> -->
 
+    <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(find description_robot)/config/ackermann_controller.yaml</parameters>
+    </plugin>
+    
     <!-- World odometry plugin (by default, odometry topic is used) -->
     <plugin filename="ignition-gazebo-odometry-publisher-system" name="ignition::gazebo::systems::OdometryPublisher">
       <dimensions>3</dimensions>

@@ -11,7 +11,7 @@
   <depend>launch</depend>
   <depend>launch_ros</depend>
 
-  <exec_depend>robot_description</exec_depend>
+  <exec_depend>description_robot</exec_depend>
   <exec_depend>rtabmap_bringup</exec_depend>
 
   <export>

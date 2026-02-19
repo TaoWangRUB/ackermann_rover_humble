@@ -11,15 +11,19 @@ from launch.actions import (
     ExecuteProcess,
     IncludeLaunchDescription,
     SetEnvironmentVariable,
+    RegisterEventHandler,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, TextSubstitution
+from launch.substitutions import LaunchConfiguration, TextSubstitution, PathJoinSubstitution
 from launch_ros.actions import Node
+
+from launch.event_handlers import OnProcessExit
+
 import xacro
 
 
 def generate_launch_description() -> LaunchDescription:
-    pkg_share = get_package_share_directory('robot_description')
+    pkg_share = get_package_share_directory('description_robot')
     gz_share = get_package_share_directory('ros_gz_sim')
     realsense_share = get_package_share_directory('realsense2_description')
     default_world = os.path.join(pkg_share, 'worlds', 'warehouse.sdf')
@@ -65,7 +69,7 @@ def generate_launch_description() -> LaunchDescription:
         description='Arguments forwarded to gz sim (e.g. "-v 4 -r my.world").',
     )
     declare_robot_name = DeclareLaunchArgument(
-        'robot_name', default_value='ackmann', description='Entity name for the spawned robot.'
+        'robot_name', default_value='ackermann', description='Entity name for the spawned robot.'
     )
     declare_namespace = DeclareLaunchArgument(
         'namespace', default_value='', description='Optional ROS namespace for spawned nodes.'
@@ -80,20 +84,6 @@ def generate_launch_description() -> LaunchDescription:
     )
     set_gz_resource_path = SetEnvironmentVariable(name='GZ_SIM_RESOURCE_PATH', value=combined_resource_path)
 
-    # Joint state publisher ensures TF tree stays populated even before Gazebo starts
-    joint_state_publisher = Node(
-        package='joint_state_publisher',
-        executable='joint_state_publisher',
-        namespace=namespace,
-        output='screen',
-        parameters=[
-            {
-                'robot_description': robot_description_config,
-                'use_sim_time': use_sim_time,
-            }
-        ],
-    )
-
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -107,15 +97,35 @@ def generate_launch_description() -> LaunchDescription:
         ],
     )
 
+    # Joint state publisher ensures TF tree stays populated even before Gazebo starts
+    # when ros2_control is used then joint states are published by the controller, 
+    # so this is not strictly necessary, but it can help with early visualization and 
+    # debugging before the controllers are up
+    joint_state_publisher = Node(
+        package='joint_state_publisher',
+        executable='joint_state_publisher',
+        namespace=namespace,
+        output='screen',
+        parameters=[
+            {
+                'robot_description': robot_description_config,
+                'use_sim_time': use_sim_time,
+            }
+        ],
+    )
+
+
     # Bridge Gazebo Transport topics to ROS 2 so RTAB-Map can consume them
     bridge_topics = [
         '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
-        '/ackmann/depth_camera/image@sensor_msgs/msg/Image[gz.msgs.Image',
-        '/ackmann/depth_camera/depth_image@sensor_msgs/msg/Image[gz.msgs.Image',
-        '/ackmann/depth_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+        '/ackermann/depth_camera/image@sensor_msgs/msg/Image[gz.msgs.Image',
+        '/ackermann/depth_camera/depth_image@sensor_msgs/msg/Image[gz.msgs.Image',
+        '/ackermann/depth_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
         '/l515/imu/raw@sensor_msgs/msg/Imu[gz.msgs.IMU',
         '/rplidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
-        '/ackmann/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+        '/ackermann/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+        # only need when the bildin ackermann controller is used, otherwise the ros2_controller can send directly from Gazebo topics
+        #'/ackermann/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
     ]
 
     parameter_bridge = Node(
@@ -131,26 +141,33 @@ def generate_launch_description() -> LaunchDescription:
         launch_arguments={'gz_args': gz_args}.items(),
     )
 
-    spawn_entity = ExecuteProcess(
-        cmd=[
-            'ros2',
-            'run',
-            'ros_gz_sim',
-            'create',
-            '-entity',
-            robot_name,
-            '-file',
-            robot_urdf_path,
-            '-x',
-            x_pos,
-            '-y',
-            y_pos,
-            '-z',
-            z_pos,
+    spawn_entity = Node(
+        package='ros_gz_sim',
+        executable='create',
+        arguments=[
+            '-topic', 'robot_description',
+            '-x', x_pos,
+            '-y', y_pos,
+            '-z', z_pos,
         ],
         output='screen',
     )
-
+    
+    
+    ros2_controller = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_share, 'launch', 'controller_bringup.launch.py')),
+        launch_arguments=[
+            ('namespace', namespace),
+        ]
+    ) 
+    ros2_controller_callback = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=spawn_entity,
+            on_exit=[ros2_controller],
+        )
+    )
+    
     return LaunchDescription(
         [
             declare_use_sim_time,
@@ -163,10 +180,11 @@ def generate_launch_description() -> LaunchDescription:
             set_model_path,
             set_ign_resource_path,
             set_gz_resource_path,
-            gazebo,
-            joint_state_publisher,
-            robot_state_publisher,
             parameter_bridge,
+            gazebo,
             spawn_entity,
+            #joint_state_publisher,
+            robot_state_publisher,
+            ros2_controller_callback,
         ]
     )

@@ -20,13 +20,13 @@ ARGUMENTS = [
     DeclareLaunchArgument(
         'gazebo_args',
         default_value=TextSubstitution(
-            text=f"-r {os.path.join(get_package_share_directory('robot_description'), 'worlds', 'warehouse.sdf')}"
+            text=f"-r {os.path.join(get_package_share_directory('description_robot'), 'worlds', 'warehouse.sdf')}"
         ),
         description='Arguments passed to gz sim (e.g., "-v 4 -r custom.world").'
     ),
     DeclareLaunchArgument(
         'robot_name',
-        default_value='ackmann',
+            default_value='ackermann',
         description='Name of the Gazebo entity and TF prefix.'
     ),
     DeclareLaunchArgument(
@@ -48,6 +48,12 @@ ARGUMENTS = [
         default_value='false',
         choices=['true', 'false'],
         description='Launch RTAB-Map in localization-only mode.'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Launch RTAB-Map once Gazebo is running.'
     ),
     DeclareLaunchArgument(
         'rtabmap_viz',
@@ -105,13 +111,14 @@ def generate_launch_description() -> LaunchDescription:
     z_pos = LaunchConfiguration('z')
     vision = LaunchConfiguration('vision')
     localization = LaunchConfiguration('localization')
+    rtabmap_enable = LaunchConfiguration('rtabmap')
     rtabmap_viz = LaunchConfiguration('rtabmap_viz')
     nav2_enable = LaunchConfiguration('nav2')
     nav2_params_file = LaunchConfiguration('nav2_params_file')
     nav2_bt_xml = LaunchConfiguration('nav2_bt_xml')
     nav2_through_bt = LaunchConfiguration('nav2_through_poses_bt')
 
-    robot_description_share = get_package_share_directory('robot_description')
+    robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
     nav2_bringup_share = get_package_share_directory('nav2_bringup')
 
@@ -134,6 +141,7 @@ def generate_launch_description() -> LaunchDescription:
         PythonLaunchDescriptionSource(
             os.path.join(rtabmap_bringup_share, 'launch', 'rtabmap_slam.launch.py')
         ),
+        condition=IfCondition(rtabmap_enable),
         launch_arguments={
             'use_sim_time': use_sim_time,
             'vision': vision,

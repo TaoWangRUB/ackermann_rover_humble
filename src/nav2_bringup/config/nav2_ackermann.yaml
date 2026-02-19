@@ -79,7 +79,7 @@ bt_navigator:
   ros__parameters:
     use_sim_time: true
     global_frame: map
-    robot_base_frame: ackmann/base_footprint
+    robot_base_frame: ackermann/base_footprint
     odom_topic: /odometry/filtered
     transform_tolerance: 0.2
     default_bt_xml_filename: "navigate_w_replanning_and_recovery.xml"
@@ -118,7 +118,7 @@ local_costmap:
     ros__parameters:
       use_sim_time: true
       global_frame: odom
-      robot_base_frame: ackmann/base_footprint
+      robot_base_frame: ackermann/base_footprint
       update_frequency: 10.0
       publish_frequency: 10.0
       transform_tolerance: 0.2
@@ -157,7 +157,7 @@ global_costmap:
     ros__parameters:
       use_sim_time: true
       global_frame: map
-      robot_base_frame: ackmann/base_footprint
+      robot_base_frame: ackermann/base_footprint
       update_frequency: 2.0
       publish_frequency: 1.0
       transform_tolerance: 0.5

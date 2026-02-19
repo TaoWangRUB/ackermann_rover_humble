@@ -51,7 +51,7 @@ def generate_launch_description() -> LaunchDescription:
     ])
 
     rtabmap_parameters = {
-        'frame_id': 'ackmann/base_footprint',
+        'frame_id': 'ackermann/base_footprint',
         'subscribe_rgbd': True,
         'subscribe_scan': subscribe_scan,
         'use_action_for_goal': True,
@@ -65,7 +65,7 @@ def generate_launch_description() -> LaunchDescription:
     }
 
     shared_parameters = {
-        'frame_id': 'ackmann/base_footprint',
+        'frame_id': 'ackermann/base_footprint',
         'use_sim_time': use_sim_time,
         'Reg/Strategy': '1',
         'Reg/Force3DoF': 'true',
@@ -77,10 +77,10 @@ def generate_launch_description() -> LaunchDescription:
         ('scan', scan_topic),
         ('odom', odom_topic),
         ('imu', '/imu/data'),
-        ('rgb/image', '/ackmann/depth_camera/image'),
-        ('rgb/camera_info', '/ackmann/depth_camera/camera_info'),
-        ('depth/image', '/ackmann/depth_camera/depth_image'),
-        ('depth/camera_info', '/ackmann/depth_camera/camera_info'),
+        ('rgb/image', '/ackermann/depth_camera/image'),
+        ('rgb/camera_info', '/ackermann/depth_camera/camera_info'),
+        ('depth/image', '/ackermann/depth_camera/depth_image'),
+        ('depth/camera_info', '/ackermann/depth_camera/camera_info'),
     ]
 
     rgbd_sync = Node(
@@ -100,7 +100,7 @@ def generate_launch_description() -> LaunchDescription:
         package='imu_transformer',
         executable='imu_transformer_node',
         parameters=[{
-            'target_frame': 'ackmann/base_footprint',
+            'target_frame': 'ackermann/base_footprint',
             'use_sim_time': use_sim_time,
         }],
         remappings=[
@@ -122,7 +122,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     visual_odom_parameters = {
-        'frame_id': 'ackmann/base_footprint',
+        'frame_id': 'ackermann/base_footprint',
         'odom_frame_id': 'odom',
         'publish_tf': False,
         'use_sim_time': use_sim_time,
@@ -182,7 +182,7 @@ def generate_launch_description() -> LaunchDescription:
         'publish_tf': True,
         'map_frame': 'map',
         'odom_frame': 'odom',
-        'base_link_frame': 'ackmann/base_footprint',
+        'base_link_frame': 'ackermann/base_footprint',
         'world_frame': 'odom',
         'sensor_timeout': 0.2,
         'transform_timeout': 0.2,
@@ -253,14 +253,14 @@ def generate_launch_description() -> LaunchDescription:
             'scan_height': 10,
             'range_min': 0.1,
             'range_max': 20.0,
-            'output_frame': 'ackmann/base_footprint',
+            'output_frame': 'ackermann/base_footprint',
             'angle_min': -3.1415,
             'angle_max': 3.1415,
             'angle_increment': 0.0087,
         }],
         remappings=[
-            ('depth', '/ackmann/depth_camera/depth_image'),
-            ('depth_camera_info', '/ackmann/depth_camera/camera_info'),
+            ('depth', '/ackermann/depth_camera/depth_image'),
+            ('depth_camera_info', '/ackermann/depth_camera/camera_info'),
             ('scan', '/scan'),
         ],
     )
