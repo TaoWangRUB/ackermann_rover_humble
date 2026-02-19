@@ -1,0 +1,70 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 50
+    use_sim_time: true
+    
+    # Increase timeout for controller switching
+    controller_state_update_rate: 50
+    init_timeout: 10.0
+    activate_timeout: 10.0
+    deactivate_timeout: 10.0
+    startup_timeout: 10.0
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    ackermann_steering_controller:
+      type: ackermann_steering_controller/AckermannSteeringController
+
+
+# No specific joint configuration - let it auto-discover
+joint_state_broadcaster:
+  ros__parameters:
+    use_sim_time: true
+    publish_rate: 50.0
+    frame_id: "ackermann/base_footprint"  
+    joints:
+      - ackermann/front_left_wheel_joint
+      - ackermann/front_right_wheel_joint
+      - ackermann/rear_left_wheel_joint
+      - ackermann/rear_right_wheel_joint
+      - ackermann/front_left_wheel_steering_joint
+      - ackermann/front_right_wheel_steering_joint
+
+ackermann_steering_controller:
+  ros__parameters:
+    wheelbase: 0.224
+    front_wheel_track: 0.2
+    rear_wheel_track: 0.2
+    front_wheels_radius: 0.035
+    rear_wheels_radius: 0.035
+    front_steering: true
+    reference_timeout: 2.0
+    use_stamped_vel: false
+    
+    # Rear wheels are the drive wheels
+    rear_wheels_names: [
+      'ackermann/rear_right_wheel_joint', 
+      'ackermann/rear_left_wheel_joint'
+    ]
+    
+    # Front wheels are the steered wheels (steering joints, not wheel joints)
+    front_wheels_names: [
+      'ackermann/front_right_wheel_steering_joint', 
+      'ackermann/front_left_wheel_steering_joint'
+    ]
+
+    open_loop: false
+    publish_rate: 50.0
+    enable_odom_tf: true
+    publish_odom: true
+    publish_odom_tf: false
+    
+    # topic name only works in urdf
+    # cmd_vel_topic: /ackermann/cmd_vel
+    #odom_topic: /wheel/odom
+    #tf_topic: /tf
+    odom_frame_id: odom
+    base_frame_id: ackermann/base_footprint
+    
+    twist_covariance_diagonal: [0.0, 7.0, 14.0, 21.0, 28.0, 35.0]

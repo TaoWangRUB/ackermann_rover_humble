@@ -30,7 +30,7 @@
     <visual>
       <origin xyz="-0.033 0.0 0.04" rpy="0 0 ${PI}"/>
       <geometry>
-        <mesh filename="package://robot_description/models/diffbot/meshes/base_plate.stl" scale="1 1 1"/>
+        <mesh filename="package://description_robot/models/diffbot/meshes/base_plate.stl" scale="1 1 1"/>
       </geometry>
       <material name="base_color"> <!-- Color in IGN and Rviz2 (inside visual tag) -->
         <color rgba="$(arg base_color)"/>
@@ -70,7 +70,7 @@
     <visual>
       <origin xyz="0 0 0.015" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://robot_description/models/diffbot/meshes/wheel_ring.stl" scale="1 1 1"/>
+        <mesh filename="package://description_robot/models/diffbot/meshes/wheel_ring.stl" scale="1 1 1"/>
       </geometry>
       <material name="gray"/> <!-- Color in Rviz2 (inside visual tag) -->
     </visual>
@@ -98,7 +98,7 @@
     <visual>
       <origin xyz="0 0 -0.015" rpy="${PI} 0 0"/> <!-- -z and r=PI for the other wheel -->
       <geometry>
-        <mesh filename="package://robot_description/models/diffbot/meshes/wheel_ring.stl" scale="1 1 1"/>
+        <mesh filename="package://description_robot/models/diffbot/meshes/wheel_ring.stl" scale="1 1 1"/>
       </geometry>
       <material name="gray"/>
     </visual>
@@ -127,7 +127,7 @@
     <visual>
       <origin xyz="0 0 0.015" rpy="${-PI} 0 0"/>
       <geometry>
-        <mesh filename="package://robot_description/models/diffbot/meshes/base_caster.stl"/>
+        <mesh filename="package://description_robot/models/diffbot/meshes/base_caster.stl"/>
       </geometry>
       <material name="base_color"/>
     </visual>
@@ -149,7 +149,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://robot_description/models/diffbot/meshes/caster_wheel.stl"/>
+        <mesh filename="package://description_robot/models/diffbot/meshes/caster_wheel.stl"/>
       </geometry>
       <material name="gray"/>
     </visual>
@@ -262,7 +262,7 @@
     <visual>
       <origin xyz="-0.0275 -0.0275 -0.02" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://robot_description/models/diffbot/meshes/Lidar_pacecat.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://description_robot/models/diffbot/meshes/Lidar_pacecat.stl" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="black">
         <color rgba="0.1 0.1 0.1 1.0"/>
@@ -316,7 +316,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://robot_description/models/diffbot/meshes/d435.dae" scale="1.0 1.0 1.0"/>
+        <mesh filename="package://description_robot/models/diffbot/meshes/d435.dae" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="white">
         <color rgba="0.9 0.9 0.9 1.0"/>
@@ -367,7 +367,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://robot_description/models/diffbot/meshes/d435.dae" scale="1.0 1.0 1.0"/>
+        <mesh filename="package://description_robot/models/diffbot/meshes/d435.dae" scale="1.0 1.0 1.0"/>
       </geometry>
       <material name="white">
         <color rgba="0.9 0.9 0.9 1.0"/>

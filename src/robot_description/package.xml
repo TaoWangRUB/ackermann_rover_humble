@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>robot_description</name>
+  <name>description_robot</name>
   <version>0.0.1</version>
   <description>Gazebo bring-up assets for the Ackermann rover simulation workflow.</description>
   <maintainer email="maintainer@example.com">Ackermann Rover Team</maintainer>
