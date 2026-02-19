@@ -9,6 +9,9 @@ ros_distro: humble
 ---
 ## High-Level Graph
 
+![Current ROS graph](../../rosgraph.png)
+![TF snapshot](../../frames_2026-02-19_13.42.08.pdf)
+
 ```
 [Gazebo Sensors]
 	│
@@ -16,58 +19,47 @@ ros_distro: humble
 [ros_gz_bridge parameter_bridge] ──► `/ackermann/depth_camera/*`, `/l515/imu/raw`, `/rplidar/scan`, `/ackermann/odom`, `/clock`
 	│
 	▼
-[rgbd_sync] ─► [rtabmap_odom (RGB-D/ICP)] ─► `/vo_odom` or `/icp_odom`
-	│                    │
-	│                    └──────────────┐
-	▼                                   ▼
-[depthimage_to_laserscan]            [robot_localization EKF] ─► `/odometry/filtered`
-	│                                   │
-	▼                                   ▼
-[scan topic]                        [rtabmap_slam or localization] ─► `/rtabmap/odom`, `/rtabmap/mapData`, `/tf`
-								│
-								▼
-							 [Nav2 stack]
-								│
-								▼
-						  `/cmd_vel_nav` (Twist)
-								│
-								▼
-						  [Ackermann Controller]
-								│
-								▼
-						  `/cmd_ackermann`
-								│
-								▼
-						  [px4-offboard DDS bridge]
-								│
-								▼
-							   [PX4]
-								▲
-								│
-				    `/px4/status`, `/px4/actuator_feedback`
-								│
-								▼
-						    [Safety Watchdog]
+[rgbd_sync]
+	│
+	├─► [rtabmap_odom (RGB-D)] ──► `/vo_odom`
+	│
+	└─► [depthimage_to_laserscan] ──► `/scan`
+
+[imu_transformer] ─► [imu_filter_madgwick] ──► `/imu/data`
+
+`/vo_odom` or `/icp_odom`, `/imu/data`, `/ackermann/odom`
+	│
+	▼
+[robot_localization EKF] ──► `/odometry/filtered` + TF (`odom → ackermann/base_footprint`)
+	│
+	▼
+[rtabmap_slam (SLAM/localization)] ──► `/rtabmap/*`, `map → odom` TF
+	│
+	▼
+[Nav2 stack (planned)] ──► `/cmd_vel_nav`
+	│
+	▼
+[ackermann_steering_controller] ──► `/ackermann/cmd_vel`
+	│
+	▼
+[Ackermann hardware / Gazebo vehicle]
 ```
 
 ### Components
 
-- **Gazebo Sensors**: Depth camera, IMU, and 2D LiDAR plugins provide the authoritative synthetic sensor feeds.
-- **ros_gz_bridge `parameter_bridge`**: Converts Gazebo Transport streams into ROS 2 topics and provides `/clock` so downstream nodes stay time-synchronized.
-- **RGB-D Sync + Depth-to-Scan**: `rgbd_sync` keeps RGB + depth + camera info latched, and `depthimage_to_laserscan` provides `/scan` when RTAB-Map runs in ICP mode or for redundancy.
-- **IMU Conditioning**: `imu_transformer` enforces `ackermann/base_footprint` frames, while `imu_filter_madgwick` publishes `/imu/data` for the EKF.
-- **RTAB-Map + Robot Localization**: `rtabmap_odom` (RGB-D or ICP), `robot_localization` EKF, and `rtabmap_slam` (SLAM/localization modes) together provide odom + map frames, occupancy data, and TF.
-- **Nav2 Stack**: Uses `/tf`, `/odometry/filtered`, and RTAB-Map map data to plan and control along mission goals.
-- **Ackermann Controller**: Converts Nav2 Twist commands into AckermannDriveStamped commands within configured limits.
-- **px4-offboard DDS Bridge**: Forwards `/cmd_ackermann` to PX4 setpoints and republishes telemetry topics into ROS 2.
-- **Safety Watchdog**: Subscribes to `/px4/status`, EKF diagnostics, and RTAB-Map health metrics; asserts `/safety/fault` back toward control nodes when needed.
+- **Gazebo Sensors**: Depth camera, IMU, and 2D LiDAR plugins inject the simulated sensor feeds that show up at the top of `rosgraph.png`.
+- **ros_gz_bridge `parameter_bridge`**: Bridges those Gazebo Transport streams into ROS topics and propagates `/clock` so everything under `robot_bringup` runs with `use_sim_time=true`.
+- **RGB-D Sync + Depth-to-Scan**: `rgbd_sync` time-aligns RGB + depth + camera info; `depthimage_to_laserscan` optionally produces `/scan` when ICP odom is enabled.
+- **IMU Conditioning**: `imu_transformer` rewrites IMU frames into `ackermann/base_footprint`, and `imu_filter_madgwick` outputs `/imu/data` for downstream fusion.
+- **Localization Stack**: `rtabmap_odom` (RGB-D or ICP), `robot_localization` EKF, and `rtabmap_slam` generate `/odometry/filtered`, `/rtabmap/*`, and TF (`map → odom → ackermann/base_footprint`). The EKF intentionally keeps `/odometry/filtered` as Nav2's odometry source, leaving `/odom` for raw sensor fusion output.
+- **Nav2 Stack (planned)**: Consumes `/tf`, `/odometry/filtered`, `/rtabmap/map*`, and `/scan` once its launch file is fully wired, issuing `/cmd_vel_nav` for the controller.
+- **Ackermann Controller**: `ackermann_steering_controller` consumes `/ackermann/cmd_vel` (or remapped `/cmd_vel_nav`) and drives the Gazebo hardware via `gz_ros2_control`.
 
 ### Notable Links
 
-- `/clock` from the ros_gz bridge is mandatory for all nodes launched through `robot_bringup`; the launch wires `use_sim_time=true` by default.
-- RTAB-Map publishes `/map`, `/rtabmap/odom`, `/rtabmap/mapData`, `/rtabmap/mapPath`, and TF between `map`, `odom`, and `ackermann/base_footprint`.
-- Nav2 consumes the RTAB-Map map server plus `/odometry/filtered` and goal topics from mission tooling.
-- px4-offboard exposes `/px4/status`, `/px4/actuator_feedback`, and (future) `/px4/arm` so the watchdog + operator tools can assess health without cracking open DDS traces.
+- `/clock` from ros_gz_bridge remains mandatory for the entire launch stack; every node in `rosgraph.png` listed above was running with `use_sim_time=true`.
+- RTAB-Map currently publishes `/map`, `/rtabmap/odom`, `/rtabmap/mapData`, `/rtabmap/mapPath`, and TF between `map`, `odom`, and `ackermann/base_footprint`.
+- Nav2 is staged to consume those topics plus `/odometry/filtered` (instead of the raw `/odom` topic) and `/scan`; once enabled it will produce `/cmd_vel_nav` for the Ackermann controller.
 
 Future revisions will capture the Nav2 behavior tree nodes once their configuration lands in this repository.
 
