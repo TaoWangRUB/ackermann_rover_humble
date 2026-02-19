@@ -13,8 +13,8 @@ Autonomous Ackermann rover with UAV-grade autonomy stack. Primary workflow:
 
 1. **Simulation-first**: `robot_bringup.launch.py` boots Gazebo via `description_robot` and keeps ROS ↔ Gazebo resources discoverable through `GZ_SIM_RESOURCE_PATH`. The ros_gz parameter bridge exports depth camera, IMU, LiDAR, odometry, and `/clock` directly into ROS 2 topics the rest of the stack consumes.
 2. **Perception & Localization**: `rtabmap_bringup` orchestrates RGB-D synchronization, IMU preprocessing, VIO/ICP odometry, robot_localization fusion, and RTAB-Map SLAM or localization-only mode. Outputs include TF (`map`→`odom`→`ackermann/base_footprint`), `/rtabmap/odom`, `/odometry/filtered`, and map data for Nav2.
-3. **Planning & Control**: Nav2 planners consume RTAB-Map localization and costmaps to generate `/cmd_vel` (aliased to `/cmd_vel_nav`). The Ackermann controller converts twist commands to steering/speed profiles on `/cmd_ackermann`.
-4. **Vehicle Interface**: The px4-offboard DDS bridge relays high-level Ackermann commands to PX4 (SITL or hardware), enforces heartbeat-based failsafes, and reports telemetry the watchdog consumes.
+3. **Planning & Control**: Nav2 planners consume RTAB-Map localization and costmaps to generate `/cmd_vel` (aliased to `/cmd_vel_nav`). The `ackermann_steering_controller` converts those twists to steering/speed profiles on `/ackermann/cmd_vel` for `gz_ros2_control`.
+4. **Vehicle Interface**: Gazebo runs the Ackermann hardware through `gz_ros2_control`; when real hardware arrives the same ros2_control interface will connect to the vehicle CAN/drive stack.
 
 ## Core Subsystems
 
@@ -24,7 +24,7 @@ Autonomous Ackermann rover with UAV-grade autonomy stack. Primary workflow:
 | Sensor Conditioning | Sync RGB-D, convert depth→scan, align IMU frames, filter IMU | `rgbd_sync`, `depthimage_to_laserscan`, `imu_transformer`, `imu_filter_madgwick` |
 | Localization & Mapping | VIO/ICP odom, EKF fusion, loop-closure SLAM, TF publishing | `rtabmap_odom`, `robot_localization`, `rtabmap_slam`, `rtabmap_viz` |
 | Navigation & Control | Global + local planners, Ackermann conversion | Nav2 stack, `ackermann_control` package |
-| Safety & Vehicle Interface | Command gating, DDS bridge to PX4, telemetry | Safety watchdog, `px4-offboard` DDS bridge, PX4 firmware |
+| Safety & Vehicle Interface | Command gating, emergency stop hooks, future hardware drivers | Safety watchdog (planned), ros2_control hardware adapters |
 
 ## Data Flow Summary
 
@@ -33,21 +33,21 @@ Autonomous Ackermann rover with UAV-grade autonomy stack. Primary workflow:
 - `imu_transformer` re-frames `/l515/imu/raw` into `ackermann/base_footprint`, while `imu_filter_madgwick` provides `/imu/data` for EKF fusion.
 - `rtabmap_odom` (RGB-D or ICP) publishes `/vo_odom` or `/icp_odom`; `robot_localization` fuses them into `/odometry/filtered`, and RTAB-Map SLAM emits `/rtabmap/odom`, `/rtabmap/mapData`, and TF.
 - Nav2 consumes `/tf`, `/odometry/filtered`, and the map topics to produce `/cmd_vel` (namespaced `/cmd_vel_nav`).
-- `ackermann_control` maps `/cmd_vel_nav` to `/cmd_ackermann`, which the px4-offboard DDS bridge translates to PX4 setpoints and relays telemetry (`/px4/status`, `/px4/actuator_feedback`).
-- Safety watchdog subscribes to PX4 telemetry and RTAB-Map health to assert `/safety/fault`, forcing zero-speed commands when set.
+- `ackermann_control`/`ackermann_steering_controller` maps `/cmd_vel_nav` to `/ackermann/cmd_vel`, which `gz_ros2_control` uses to actuate the simulated rover; future hardware will expose the same contract.
+- Safety watchdog hooks are being designed to watch `/odometry/filtered`, controller diagnostics, and future hardware health topics (no PX4 dependency in the current stack).
 
 ## Simulation → Hardware Parity
 
 - **Sensors**: Gazebo depth camera + IMU + LiDAR topics mirror hardware drivers. Swapping to real sensors preserves the `/ackermann/*`, `/l515/imu/raw`, and `/scan` contracts so RTAB-Map continues to function.
 - **Localization**: `rtabmap_bringup` exposes parameters for localization-only vs SLAM mode, RGB-D vs ICP odometry, and EKF tuning. Field deployments reuse the same launch with overrides for camera intrinsics, IMU bias, and scan settings.
-- **Vehicle Interface**: The DDS bridge hosts SITL endpoints by default; deploying to hardware updates `dds_domain_id` and transport endpoints only. `/cmd_ackermann` remains the canonical control contract.
-- **Safety**: Watchdog monitors `/px4/status` plus EKF/RTAB-Map diagnostics. Any stale heartbeat or low-confidence localization toggles `/safety/fault`, which `ackermann_control` currently interprets by halting the vehicle (future: gating before px4-offboard).
+- **Vehicle Interface**: `gz_ros2_control` drives the simulated joints today. When hardware shows up, the same ros2_control interface will bridge to the physical actuators without changing controller topics.
+- **Safety**: A ROS-native watchdog (planned) will monitor EKF/RTAB-Map diagnostics and controller health to assert `/safety/fault`, which `ackermann_control` can use to halt motion.
 
 ## Gazebo ↔ RTAB-Map Integration
 
 - `robot_bringup.launch.py` composes `gazebo_bringup` and `rtabmap_slam.launch.py`, ensuring shared launch arguments (`use_sim_time`, pose, namespace) stay consistent across subsystems.
 - The ros_gz parameter bridge topics feed directly into the remaps defined inside `rtabmap_bringup`, so no intermediate republishers are required. Topic names intentionally follow the `ackermann/*` prefix to minimize collisions in multi-robot scenarios.
 - State estimation runs in three tiers: raw VIO/ICP odom, EKF-smoothed `/odometry/filtered`, and RTAB-Map's global map frame. Nav2 and downstream planners consume `/odometry/filtered` plus the RTAB-Map map server outputs.
-- Interfaces to Nav2, safety watchdog, and px4-offboard are now centralized in documentation tables below to keep integrators aligned when topics or QoS policies change.
+- Interfaces to Nav2, safety watchdog, and ros2_control are now centralized in documentation tables below to keep integrators aligned when topics or QoS policies change.
 
 This overview drives the detailed node graph, interface contracts, and failure mode definitions in the following documents.

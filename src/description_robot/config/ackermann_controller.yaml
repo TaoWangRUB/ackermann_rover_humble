@@ -23,21 +23,14 @@ joint_state_broadcaster:
     use_sim_time: true
     publish_rate: 50.0
     frame_id: "ackermann/base_footprint"  
-    joints:
-      - ackermann/front_left_wheel_joint
-      - ackermann/front_right_wheel_joint
-      - ackermann/rear_left_wheel_joint
-      - ackermann/rear_right_wheel_joint
-      - ackermann/front_left_wheel_steering_joint
-      - ackermann/front_right_wheel_steering_joint
 
 ackermann_steering_controller:
   ros__parameters:
-    wheelbase: 0.224
-    front_wheel_track: 0.2
-    rear_wheel_track: 0.2
-    front_wheels_radius: 0.035
-    rear_wheels_radius: 0.035
+    wheelbase: 0.174
+    front_wheel_track: 0.174
+    rear_wheel_track: 0.174
+    front_wheels_radius: 0.038
+    rear_wheels_radius: 0.038
     front_steering: true
     reference_timeout: 2.0
     use_stamped_vel: false
@@ -68,3 +61,4 @@ ackermann_steering_controller:
     base_frame_id: ackermann/base_footprint
     
     twist_covariance_diagonal: [0.0, 7.0, 14.0, 21.0, 28.0, 35.0]
+    pose_covariance_diagonal: [0.0, 7.0, 14.0, 21.0, 28.0, 35.0]

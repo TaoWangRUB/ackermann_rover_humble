@@ -27,7 +27,7 @@ def generate_launch_description():
 
     control_params_file = PathJoinSubstitution(
         [pkg_control, 'config', 'ackermann_controller.yaml'])
-    robot_description_config = xacro.process_file(xacro_file).toxml()
+    description_robot_config = xacro.process_file(xacro_file).toxml()
     
     # Controller manager (ros2_control_node)
     controller_manager = Node(
@@ -36,7 +36,7 @@ def generate_launch_description():
         namespace=namespace,
         parameters=[
             {
-                'robot_description': robot_description_config,
+                'robot_description': description_robot_config,
                 'use_sim_time': use_sim_time,
             },
             control_params_file,
