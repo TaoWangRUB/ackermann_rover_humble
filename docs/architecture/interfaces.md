@@ -9,7 +9,7 @@ ros_distro: humble
 ---
 ## Gazebo ↔ ROS 2 Bridge
 
-`robot_description/launch/gazebo_bringup.launch.py` launches `ros_gz_bridge parameter_bridge` so Gazebo topics land directly on the ROS graph. All entities are prefixed with `ackermann` to simplify multi-robot simulation.
+`description_robot/launch/gazebo_bringup.launch.py` launches `ros_gz_bridge parameter_bridge` so Gazebo topics land directly on the ROS graph. All entities are prefixed with `ackermann` to simplify multi-robot simulation.
 
 | Gazebo Topic | ROS 2 Topic | ROS Type | Notes |
 | --- | --- | --- | --- |

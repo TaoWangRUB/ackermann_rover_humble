@@ -9,6 +9,10 @@ Introduce a dedicated Nav2 bringup package/config wired into `robot_bringup`, ke
 4. Update [robot_bringup/launch/robot_bringup.launch.py](src/robot_bringup/launch/robot_bringup.launch.py) with a `nav2` boolean argument gating inclusion of the new launch, ensuring sequence: Gazebo → RTAB-Map → Nav2 once `/odometry/filtered` is available.
 5. Document the Nav2 bringup in README + architecture docs, including instructions to launch (`ros2 launch robot_bringup robot_bringup.launch.py nav2:=true`) and note reliance on the sample behavior tree.
 
+### Progress Log
+- 2026-02-19: Step 1 PASS. `nav2_bringup` package, config, and launch already exist (see [src/nav2_bringup](../src/nav2_bringup)), dependencies trimmed to omit map_server/AMCL as requested.
+- 2026-02-19: Step 2 PASS. [config/nav2_ackermann.yaml](../src/nav2_bringup/config/nav2_ackermann.yaml) already defines planner/controller/behavior/smoother/velocity_smoother/costmaps/lifecycle blocks with `/odometry/filtered` + `/cmd_vel_nav`, and [launch/nav2_bringup.launch.py](../src/nav2_bringup/launch/nav2_bringup.launch.py) wires in the stock Nav2 BT XML via declarable arguments.
+
 ### Further Considerations
 1. Confirm topic alignment: keep `/cmd_vel_nav` and `/odometry/filtered` naming or adopt Nav2 defaults?
 2. Behavior tree source: reuse Nav2 sample XML or craft rover-specific tree with safety hooks?

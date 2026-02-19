@@ -80,7 +80,7 @@ bt_navigator:
     use_sim_time: true
     global_frame: map
     robot_base_frame: ackermann/base_footprint
-    odom_topic: /odometry/filtered
+    odom_topic: /odom
     transform_tolerance: 0.2
     default_bt_xml_filename: "navigate_w_replanning_and_recovery.xml"
     goal_blackboard_id: goal
@@ -111,7 +111,7 @@ velocity_smoother:
     velocity_timeout: 1.0
     smoothing_duration: 0.3
     input_topic: /cmd_vel_nav
-    output_topic: /cmd_vel_nav
+    output_topic: /ackermann/cmd_vel
 
 local_costmap:
   local_costmap:

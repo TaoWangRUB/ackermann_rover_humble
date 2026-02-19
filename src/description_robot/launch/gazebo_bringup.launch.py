@@ -14,7 +14,7 @@ from launch.actions import (
     RegisterEventHandler,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, TextSubstitution, PathJoinSubstitution
+from launch.substitutions import Command, LaunchConfiguration, TextSubstitution, PathJoinSubstitution
 from launch_ros.actions import Node
 
 from launch.event_handlers import OnProcessExit
@@ -30,10 +30,10 @@ def generate_launch_description() -> LaunchDescription:
     xacro_file = os.path.join(pkg_share, 'urdf', 'donkey_sensors.urdf')
 
     # Preprocess the legacy URDF/Xacro tree once so shared nodes can consume it.
-    robot_description_config = xacro.process_file(xacro_file).toxml()
+    description_robot_config = xacro.process_file(xacro_file).toxml()
 
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.urdf') as temp_urdf:
-        temp_urdf.write(robot_description_config)
+        temp_urdf.write(description_robot_config)
         robot_urdf_path = temp_urdf.name
 
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -91,10 +91,17 @@ def generate_launch_description() -> LaunchDescription:
         output='screen',
         parameters=[
             {
-                'robot_description': robot_description_config,
+                'robot_description': Command([
+                'xacro', ' ', xacro_file, ' ',
+                'gazebo:=harmonic', ' ',
+                'namespace:=', namespace]),
                 'use_sim_time': use_sim_time,
             }
         ],
+        remappings=[
+            ('/tf', 'tf'),
+            ('/tf_static', 'tf_static')
+        ]
     )
 
     # Joint state publisher ensures TF tree stays populated even before Gazebo starts
@@ -108,7 +115,7 @@ def generate_launch_description() -> LaunchDescription:
         output='screen',
         parameters=[
             {
-                'robot_description': robot_description_config,
+                'robot_description': description_robot_config,
                 'use_sim_time': use_sim_time,
             }
         ],
@@ -124,6 +131,7 @@ def generate_launch_description() -> LaunchDescription:
         '/l515/imu/raw@sensor_msgs/msg/Imu[gz.msgs.IMU',
         '/rplidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
         '/ackermann/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+        '/ackermann/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
         # only need when the bildin ackermann controller is used, otherwise the ros2_controller can send directly from Gazebo topics
         #'/ackermann/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
     ]

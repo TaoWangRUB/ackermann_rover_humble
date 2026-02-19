@@ -1,0 +1,140 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:macro name="gazebo_t265" params="parent
+                                          name
+                                          fisheye_width:=848
+                                          fisheye_height:=800
+                                          fov:=2.9
+                                          fisheye_fps:=30
+                                          accel_fps:=62.5
+                                          gyro_fps:=200
+                                          odom_fps:=200
+                                          ">
+
+    <!-- Load parameters to model's main link-->
+    <gazebo reference="${name}_link">
+      <sensor name="${name}_fisheye1" type="camera">
+        <always_on>true</always_on>
+        <update_rate>${fisheye_fps}</update_rate>
+        <visualize>false</visualize>
+        <topic>/${name}/fisheye1/image_raw</topic>
+        <camera>
+          <optical_frame_id>${name}_fisheye1_optical_frame</optical_frame_id>
+          <horizontal_fov>${fov}</horizontal_fov>
+          <image>
+            <width>${fisheye_width}</width>
+            <height>${fisheye_height}</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.01</near>
+            <far>100.0</far>
+          </clip>
+        <lens>
+          <type>equisolid_angle</type>
+          <scale_to_hfov>true</scale_to_hfov>
+          <cutoff_angle>${fov/2}</cutoff_angle>  <!-- 85° cutoff -->
+          <env_texture_size>1024</env_texture_size>
+          <!-- <intrinsics>
+            <fx>${fisheye_width / (2 * tan(fov/2))}</fx>
+            <fy>${fisheye_width / (2 * tan(fov/2))}</fy>
+            <cx>${fisheye_width / 2}</cx>
+            <cy>${fisheye_height / 2}</cy>
+          </intrinsics>
+          <projection>
+            <p_fx>${fisheye_width / (2 * tan(fov/2))}</p_fx>
+            <p_fy>${fisheye_width / (2 * tan(fov/2))}</p_fy>
+            <p_cx>${fisheye_width / 2}</p_cx>
+            <p_cy>${fisheye_height / 2}</p_cy>
+          </projection>
+          <distortion>
+            <k1>-0.15</k1>
+            <k2>0.041209</k2>
+            <k3>-0.037267</k3>
+            <k4>0.007446</k4>
+            <p1>0</p1>
+            <p2>0</p2>
+            <center>0.5 0.5</center>
+          </distortion> -->
+        </lens>
+        </camera>
+      </sensor>
+      <sensor name="${name}_fisheye2" type="camera">
+        <always_on>true</always_on>
+        <update_rate>${fisheye_fps}</update_rate>
+        <visualize>false</visualize>
+        <topic>/${name}/fisheye2/image_raw</topic>
+        <camera>
+          <optical_frame_id>${name}_fisheye2_optical_frame</optical_frame_id>
+          <horizontal_fov>${fov}</horizontal_fov>
+          <image>
+            <width>${fisheye_width}</width>
+            <height>${fisheye_height}</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.01</near>
+            <far>100.0</far>
+          </clip>
+        <lens>
+          <type>equisolid_angle</type>
+          <scale_to_hfov>true</scale_to_hfov>
+          <cutoff_angle>${fov/2}</cutoff_angle>  <!-- 85° cutoff -->
+          <env_texture_size>1024</env_texture_size>
+          <!-- <intrinsics>
+            <fx>${fisheye_width / (2 * tan(fov/2))}</fx>
+            <fy>${fisheye_width / (2 * tan(fov/2))}</fy>
+            <cx>${fisheye_width / 2}</cx>
+            <cy>${fisheye_height / 2}</cy>
+          </intrinsics>
+          <projection>
+            <p_fx>${fisheye_width / (2 * tan(fov/2))}</p_fx>
+            <p_fy>${fisheye_width / (2 * tan(fov/2))}</p_fy>
+            <p_cx>${fisheye_width / 2}</p_cx>
+            <p_cy>${fisheye_height / 2}</p_cy>
+          </projection> -->
+        </lens>
+        </camera>
+      </sensor>
+    </gazebo>
+
+    <!-- IMU -->
+    <gazebo reference="${name}_imu_optical_frame">
+      <sensor name="${name}_imu" type="imu">
+        <always_on>true</always_on>
+        <update_rate>${gyro_fps}</update_rate>
+        <visualize>false</visualize>
+        <topic>/${name}/imu</topic>
+        <ignition_frame_id>${name}_imu_optical_frame</ignition_frame_id>
+        <imu>
+          <angular_velocity>
+            <x>true</x>
+            <y>true</y>
+            <z>true</z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x>true</x>
+            <y>true</y>
+            <z>true</z>
+          </linear_acceleration>
+        </imu>
+      </sensor>
+    </gazebo>
+
+    <!-- odom -->
+    <gazebo>
+      <!-- World odometry plugin (by default, odometry topic is used) -->
+      <plugin filename="ignition-gazebo-odometry-publisher-system" name="ignition::gazebo::systems::OdometryPublisher">
+        <dimensions>3</dimensions>
+        <odom_frame>odom_frame</odom_frame>
+        <robot_base_frame>${name}_pose_frame</robot_base_frame>
+        <publish_link_pose>true</publish_link_pose>
+        <tf_topic>$(arg ns)/tf</tf_topic> 
+        <odom_topic>/${name}/pose/sample</odom_topic>
+        <publish_tf>false</publish_tf>
+      </plugin>
+    </gazebo>
+  </xacro:macro>
+</robot>

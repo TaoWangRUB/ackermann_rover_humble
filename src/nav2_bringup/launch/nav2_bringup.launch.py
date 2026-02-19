@@ -42,12 +42,15 @@ def generate_launch_description() -> LaunchDescription:
         description='Behavior Tree XML used for NavigateThroughPoses.'
     )
 
+    nav2_remaps = [('odom', '/odometry/filtered')]
+
     controller_server = Node(
         package='nav2_controller',
         executable='controller_server',
         name='controller_server',
         output='screen',
-        parameters=[params_file]
+        parameters=[params_file],
+        remappings=nav2_remaps,
     )
 
     planner_server = Node(
@@ -55,7 +58,8 @@ def generate_launch_description() -> LaunchDescription:
         executable='planner_server',
         name='planner_server',
         output='screen',
-        parameters=[params_file]
+        parameters=[params_file],
+        remappings=nav2_remaps,
     )
 
     smoother_server = Node(
@@ -63,7 +67,8 @@ def generate_launch_description() -> LaunchDescription:
         executable='smoother_server',
         name='smoother_server',
         output='screen',
-        parameters=[params_file]
+        parameters=[params_file],
+        remappings=nav2_remaps,
     )
 
     behavior_server = Node(
@@ -71,7 +76,8 @@ def generate_launch_description() -> LaunchDescription:
         executable='behavior_server',
         name='behavior_server',
         output='screen',
-        parameters=[params_file]
+        parameters=[params_file],
+        remappings=nav2_remaps,
     )
 
     bt_navigator = Node(
@@ -85,7 +91,8 @@ def generate_launch_description() -> LaunchDescription:
                 'default_bt_xml_filename': bt_xml,
                 'nav_through_poses_bt_xml': nav_through_bt,
             },
-        ]
+        ],
+        remappings=nav2_remaps,
     )
 
     waypoint_follower = Node(
@@ -93,7 +100,8 @@ def generate_launch_description() -> LaunchDescription:
         executable='waypoint_follower',
         name='waypoint_follower',
         output='screen',
-        parameters=[params_file]
+        parameters=[params_file],
+        remappings=nav2_remaps,
     )
 
     velocity_smoother = Node(
@@ -101,7 +109,8 @@ def generate_launch_description() -> LaunchDescription:
         executable='velocity_smoother',
         name='velocity_smoother',
         output='screen',
-        parameters=[params_file]
+        parameters=[params_file],
+        remappings=nav2_remaps,
     )
 
     lifecycle_nav = Node(
@@ -109,7 +118,8 @@ def generate_launch_description() -> LaunchDescription:
         executable='lifecycle_manager',
         name='lifecycle_manager_nav2',
         output='screen',
-        parameters=[params_file]
+        parameters=[params_file],
+        remappings=nav2_remaps,
     )
 
     return LaunchDescription(

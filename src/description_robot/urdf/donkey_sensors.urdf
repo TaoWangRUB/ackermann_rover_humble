@@ -6,14 +6,17 @@
   <xacro:property name="package_name" value="rebot_description"/>
   <xacro:property name="PI" value="3.14159265"/>
   
-  <xacro:property name="wheel_separation" value="0.2"/>
-  <xacro:property name="wheel_base" value="0.224"/>
-  <xacro:property name="wheel_diameter" value="0.07"/>
+  <xacro:property name="wheel_separation" value="0.174"/>
+  <xacro:property name="wheel_base" value="0.174"/>
+  <xacro:property name="wheel_diameter" value="0.077"/>
   <xacro:property name="wheel_thickness" value="0.024"/>
   <xacro:property name="base_elevation" value="0.01"/>
 
   <xacro:property name="d435i_x_offset" value="${10*cm2m}"/>
   <xacro:property name="d435i_z_offset" value="${17*cm2m}"/>
+
+  <xacro:property name="t265_x_offset" value="${10*cm2m}"/>
+  <xacro:property name="t265_z_offset" value="${21*cm2m}"/>
 
   <xacro:property name="l515_x_offset" value="${10*cm2m}"/>
   <xacro:property name="l515_z_offset" value="${50*cm2m}"/>
@@ -28,10 +31,6 @@
   <!-- Custom color (for Gz and RViz) -->
   <material name="gray">
     <color rgba="0.4 0.4 0.4 1.0"/>
-  </material>
-
-  <material name="dark_gray">
-    <color rgba="0.2 0.2 0.2 1.0"/>
   </material>
   
   <xacro:macro name="inertial_cuboid_with_pose" params="mass x y z *origin">
@@ -322,6 +321,7 @@
   <xacro:arg name="use_mesh" default="true" />
   <xacro:property name="d435_name" value="d435i" />
   <xacro:property name="l515_name" value="l515" />
+  <xacro:property name="t265_name" value="t265" />
 
   <xacro:include filename="$(find description_robot)/urdf/realsense/_d435i.urdf.xacro"/>
   <xacro:sensor_d435i name="${d435_name}" parent="$(arg ns)/base_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)">
@@ -333,53 +333,16 @@
     <origin xyz="${l515_x_offset} 0 ${l515_z_offset}" rpy="0 0 0"/>
   </xacro:sensor_l515>
 
-  <!--   
-  <joint name="${l515_name}_joint" type="fixed">
-    <origin xyz="0.1 0 0.07" rpy="0 0 0"/>
-    <parent link="$(arg ns)/base_link"/>
-    <child link="${l515_name}_link"/>
-  </joint>
-  <link name="${l515_name}_link">
-    <visual>
-     <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry>
-       <box size="0.012 0.132 0.020"/>
-      </geometry>
-    </visual>
-    <collision>
-      <origin xyz="0.003 0.065 0.007" rpy="0 0 0"/>
-      <geometry>
-        <box size="0.012 0.132 0.020"/>
-      </geometry>
-    </collision>
-  </link>
-
-  <joint name="${l515_name}_depth_joint" type="fixed">
-    <origin xyz="0.005 0.028 0.013" rpy="0 0 0"/>
-    <parent link="${l515_name}_link"/>
-    <child link="${l515_name}_depth_frame"/>
-  </joint>
-  <link name="${l515_name}_depth_frame">
-    <xacro:inertial_dummy/>
-  </link>
-
-  <joint name="${l515_name}_depth_optical_joint" type="fixed">
-    <origin xyz="0 0 0" rpy="${-PI/2} 0 ${-PI/2}"/>
-    <parent link="${l515_name}_depth_frame"/>
-    <child link="${l515_name}_depth_optical_frame"/>
-  </joint>
-
-  <link name="${l515_name}_depth_optical_frame">
-    <xacro:inertial_dummy/>
-  </link> -->
+  <xacro:include filename="$(find description_robot)/urdf/realsense/_t265.urdf.xacro"/>
+  <xacro:sensor_t265 name="${t265_name}" parent="$(arg ns)/base_link">
+    <origin xyz="${t265_x_offset} 0 ${t265_z_offset}" rpy="0.0 0.0 0.0"/>
+  </xacro:sensor_t265>
 
   <!-- Depth camera sensor -->
-  <gazebo reference="${l515_name}_depth_frame">
+  <!-- <gazebo reference="${l515_name}_depth_frame">
     <sensor name="rgbd_camera" type="rgbd_camera">
-      <!-- <pose>0 0 0.0 ${-PI/2} 0 ${PI/2}</pose> -->
-      <!-- <gz_frame_id>${l515_name}_depth_optical_frame</gz_frame_id> -->
       <camera name="${l515_name}">
-        <horizontal_fov>1.39626</horizontal_fov>  <!--1.047-->
+        <horizontal_fov>1.39626</horizontal_fov>
         <image>
           <width>480</width>
           <height>360</height>
@@ -407,16 +370,17 @@
       <always_on>1</always_on>
       <update_rate>30</update_rate>
       <visualize>true</visualize>
-      <topic>$(arg ns)/depth_camera</topic>
+      <topic>/${l515_name}</topic>
     </sensor>
   </gazebo>
-  <!-- IMU sensor -->
+  
   <gazebo reference="${l515_name}_imu_optical_frame">
     <sensor name="imu_sensor" type="imu">
       <always_on>true</always_on>
       <update_rate>100.0</update_rate>
       <visualize>false</visualize>
       <topic>/${l515_name}/imu/raw</topic>
+      <ignition_frame_id>${l515_name}_imu_optical_frame</ignition_frame_id>
       <imu>
         <angular_velocity>
           <x>true</x>
@@ -431,7 +395,7 @@
       </imu>
       
     </sensor>
-  </gazebo>
+  </gazebo> -->
 
 
   <xacro:rplidar name="rplidar" parent_link="$(arg ns)/base_link" gazebo="ignition">
@@ -463,8 +427,14 @@
 
     <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
       <parameters>$(find description_robot)/config/ackermann_controller.yaml</parameters>
+      <ros> 
+        <namespace></namespace> 
+        <remapping>ackermann_steering_controller/reference_unstamped:=cmd_vel</remapping> 
+        <!-- <remapping>ackermann_steering_controller/odometry:=/wheel/odom</remapping>  -->
+        <!-- <remapping>ackermann_steering_controller/tf_odometry:=tf</remapping>  -->
+      </ros> 
     </plugin>
-    
+
     <!-- World odometry plugin (by default, odometry topic is used) -->
     <plugin filename="ignition-gazebo-odometry-publisher-system" name="ignition::gazebo::systems::OdometryPublisher">
       <dimensions>3</dimensions>
