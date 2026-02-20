@@ -54,7 +54,11 @@ def generate_launch_description():
         package='controller_manager',
         executable='spawner',
         namespace=namespace,
-        arguments=['joint_state_broadcaster'],
+        arguments=['joint_state_broadcaster', 
+                   '--controller-manager', 'controller_manager',
+                   '--controller-manager-timeout', '60',
+                   '--switch-timeout', '60'  # <--- Add this line (seconds)
+                   ],
         output='screen',
     )
     
