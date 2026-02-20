@@ -82,7 +82,8 @@ def generate_launch_description() -> LaunchDescription:
         'Grid/NormalsSegmentation': 'false',
         #'Grid/RangeMax': '20',
         'Grid/3D': 'false',
-        'Grid/RayTracing': 'true'
+        'Grid/RayTracing': 'true',
+        'Reg/Force3DoF': 'true',
     }
 
     shared_parameters = {
@@ -146,6 +147,7 @@ def generate_launch_description() -> LaunchDescription:
         'frame_id': 'ackermann/base_footprint',
         'odom_frame_id': 'odom',
         'publish_tf': False,
+        'wait_for_imu_to_init': True,
         'use_sim_time': use_sim_time,
         'Odom/Strategy': '0',
         'Vis/MinInliers': '10',
@@ -157,6 +159,8 @@ def generate_launch_description() -> LaunchDescription:
         'Vis/MaxDepth': '20.0',
         'Odom/GuessMotion': 'true',
         'Odom/GuessSmoothingDelay': '0.1',
+        'Reg/Force3DoF': 'true',
+        'wait_imu_to_init': 'true',
     }
 
     visual_odom = Node(
@@ -171,7 +175,7 @@ def generate_launch_description() -> LaunchDescription:
 
     icp_parameters = {
         'odom_frame_id': 'odom',
-        'publish_tf': True,
+        'publish_tf': False,
         'use_sim_time': use_sim_time,
         'Icp/CorrespondenceRatio': '0.03',
         'Icp/PointToPlaneMinComplexity': '0.01',
@@ -218,20 +222,20 @@ def generate_launch_description() -> LaunchDescription:
         'odom0_nodelay': False,
         'odom0_differential': False,
         'odom0_relative': True,
-        'imu0': '/imu/data',
-        "imu0_config": [False, False, False,   # x, y, z position
-                        False, False, True,    # roll, pitch, yaw
-                        False, False, False,   # x, y, z velocity
-                        False, False, True,    # roll, pitch, yaw rates
-                        False, False, False],  # x, y, z acceleration
-        'imu0_queue_size': 10,
-        'imu0_nodelay': False,
-        'imu0_differential': False,
-        'imu0_relative': True,
-        'imu0_remove_gravitational_acceleration': True,
-        'imu0_angular_velocity_covariance': [0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001],
-        'imu0_linear_acceleration_covariance': [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01],
-        'imu0_orientation_covariance': [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01],
+        #'imu0': '/imu/data',
+        #"imu0_config": [False, False, False,   # x, y, z position
+        #                False, False, True,    # roll, pitch, yaw
+        #                False, False, False,   # x, y, z velocity
+        #                False, False, True,    # roll, pitch, yaw rates
+        #                False, False, False],  # x, y, z acceleration
+        #'imu0_queue_size': 10,
+        #'imu0_nodelay': False,
+        #'imu0_differential': False,
+        #'imu0_relative': True,
+        #'imu0_remove_gravitational_acceleration': True,
+        #'imu0_angular_velocity_covariance': [0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001],
+        #'imu0_linear_acceleration_covariance': [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01],
+        #'imu0_orientation_covariance': [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01],
     }
 
     ekf_filter_node = Node(
