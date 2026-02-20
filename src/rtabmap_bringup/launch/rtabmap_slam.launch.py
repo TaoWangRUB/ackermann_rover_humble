@@ -160,7 +160,6 @@ def generate_launch_description() -> LaunchDescription:
         'Odom/GuessMotion': 'true',
         'Odom/GuessSmoothingDelay': '0.1',
         'Reg/Force3DoF': 'true',
-        'wait_imu_to_init': 'true',
     }
 
     visual_odom = Node(
@@ -222,20 +221,20 @@ def generate_launch_description() -> LaunchDescription:
         'odom0_nodelay': False,
         'odom0_differential': False,
         'odom0_relative': True,
-        #'imu0': '/imu/data',
-        #"imu0_config": [False, False, False,   # x, y, z position
-        #                False, False, True,    # roll, pitch, yaw
-        #                False, False, False,   # x, y, z velocity
-        #                False, False, True,    # roll, pitch, yaw rates
-        #                False, False, False],  # x, y, z acceleration
-        #'imu0_queue_size': 10,
-        #'imu0_nodelay': False,
-        #'imu0_differential': False,
-        #'imu0_relative': True,
-        #'imu0_remove_gravitational_acceleration': True,
-        #'imu0_angular_velocity_covariance': [0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001],
-        #'imu0_linear_acceleration_covariance': [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01],
-        #'imu0_orientation_covariance': [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01],
+        'imu0': '/imu/data',
+        "imu0_config": [False, False, False,   # x, y, z position
+                        False, False, True,    # roll, pitch, yaw
+                        False, False, False,   # x, y, z velocity
+                        False, False, True,    # roll, pitch, yaw rates
+                        False, False, False],  # x, y, z acceleration
+        'imu0_queue_size': 10,
+        'imu0_nodelay': False,
+        'imu0_differential': False,
+        'imu0_relative': True,
+        'imu0_remove_gravitational_acceleration': True,
+        'imu0_angular_velocity_covariance': [0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001],
+        'imu0_linear_acceleration_covariance': [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01],
+        'imu0_orientation_covariance': [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01],
     }
 
     ekf_filter_node = Node(
