@@ -98,10 +98,6 @@ def generate_launch_description() -> LaunchDescription:
                 'use_sim_time': use_sim_time,
             }
         ],
-        remappings=[
-            ('/tf', 'tf'),
-            ('/tf_static', 'tf_static')
-        ]
     )
 
     # Joint state publisher ensures TF tree stays populated even before Gazebo starts
@@ -126,27 +122,27 @@ def generate_launch_description() -> LaunchDescription:
     bridge_topics = [
         '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
         '/d435i/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
-            #'/d435i/points' + '@sensor_msgs/msg/PointCloud2' + '[gz.msgs.PointCloudPacked',
-            '/d435i/depth_image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-            '/d435i/image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-            '/d435i/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
-            '/l515/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
-            '/l515/points' + '@sensor_msgs/msg/PointCloud2' + '[gz.msgs.PointCloudPacked',
-            '/l515/depth_image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-            '/l515/image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-            '/l515/imu/raw' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
-            '/t265/fisheye1/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
-            '/t265/fisheye1/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-            '/t265/fisheye2/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
-            '/t265/fisheye2/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-            '/t265/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
-            '/t265/pose' + '@nav_msgs/msg/Odometry' + '[gz.msgs.Odometry',
-            '/ackmann/odom' + '@nav_msgs/msg/Odometry' + '[gz.msgs.Odometry',
-            '/ackmann/tf' + '@tf2_msgs/msg/TFMessage' + '[gz.msgs.Pose_V',
-            '/model/ackmann/tf' + '@tf2_msgs/msg/TFMessage' + '[gz.msgs.Pose_V',
-            #'/ackmann/joint_state' + '@sensor_msgs/msg/JointState' + '[gz.msgs.Model',
-            '/ackmann/cmd_vel' + '@geometry_msgs/msg/Twist' + ']gz.msgs.Twist',
-            '/rplidar/scan' + '@sensor_msgs/msg/LaserScan' + '[gz.msgs.LaserScan',
+        #'/d435i/points' + '@sensor_msgs/msg/PointCloud2' + '[gz.msgs.PointCloudPacked',
+        '/d435i/depth_image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+        '/d435i/image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+        '/d435i/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
+        '/l515/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
+        '/l515/points' + '@sensor_msgs/msg/PointCloud2' + '[gz.msgs.PointCloudPacked',
+        '/l515/depth_image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+        '/l515/image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+        '/l515/imu/raw' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
+        '/t265/fisheye1/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
+        '/t265/fisheye1/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+        '/t265/fisheye2/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
+        '/t265/fisheye2/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+        '/t265/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
+        '/t265/pose' + '@nav_msgs/msg/Odometry' + '[gz.msgs.Odometry',
+        '/ackermann/odom' + '@nav_msgs/msg/Odometry' + '[gz.msgs.Odometry',
+        '/ackermann/tf' + '@tf2_msgs/msg/TFMessage' + '[gz.msgs.Pose_V',
+        '/model/ackermann/tf' + '@tf2_msgs/msg/TFMessage' + '[gz.msgs.Pose_V',
+        #'/ackermann/joint_state' + '@sensor_msgs/msg/JointState' + '[gz.msgs.Model',
+        #'/ackermann/cmd_vel' + '@geometry_msgs/msg/Twist' + ']gz.msgs.Twist',
+        '/rplidar/scan' + '@sensor_msgs/msg/LaserScan' + '[gz.msgs.LaserScan',
     ]
 
     parameter_bridge = Node(
