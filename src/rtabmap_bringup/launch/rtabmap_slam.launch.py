@@ -31,6 +31,25 @@ ARGUMENTS = [
         choices=['true', 'false'],
         description='Launch rtabmap_viz for debugging.'
     ),
+    DeclareLaunchArgument(
+        'imu_raw_topic', default_value='/l515/imu/raw',
+        description='imu topic from sensor'),
+    
+    DeclareLaunchArgument(
+        'rgb_image_topic', default_value='/l515/image',
+        description='imu topic from sensor'),
+    
+    DeclareLaunchArgument(
+        'rgb_camera_info_topic', default_value='/l515/camera_info',
+        description='imu topic from sensor'),
+    
+    DeclareLaunchArgument(
+        'depth_image_topic', default_value='/l515/depth_image',
+        description='imu topic from sensor'),
+    
+    DeclareLaunchArgument(
+        'depth_camera_info_topic', default_value='/l515/camera_info',
+        description='imu topic from sensor'),
 ]
 
 
@@ -51,15 +70,17 @@ def generate_launch_description() -> LaunchDescription:
     ])
 
     rtabmap_parameters = {
-        'frame_id': 'ackermann/base_footprint',
-        'subscribe_rgbd': True,
-        'subscribe_scan': subscribe_scan,
-        'use_action_for_goal': True,
-        'odom_sensor_sync': True,
-        'Mem/NotLinkedNodesKept': 'false',
+        'subscribe_rgbd':True,
+        'subscribe_scan':subscribe_scan,
+        'subscribe_odom':True,
+        'use_action_for_goal':True,
+        'odom_sensor_sync': True,   
+        # RTAB-Map's parameters should be strings:
+        'Mem/NotLinkedNodesKept':'false',
         'Grid/MaxGroundHeight': '0.1',
         'Grid/MaxObstacleHeight': '0.8',
         'Grid/NormalsSegmentation': 'false',
+        #'Grid/RangeMax': '20',
         'Grid/3D': 'false',
         'Grid/RayTracing': 'true'
     }
@@ -77,10 +98,10 @@ def generate_launch_description() -> LaunchDescription:
         ('scan', scan_topic),
         ('odom', odom_topic),
         ('imu', '/imu/data'),
-        ('rgb/image', '/ackermann/depth_camera/image'),
-        ('rgb/camera_info', '/ackermann/depth_camera/camera_info'),
-        ('depth/image', '/ackermann/depth_camera/depth_image'),
-        ('depth/camera_info', '/ackermann/depth_camera/camera_info'),
+        ('rgb/image', LaunchConfiguration('rgb_image_topic')), 
+        ('rgb/camera_info', LaunchConfiguration('rgb_camera_info_topic')),
+        ('depth/image', LaunchConfiguration('depth_image_topic')),
+        ('depth/camera_info', LaunchConfiguration('depth_camera_info_topic'))
     ]
 
     rgbd_sync = Node(
@@ -104,7 +125,7 @@ def generate_launch_description() -> LaunchDescription:
             'use_sim_time': use_sim_time,
         }],
         remappings=[
-            ('imu_in', '/l515/imu/raw'),
+            ('imu_in', LaunchConfiguration('imu_raw_topic')),
             ('imu_out', '/l515/imu/raw_transformed'),
         ],
     )
@@ -188,13 +209,21 @@ def generate_launch_description() -> LaunchDescription:
         'transform_timeout': 0.2,
         'transform_time_offset': 0.1,
         'odom0': odom_topic,
-        'odom0_config': [True, True, False, False, False, True, True, True, False, False, False, True, False, False, False],
+        "odom0_config": [True, True, False,     # x, y, z position
+                         False, False, True,    # roll, pitch, yaw
+                         True, True, False,     # x, y, z velocity
+                         False, False, True,    # roll, pitch, yaw rates
+                         False, False, False],  # x, y, z acceleration
         'odom0_queue_size': 10,
         'odom0_nodelay': False,
         'odom0_differential': False,
         'odom0_relative': True,
         'imu0': '/imu/data',
-        'imu0_config': [False, False, False, False, False, True, False, False, False, False, False, True, False, False, False],
+        "imu0_config": [False, False, False,   # x, y, z position
+                        False, False, True,    # roll, pitch, yaw
+                        False, False, False,   # x, y, z velocity
+                        False, False, True,    # roll, pitch, yaw rates
+                        False, False, False],  # x, y, z acceleration
         'imu0_queue_size': 10,
         'imu0_nodelay': False,
         'imu0_differential': False,
@@ -259,12 +288,42 @@ def generate_launch_description() -> LaunchDescription:
             'angle_increment': 0.0087,
         }],
         remappings=[
-            ('depth', '/ackermann/depth_camera/depth_image'),
-            ('depth_camera_info', '/ackermann/depth_camera/camera_info'),
+            ('depth', LaunchConfiguration('depth_image_topic')),
+            ('depth_camera_info', LaunchConfiguration('depth_camera_info_topic')),
             ('scan', '/scan'),
         ],
     )
-
+    
+    # Obstacle detection with the camera for nav2 local costmap.
+    # First, we need to convert depth image to a point cloud.
+    rgbd_to_points = Node(
+        package='rtabmap_util', executable='point_cloud_xyz', output='screen',
+        parameters=[{'decimation': 2,
+                     'max_depth': 20.0,
+                     'voxel_size': 0.02}],
+        remappings=remappings)
+    
+    # Second, we segment the floor from the obstacles.
+    obstacle_parameters={
+          'frame_id':'ackermann/base_footprint',
+          'use_sim_time':use_sim_time,
+          'subscribe_depth':True,
+          'use_action_for_goal':True,
+          'Reg/Force3DoF':'true',
+          'Grid/RayTracing':'true', # Fill empty space
+          'Grid/3D':'false', # Use 2D occupancy
+          'Grid/RangeMax':'3',
+          'Grid/NormalsSegmentation':'true', # Use passthrough filter to detect obstacles
+          'Grid/MaxGroundHeight':'0.1', # All points above 5 cm are obstacles
+          'Grid/MaxObstacleHeight':'0.8',  # All points over 1 meter are ignored
+          'Optimizer/GravitySigma':'0' # Disable imu constraints (we are already in 2D)
+    }
+    obstacle_detection = Node(
+        package='rtabmap_util', executable='obstacles_detection', output='screen',
+        parameters=[obstacle_parameters],
+        remappings=[('obstacles', '/camera/obstacles'),
+                    ('ground', '/camera/ground')])
+    
     ld = LaunchDescription(ARGUMENTS)
     ld.add_action(rgbd_sync)
     ld.add_action(depth_to_scan)
