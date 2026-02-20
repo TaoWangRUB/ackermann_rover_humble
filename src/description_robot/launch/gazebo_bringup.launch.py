@@ -125,15 +125,28 @@ def generate_launch_description() -> LaunchDescription:
     # Bridge Gazebo Transport topics to ROS 2 so RTAB-Map can consume them
     bridge_topics = [
         '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
-        '/ackermann/depth_camera/image@sensor_msgs/msg/Image[gz.msgs.Image',
-        '/ackermann/depth_camera/depth_image@sensor_msgs/msg/Image[gz.msgs.Image',
-        '/ackermann/depth_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
-        '/l515/imu/raw@sensor_msgs/msg/Imu[gz.msgs.IMU',
-        '/rplidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
-        '/ackermann/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
-        '/ackermann/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
-        # only need when the bildin ackermann controller is used, otherwise the ros2_controller can send directly from Gazebo topics
-        #'/ackermann/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
+        '/d435i/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
+            #'/d435i/points' + '@sensor_msgs/msg/PointCloud2' + '[gz.msgs.PointCloudPacked',
+            '/d435i/depth_image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+            '/d435i/image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+            '/d435i/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
+            '/l515/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
+            '/l515/points' + '@sensor_msgs/msg/PointCloud2' + '[gz.msgs.PointCloudPacked',
+            '/l515/depth_image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+            '/l515/image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+            '/l515/imu/raw' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
+            '/t265/fisheye1/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
+            '/t265/fisheye1/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+            '/t265/fisheye2/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
+            '/t265/fisheye2/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+            '/t265/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
+            '/t265/pose' + '@nav_msgs/msg/Odometry' + '[gz.msgs.Odometry',
+            '/ackmann/odom' + '@nav_msgs/msg/Odometry' + '[gz.msgs.Odometry',
+            '/ackmann/tf' + '@tf2_msgs/msg/TFMessage' + '[gz.msgs.Pose_V',
+            '/model/ackmann/tf' + '@tf2_msgs/msg/TFMessage' + '[gz.msgs.Pose_V',
+            #'/ackmann/joint_state' + '@sensor_msgs/msg/JointState' + '[gz.msgs.Model',
+            '/ackmann/cmd_vel' + '@geometry_msgs/msg/Twist' + ']gz.msgs.Twist',
+            '/rplidar/scan' + '@sensor_msgs/msg/LaserScan' + '[gz.msgs.LaserScan',
     ]
 
     parameter_bridge = Node(
