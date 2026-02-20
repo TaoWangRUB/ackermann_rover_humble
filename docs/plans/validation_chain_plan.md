@@ -17,3 +17,6 @@ Verify TF/data flow end-to-end: first `description_robot`, then RTAB-Map, then s
 
 ### Further Considerations
 1. Headless tooling only: Option A (`tf2_tools view_frames`) and Option C (`tf2_echo`) can run alongside launches; RViz remains optional.
+2. Verify TF ownership: use `ros2 topic info /tf -v` and `ros2 topic info /tf_static -v` to ensure there is a single publisher chain for each transform edge (e.g., only one node provides `map→odom` and one provides `odom→ackermann/base_footprint`).
+3. Validate sensor frames: confirm IMU and camera `frame_id` values match frames present in the TF tree (e.g., `/l515/imu/raw` and `/ackermann/depth_camera/*` use frames that exist and are correctly attached under `ackermann/base_footprint`).
+4. Check odometry alignment with gravity: use `ros2 run tf2_ros tf2_echo map ackermann/base_footprint` (and `odom ackermann/base_footprint`) while driving and ensure roll/pitch stay near zero and the ground plane remains flat in `map`.
