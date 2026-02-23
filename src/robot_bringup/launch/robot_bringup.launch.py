@@ -9,6 +9,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, TextSubstitution
+from launch_ros.actions import Node
 
 ARGUMENTS = [
     DeclareLaunchArgument(
@@ -57,7 +58,7 @@ ARGUMENTS = [
     ),
     DeclareLaunchArgument(
         'rtabmap_viz',
-        default_value='true',
+        default_value='false',
         choices=['true', 'false'],
         description='Start rtabmap_viz for monitoring.'
     ),
@@ -71,7 +72,7 @@ ARGUMENTS = [
         'nav2_params_file',
         default_value=TextSubstitution(
             text=os.path.join(
-                get_package_share_directory('nav2_bringup'), 'config', 'nav2_ackermann.yaml'
+                get_package_share_directory('ackermann_nav2_bringup'), 'config', 'nav2_params.yaml'
             )
         ),
         description='Parameter file used to configure Nav2 components.'
@@ -98,6 +99,23 @@ ARGUMENTS = [
         ),
         description='Behavior Tree XML file for NavigateThroughPoses.'
     ),
+    DeclareLaunchArgument(
+        'rviz_config',
+        default_value=TextSubstitution(
+            text=os.path.join(
+                get_package_share_directory('robot_bringup'),
+                'rviz',
+                'robot.rviz'
+            )
+        ),
+        description='RViz configuration file to load at startup.'
+    ),
+    DeclareLaunchArgument(
+        'rviz',
+        default_value='true',
+        choices=['true', 'false'],
+        description='When true, start rviz2 with the configured view.'
+    ),
 ]
 
 
@@ -117,10 +135,12 @@ def generate_launch_description() -> LaunchDescription:
     nav2_params_file = LaunchConfiguration('nav2_params_file')
     nav2_bt_xml = LaunchConfiguration('nav2_bt_xml')
     nav2_through_bt = LaunchConfiguration('nav2_through_poses_bt')
+    rviz_config = LaunchConfiguration('rviz_config')
+    rviz_enable = LaunchConfiguration('rviz')
 
     robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
-    nav2_bringup_share = get_package_share_directory('nav2_bringup')
+    nav2_bringup_share = get_package_share_directory('ackermann_nav2_bringup')
 
     gazebo_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -162,9 +182,20 @@ def generate_launch_description() -> LaunchDescription:
         }.items()
     )
 
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        output='screen',
+        arguments=['-d', rviz_config],
+        parameters=[{'use_sim_time': use_sim_time}],
+        condition=IfCondition(rviz_enable),
+    )
+
     ld = LaunchDescription(ARGUMENTS)
     ld.add_action(gazebo_launch)
     ld.add_action(rtabmap_launch)
     ld.add_action(nav2_launch)
+    ld.add_action(rviz_node)
 
     return ld

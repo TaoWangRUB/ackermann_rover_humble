@@ -18,20 +18,20 @@ Autonomous Ackermann rover with UAV-grade autonomy stack. Primary workflow:
 
 ## Core Subsystems
 
-| Layer | Responsibilities | Key Nodes/Tools |
-| --- | --- | --- |
-| Simulation & Bridge | Gazebo physics, sensor plugins, ros_gz parameter bridge, TF priming | `gazebo_bringup.launch.py`, ros_gz_sim, ros_gz_bridge, joint_state_publisher, robot_state_publisher |
-| Sensor Conditioning | Sync RGB-D, convert depth→scan, align IMU frames, filter IMU | `rgbd_sync`, `depthimage_to_laserscan`, `imu_transformer`, `imu_filter_madgwick` |
-| Localization & Mapping | VIO/ICP odom, EKF fusion, loop-closure SLAM, TF publishing | `rtabmap_odom`, `robot_localization`, `rtabmap_slam`, `rtabmap_viz` |
-| Navigation & Control | Global + local planners, Ackermann conversion | Nav2 stack, `ackermann_control` package |
-| Safety & Vehicle Interface | Command gating, emergency stop hooks, future hardware drivers | Safety watchdog (planned), ros2_control hardware adapters |
+| Layer                      | Responsibilities                                                    | Key Nodes/Tools                                                                                     |
+| -------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Simulation & Bridge        | Gazebo physics, sensor plugins, ros_gz parameter bridge, TF priming | `gazebo_bringup.launch.py`, ros_gz_sim, ros_gz_bridge, joint_state_publisher, robot_state_publisher |
+| Sensor Conditioning        | Sync RGB-D, convert depth→scan, align IMU frames, filter IMU        | `rgbd_sync`, `depthimage_to_laserscan`, `imu_transformer`, `imu_filter_madgwick`                    |
+| Localization & Mapping     | VIO/ICP odom, EKF fusion, loop-closure SLAM, TF publishing          | `rtabmap_odom`, `robot_localization`, `rtabmap_slam`, `rtabmap_viz`                                 |
+| Navigation & Control       | Global + local planners, Ackermann conversion                       | Nav2 stack, `ackermann_control` package                                                             |
+| Safety & Vehicle Interface | Command gating, emergency stop hooks, future hardware drivers       | Safety watchdog (planned), ros2_control hardware adapters                                           |
 
 ## Data Flow Summary
 
 - ros_gz parameter bridge exports `/ackermann/depth_camera/image`, `/ackermann/depth_camera/depth_image`, `/ackermann/depth_camera/camera_info`, `/l515/imu/raw`, `/rplidar/scan`, `/ackermann/odom`, and `/clock` into ROS 2.
-- `rgbd_sync` aligns the RGB-D stream, and `depthimage_to_laserscan` produces `/scan` so RTAB-Map can switch between vision or ICP pipelines.
-- `imu_transformer` re-frames `/l515/imu/raw` into `ackermann/base_footprint`, while `imu_filter_madgwick` provides `/imu/data` for EKF fusion.
-- `rtabmap_odom` (RGB-D or ICP) publishes `/vo_odom` or `/icp_odom`; `robot_localization` fuses them into `/odometry/filtered`, and RTAB-Map SLAM emits `/rtabmap/odom`, `/rtabmap/mapData`, and TF.
+- `rgbd_sync` aligns the RGB-D stream in the camera optical frame so RGB and depth arrive time-synchronized; `depthimage_to_laserscan` produces `/scan` so RTAB-Map can switch between vision or ICP pipelines.
+- Raw IMU data arrives in the RealSense optical IMU frame (e.g. `*_optical_imu_frame`). `imu_transformer` provides the required static/dynamic transform from the rover base frame (`ackermann/base_footprint` or `ackermann/base_link`) into this IMU frame so all inertial data share a common base frame for fusion. `imu_filter_madgwick` then filters this transformed IMU stream to produce a smooth `/imu/data` signal suitable for EKF and VIO.
+- `rtabmap_odom` runs vision odometry on the synchronized RGB-D stream. For loose coupling, this VO output is fused with filtered IMU data in `robot_localization` to produce `/odometry/filtered`. RTAB-Map SLAM/localization can then operate in a VIO mode (VO + IMU) plus images to estimate `map` with loop-closure detection, while still exposing `/rtabmap/odom`, `/rtabmap/mapData`, and the TF (`map→odom→base`) chain.
 - Nav2 consumes `/tf`, `/odometry/filtered`, and the map topics to produce `/cmd_vel` (namespaced `/cmd_vel_nav`).
 - `ackermann_control`/`ackermann_steering_controller` maps `/cmd_vel_nav` to `/ackermann/cmd_vel`, which `gz_ros2_control` uses to actuate the simulated rover; future hardware will expose the same contract.
 - Safety watchdog hooks are being designed to watch `/odometry/filtered`, controller diagnostics, and future hardware health topics (no PX4 dependency in the current stack).

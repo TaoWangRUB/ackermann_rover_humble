@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>nav2_bringup</name>
+  <name>ackermann_nav2_bringup</name>
   <version>0.1.0</version>
   <description>Nav2 bringup tailored for the Ackermann rover.</description>
   <maintainer email="dev@example.com">Dev</maintainer>

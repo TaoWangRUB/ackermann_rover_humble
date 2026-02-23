@@ -65,7 +65,7 @@ def generate_launch_description() -> LaunchDescription:
     )
     declare_gz_args = DeclareLaunchArgument(
         'gz_args',
-        default_value=TextSubstitution(text=f'-r {default_world}'),
+        default_value=TextSubstitution(text=f'-s -r {default_world}'),
         description='Arguments forwarded to gz sim (e.g. "-v 4 -r my.world").',
     )
     declare_robot_name = DeclareLaunchArgument(

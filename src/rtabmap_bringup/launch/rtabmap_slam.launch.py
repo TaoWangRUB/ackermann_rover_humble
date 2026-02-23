@@ -27,7 +27,7 @@ ARGUMENTS = [
     ),
     DeclareLaunchArgument(
         'rtabmap_viz',
-        default_value='true',
+        default_value='false',
         choices=['true', 'false'],
         description='Launch rtabmap_viz for debugging.'
     ),
@@ -84,6 +84,10 @@ def generate_launch_description() -> LaunchDescription:
         'Grid/3D': 'false',
         'Grid/RayTracing': 'true',
         'Reg/Force3DoF': 'true',
+        'topic_queue_size': 20,
+        'sync_queue_size': 20,
+        'RGBD/LinearUpdate': '0.05',     # Update map more often (smaller motion threshold)
+        'RGBD/AngularUpdate': '0.05',
     }
 
     shared_parameters = {
@@ -102,7 +106,8 @@ def generate_launch_description() -> LaunchDescription:
         ('rgb/image', LaunchConfiguration('rgb_image_topic')), 
         ('rgb/camera_info', LaunchConfiguration('rgb_camera_info_topic')),
         ('depth/image', LaunchConfiguration('depth_image_topic')),
-        ('depth/camera_info', LaunchConfiguration('depth_camera_info_topic'))
+        ('depth/camera_info', LaunchConfiguration('depth_camera_info_topic')),
+        ('cloud', '/camera/cloud')
     ]
 
     rgbd_sync = Node(
@@ -110,9 +115,9 @@ def generate_launch_description() -> LaunchDescription:
         executable='rgbd_sync',
         output='screen',
         parameters=[{
-            'approx_sync': False,
+            'approx_sync': True,
             'queue_size': 30,
-            'approx_sync_max_interval': 0.05,
+            'approx_sync_max_interval': 0.02,
             'use_sim_time': use_sim_time
         }],
         remappings=remappings,
@@ -149,8 +154,11 @@ def generate_launch_description() -> LaunchDescription:
         'publish_tf': False,
         'wait_for_imu_to_init': True,
         'use_sim_time': use_sim_time,
+        'approx_sync': True,
+        'queue_size': 30,
+        'approx_sync_max_interval': 0.02,
         'Odom/Strategy': '0',
-        'Vis/MinInliers': '10',
+        'Vis/MinInliers': '15',
         'Vis/FeatureType': '6',
         'Vis/MaxFeatures': '1000',
         'Vis/EstimationType': '1',
@@ -201,6 +209,7 @@ def generate_launch_description() -> LaunchDescription:
         'frequency': 30.0,
         'predict_to_current_time': True,
         'history_length': 5.0,
+        'smooth_lagged_data': True,
         'use_sim_time': use_sim_time,
         'two_d_mode': True,
         'publish_tf': True,
@@ -211,7 +220,7 @@ def generate_launch_description() -> LaunchDescription:
         'sensor_timeout': 0.2,
         'transform_timeout': 0.2,
         'transform_time_offset': 0.1,
-        'odom0': odom_topic,
+        'odom0': odom_topic, #odom_topic '/ackermann_odom'
         "odom0_config": [True, True, False,     # x, y, z position
                          False, False, True,    # roll, pitch, yaw
                          True, True, False,     # x, y, z velocity
@@ -251,7 +260,7 @@ def generate_launch_description() -> LaunchDescription:
         executable='rtabmap',
         output='screen',
         parameters=[rtabmap_parameters, shared_parameters],
-        remappings=remappings + [('odom', '/odometry/filtered')],
+        remappings=remappings + [('odom', odom_topic)],#/ackermann/odom /odometry/filtered
         arguments=['-d'],
     )
 
@@ -337,6 +346,8 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(ekf_filter_node)
     ld.add_action(slam)
     ld.add_action(localization_node)
+    ld.add_action(rgbd_to_points)
+    ld.add_action(obstacle_detection)
     ld.add_action(rtabmap_viz_node)
 
     return ld
