@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(nav2_bringup)
+project(ackermann_nav2_bringup)
 
 find_package(ament_cmake REQUIRED)
 

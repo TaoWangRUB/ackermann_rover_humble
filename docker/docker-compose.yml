@@ -1,0 +1,55 @@
+services:
+  ackermann_slam:
+    image: ${IMAGE_NAME:-ackermann_rover}_${ROS_DISTRO:-jazzy}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        UBUNTU_VERSION: ${UBUNTU_VERSION:-24.04}
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        GZ_DISTRO: ${GZ_DISTRO:-harmonic}
+        ROS_UBUNTU_CODENAME: ${ROS_UBUNTU_CODENAME:-noble}
+    container_name: ${CONTAINER_NAME:-ackermann_slam}
+
+    # Match your current docker run environment
+    env_file:
+      - .env
+    environment:
+      - __NV_PRIME_RENDER_OFFLOAD=1           # important on hybrid systems, harmless otherwise
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - LIBGL_ALWAYS_INDIRECT=0
+      - UBUNTU_VERSION=${UBUNTU_VERSION:-24.04}
+      - ROS_DISTRO=${ROS_DISTRO:-jazzy}
+      - GZ_DISTRO=${GZ_DISTRO:-harmonic}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+
+    # Volumes: X11 socket, workspace, Gazebo cache, full /dev access
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ..:/workspace
+      - ../gazebo_cache:/root/.gazebo
+      - /dev:/dev
+
+    # Same isolation model as your manual docker run
+    network_mode: host
+    ipc: host
+    pid: host
+    privileged: true
+    shm_size: 2g
+
+    # GPU access (requires nvidia-container-toolkit)
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: ["gpu"]
+
+    working_dir: /workspace
+    stdin_open: true   # -i
+    tty: true          # -t
