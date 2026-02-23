@@ -11,7 +11,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description() -> LaunchDescription:
-    bringup_share = get_package_share_directory('nav2_bringup')
+    bringup_share = get_package_share_directory('ackermann_nav2_bringup')
     default_params = os.path.join(bringup_share, 'config', 'nav2_ackermann.yaml')
     bt_share = get_package_share_directory('nav2_bt_navigator')
 

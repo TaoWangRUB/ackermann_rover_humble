@@ -1,13 +1,19 @@
 # Dockerfile for ackermann_rover_humble
-# Ubuntu 24.04 + ROS 2 Jazzy + Gazebo (gz) Harmonic
-# NOTE: ROS 2 Jazzy is officially targeted at Ubuntu 24.04 (Noble).
-# If you strictly require Ubuntu 22.04, we would need to build Jazzy from source,
-# which is significantly heavier and non-standard.
+# Ubuntu 24.04 + ROS 2 (configurable) + Gazebo (gz) release (configurable)
+# NOTE: Defaults target ROS 2 Jazzy on Ubuntu 24.04 (Noble).
 
-FROM ubuntu:24.04
+ARG UBUNTU_VERSION=24.04
+FROM ubuntu:${UBUNTU_VERSION}
+
+ARG UBUNTU_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-c"]
+
+# Build-time configuration for ROS and Gazebo distributions
+ARG ROS_DISTRO=jazzy
+ARG GZ_DISTRO=harmonic
+ARG ROS_UBUNTU_CODENAME=noble
 
 # Locale setup
 RUN apt-get update && apt-get install -y \
@@ -30,10 +36,10 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Add ROS 2 Jazzy apt repository
+# Add ROS 2 apt repository (default: Jazzy on Ubuntu Noble)
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
     | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu noble main" \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu ${ROS_UBUNTU_CODENAME} main" \
     > /etc/apt/sources.list.d/ros2.list
 
 # Add Gazebo (gz) Harmonic apt repository (ubuntu-stable, per official docs)
@@ -42,18 +48,20 @@ RUN curl -sSL https://packages.osrfoundation.org/gazebo.gpg \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] https://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" \
     > /etc/apt/sources.list.d/gazebo-stable.list
 
-ENV ROS_DISTRO=jazzy
-ENV ROS_ROOT=/opt/ros/$ROS_DISTRO
+ENV ROS_DISTRO=${ROS_DISTRO}
+ENV ROS_ROOT=/opt/ros/${ROS_DISTRO}
 
-# Install ROS 2 Jazzy, Gazebo Harmonic, ROS–gz bridge, and ROS dev tools
+# Install ROS 2, Gazebo (gz), ROS–gz bridge, and ROS dev tools
 RUN apt-get update && apt-get install -y \
     ros-$ROS_DISTRO-desktop \
-    gz-harmonic \
+    gz-${GZ_DISTRO} \
     ros-$ROS_DISTRO-ros-gz-sim \
     python3-colcon-common-extensions \
     python3-vcstool \
     python3-rosdep \
     ros-$ROS_DISTRO-ros2controlcli \
+    ros-$ROS_DISTRO-rtabmap-* \
+    ros-$ROS_DISTRO-turtlebot3* \
     && rm -rf /var/lib/apt/lists/*
 
 # Initialize rosdep
@@ -77,23 +85,24 @@ RUN mkdir -p src && \
 # Bind-mount your workspace at runtime, e.g.:
 #   docker run -it --rm \
 #     -v "$PWD":/workspace/src/ackermann_rover_humble \
-#     ackermann_rover_jazzy
+#     ${IMAGE_NAME:-ackermann_rover}_${ROS_DISTRO}
 
 # (Optional) Install package dependencies for any repos brought in via ros2.repos.
 # Your bind-mounted project can run rosdep / colcon inside the container.
-RUN source /opt/ros/$ROS_DISTRO/setup.bash && \
+RUN apt-get update && source /opt/ros/$ROS_DISTRO/setup.bash && \
     rosdep install --from-paths src --ignore-src -r -y || \
     echo "WARNING: rosdep install encountered errors (some ros-jazzy-* packages may not be available); continuing image build."
 
 # (Optional) Build any repos already present under /workspace/src at image build time.
-RUN source /opt/ros/$ROS_DISTRO/setup.bash && \
+RUN apt-get update && source /opt/ros/$ROS_DISTRO/setup.bash && \
     colcon build --symlink-install || \
     echo "WARNING: colcon build failed during image build; please run colcon build inside the container after resolving dependencies."
 
-# Source ROS and the overlay by default in interactive shells
-RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /root/.bashrc && \
-    echo "source /workspace/install/setup.bash" >> /root/.bashrc
+# Lightweight entrypoint script: provided from the local repo for easy editing
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 WORKDIR /workspace
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["bash"]
