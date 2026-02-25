@@ -10,8 +10,8 @@ This skill provides you with instructions on how to interact with, build, test, 
 ## 1. Environment Setup
 Before running ROS 2 commands or building code locally (if not inside the pre-configured Docker container), always source the workspace:
 ```bash
-# Source the ROS 2 installation (Adjust 'humble' to the correct distro if needed)
-source /opt/ros/humble/setup.bash
+# Source the ROS 2 installation (Adjust 'jazzy' to the correct distro if needed)
+source /opt/ros/jazzy/setup.bash
 # Source the local workspace
 source install/setup.bash
 ```
@@ -66,6 +66,13 @@ To understand the running ROS graph, use the CLI tools:
 - **Services/Actions**: RPCs and long-running tasks
   - `ros2 service list` & `ros2 service call ...`
   - `ros2 action list` & `ros2 action send_goal ...`
+- **GUI Debugging Tools (Requires X11/`xhost +local:root`)**:
+  - `rqt_graph`: Visualizes the active ROS 2 node/topic computation graph. Shows exactly who is publishing to what.
+  - `rqt_tf_tree`: Visualizes the current broadcasted TF frames and their relationships.
+- **Transform (TF2) Introspection**:
+  - `ros2 run tf2_ros tf2_echo <source_frame> <target_frame>`: Watch the continuous transform math between two frames (e.g., `odom` to `base_link`).
+  - `ros2 run tf2_tools view_frames`: Generates a PDF (`frames.pdf`) of the entire TF tree showing broadcaster info and timing. Useful when GUI tools are unavailable.
+  - `ros2 run tf2_ros tf2_monitor`: Monitors transform delays and broadcasters for the entire tree or specific frames.
 
 ## 5. Lifecycle Nodes
 Nav2 and hardware interfaces heavily use Managed (Lifecycle) nodes.
