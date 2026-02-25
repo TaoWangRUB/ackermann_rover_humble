@@ -55,6 +55,8 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
+          # Remove pre-installed libunwind-14-dev which conflicts with libunwind-dev required by rosdep
+          sudo apt-get remove -y libunwind-14-dev
           rosdep update
           rosdep install --from-paths src --ignore-src --rosdistro humble -y
 
