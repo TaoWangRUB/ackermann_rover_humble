@@ -41,4 +41,9 @@ Before considering any task "Done", you must verify your changes programmaticall
 ```bash
 bash scripts/verify_agent_work.sh
 ```
+> **Note on GUI Tools (Gazebo/RViz):** If you are running standalone visual verification, always ensure you've enabled local X11 forwarding first (`xhost +local:root`). 
+> Also, be aware of race conditions during simulation startup; use `timeout` or `TimerAction` to delay node startups if needed.
+
 If this script fails, you are NOT done. You must diagnose the failure, patch the code, and re-run until you achieve a fully green build and stable simulation trace.
+
+> **CRITICAL RULE:** When you complete a verification task, **you MUST ALWAYS close/terminate the simulation** and any running nodes (e.g., using `docker compose restart ackermann_slam` or by explicitly killing the background processes). Leaving background simulations running causes conflicts for future tasks.
