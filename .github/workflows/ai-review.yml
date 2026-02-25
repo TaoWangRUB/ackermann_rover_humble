@@ -4,4 +4,6 @@ jobs:
   review:
     runs-on: ubuntu-22.04
     steps:
-      - run: echo AI review placeholder
+      - uses: actions/checkout@v4
+      - name: Run Autonomous Agent Verification
+        run: bash scripts/verify_agent_work.sh
