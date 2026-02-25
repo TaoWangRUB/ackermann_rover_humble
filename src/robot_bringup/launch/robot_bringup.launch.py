@@ -192,10 +192,16 @@ def generate_launch_description() -> LaunchDescription:
         condition=IfCondition(rviz_enable),
     )
 
+    from launch.actions import TimerAction
+    rviz_delayed = TimerAction(
+        period=5.0,
+        actions=[rviz_node]
+    )
+
     ld = LaunchDescription(ARGUMENTS)
     ld.add_action(gazebo_launch)
     ld.add_action(rtabmap_launch)
     ld.add_action(nav2_launch)
-    ld.add_action(rviz_node)
+    ld.add_action(rviz_delayed)
 
     return ld
