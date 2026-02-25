@@ -1,9 +1,0 @@
-# CI Override for Docker Compose
-# Removes the NVIDIA runtime and GPU deploy reservation for standard runners
-services:
-  ackermann_slam:
-    runtime: runc
-    deploy:
-      resources:
-        reservations:
-          devices: []
