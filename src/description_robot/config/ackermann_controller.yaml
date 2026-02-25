@@ -56,8 +56,8 @@ ackermann_steering_controller:
 
     open_loop: false
     publish_rate: 50.0
-    enable_odom_tf: true
     publish_odom: true
+    enable_odom_tf: false
     publish_odom_tf: false
 
     # topic name only works in urdf
