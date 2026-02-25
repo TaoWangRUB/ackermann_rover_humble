@@ -76,7 +76,7 @@ def generate_launch_description():
             'ackermann_steering_controller',
             '--param-file', control_params_file,
             '--controller-ros-args', 
-            '-r /ackermann_steering_controller/reference:=/cmd_vel_smoothed',
+            '-r /ackermann_steering_controller/reference:=/cmd_vel',
         ],
         output='screen',
     )
