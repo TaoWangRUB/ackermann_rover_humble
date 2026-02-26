@@ -30,8 +30,8 @@ install(DIRECTORY
 )
 
 install(PROGRAMS
-  scripts/px4_bridge_node.py
-  scripts/px4_odometry_node.py
+  scripts/px4_offboard_control.py
+  scripts/px4_vision_odom.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
