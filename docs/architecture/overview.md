@@ -13,7 +13,7 @@ Autonomous Ackermann rover with UAV-grade autonomy stack. Primary workflow:
 
 1. **Simulation-first**: `robot_bringup.launch.py` boots Gazebo via `description_robot` and keeps ROS ↔ Gazebo resources discoverable through `GZ_SIM_RESOURCE_PATH`. The ros_gz parameter bridge exports depth camera, IMU, LiDAR, odometry, and `/clock` directly into ROS 2 topics the rest of the stack consumes.
 2. **Perception & Localization**: `rtabmap_bringup` orchestrates RGB-D synchronization, IMU preprocessing, VIO/ICP odometry, robot_localization fusion, and RTAB-Map SLAM or localization-only mode. Outputs include TF (`map`→`odom`→`ackermann/base_footprint`), `/rtabmap/odom`, `/odometry/filtered`, and map data for Nav2.
-3. **Planning & Control**: Nav2 planners consume RTAB-Map localization and costmaps to generate `/cmd_vel` (aliased to `/cmd_vel_nav`). The `ackermann_steering_controller` converts those twists to steering/speed profiles on `/ackermann/cmd_vel` for `gz_ros2_control`.
+3. **Planning & Control**: Nav2 planners consume RTAB-Map localization and costmaps to generate `/cmd_vel_nav`. This is smoothed and collision-checked to produce the final `/cmd_vel`. The `ackermann_steering_controller` directly consumes `/cmd_vel` to command the `gz_ros2_control` hardware interface.
 4. **Vehicle Interface**: Gazebo runs the Ackermann hardware through `gz_ros2_control`; when real hardware arrives the same ros2_control interface will connect to the vehicle CAN/drive stack.
 
 ## Core Subsystems
@@ -31,9 +31,10 @@ Autonomous Ackermann rover with UAV-grade autonomy stack. Primary workflow:
 - ros_gz parameter bridge exports `/ackermann/depth_camera/image`, `/ackermann/depth_camera/depth_image`, `/ackermann/depth_camera/camera_info`, `/l515/imu/raw`, `/rplidar/scan`, `/ackermann/odom`, and `/clock` into ROS 2.
 - `rgbd_sync` aligns the RGB-D stream in the camera optical frame so RGB and depth arrive time-synchronized; `depthimage_to_laserscan` produces `/scan` so RTAB-Map can switch between vision or ICP pipelines.
 - Raw IMU data arrives in the RealSense optical IMU frame (e.g. `*_optical_imu_frame`). `imu_transformer` provides the required static/dynamic transform from the rover base frame (`ackermann/base_footprint` or `ackermann/base_link`) into this IMU frame so all inertial data share a common base frame for fusion. `imu_filter_madgwick` then filters this transformed IMU stream to produce a smooth `/imu/data` signal suitable for EKF and VIO.
-- `rtabmap_odom` runs vision odometry on the synchronized RGB-D stream. For loose coupling, this VO output is fused with filtered IMU data in `robot_localization` to produce `/odometry/filtered`. RTAB-Map SLAM/localization can then operate in a VIO mode (VO + IMU) plus images to estimate `map` with loop-closure detection, while still exposing `/rtabmap/odom`, `/rtabmap/mapData`, and the TF (`map→odom→base`) chain.
-- Nav2 consumes `/tf`, `/odometry/filtered`, and the map topics to produce `/cmd_vel` (namespaced `/cmd_vel_nav`).
-- `ackermann_control`/`ackermann_steering_controller` maps `/cmd_vel_nav` to `/ackermann/cmd_vel`, which `gz_ros2_control` uses to actuate the simulated rover; future hardware will expose the same contract.
+- `rtabmap_odom` runs vision odometry on the synchronized RGB-D stream. For loose coupling, this VO output is fused with filtered IMU data in `robot_localization` to produce `/odometry/filtered`. RTAB-Map SLAM/localization then operates directly on this `/vo_odom` output (plus images) to estimate `map` with loop-closure detection, while exposing `/rtabmap/odom`, `/rtabmap/mapData`, and the TF (`map→odom→base`) chain.
+- Nav2 consumes `/tf`, `/odometry/filtered`, and the map topics to produce `/cmd_vel_nav`.
+- This velocity command routes through a velocity smoother and collision monitor to emerge as `/cmd_vel`.
+- `ackermann_steering_controller` maps `/cmd_vel` to the `gz_ros2_control` interface which actuates the simulated rover; future hardware will expose the same contract.
 - Safety watchdog hooks are being designed to watch `/odometry/filtered`, controller diagnostics, and future hardware health topics (no PX4 dependency in the current stack).
 
 ## Simulation → Hardware Parity
@@ -51,3 +52,139 @@ Autonomous Ackermann rover with UAV-grade autonomy stack. Primary workflow:
 - Interfaces to Nav2, safety watchdog, and ros2_control are now centralized in documentation tables below to keep integrators aligned when topics or QoS policies change.
 
 This overview drives the detailed node graph, interface contracts, and failure mode definitions in the following documents.
+
+## Software Architecture Diagram
+
+```mermaid
+
+flowchart TD
+
+%% ======================
+%% ROBOT / SIMULATION LAYER (SENSORS & ACTUATION)
+%% ======================
+subgraph RobotLayer[Robot / Simulation Layer]
+    %% Actuation
+    AckermannCtrl[ackermann_steering_controller]
+    Hardware[gz_ros2_control / Hardware Bridge]
+    OdomRaw[Odometry Raw / Ground Truth]
+    
+    %% Sensors
+    Cam[Depth Camera]
+    IMURaw[IMU Raw]
+    LidarScan[2D LiDAR]
+end
+
+%% Internal Robot Layer Connections
+CmdVelFinal --> AckermannCtrl
+AckermannCtrl --> Hardware
+AckermannCtrl -->|"/ackermann/odom"| OdomRaw
+AckermannCtrl -->|"/ackermann/odom (fallback)"| EKF
+
+%% ======================
+%% SENSOR CONDITIONING
+%% ======================
+subgraph Conditioning[Sensor Conditioning]
+    RGBSync[rgbd_sync]
+    DepthToScan[depthimage_to_laserscan]
+    IMUTrans[imu_transformer]
+    IMUFilter[imu_filter_madgwick]
+end
+
+Cam -->|"/ackermann/depth_camera/*"| RGBSync
+Cam -->|"depth_image"| DepthToScan
+DepthToScan -->|"/scan (optional backup)"| LidarScan
+IMURaw -->|"/l515/imu/raw"| IMUTrans
+IMUTrans -->|"/l515/imu/raw_transformed"| IMUFilter
+
+%% ======================
+%% LOCALIZATION / SLAM
+%% ======================
+subgraph Localization[RTAB-Map & State Estimation]
+    VO[rtabmap_odom]
+    EKF[robot_localization EKF]
+    SLAM[rtabmap_slam]
+end
+
+RGBSync -->|"RGB-D"| VO
+VO -->|"/vo_odom"| EKF
+IMUFilter -->|"/imu/data"| EKF
+EKF[robot_localization EKF]
+
+EKF -->|"TF odom->base"| SLAM
+VO -->|"/vo_odom"| SLAM
+
+%% ======================
+%% NAV2 STACK (EXISTING)
+%% ======================
+subgraph Nav2[Nav2 Stack]
+
+    %% ======================
+    %% GOAL INPUT
+    %% ======================
+    RViz[RViz Goal / NavigateToPose Action] --> BTNAV[bt_navigator]
+
+    %% ======================
+    %% BEHAVIOR TREE
+    %% ======================
+    BTNAV --> BT[Behavior Tree Engine]
+
+    BT --> CP[ComputePathToPose BT Node]
+    BT --> FP[FollowPath BT Node]
+    BT --> REC[Recovery Behaviors]
+
+    %% ======================
+    %% PLANNER
+    %% ======================
+    CP --> PlannerServer[planner_server]
+    PlannerServer --> GlobalCostmap[global_costmap]
+    PlannerServer --> PlannerPlugin[NavfnPlanner]
+
+    PlannerPlugin --> Path[(Global Path)]
+
+    %% ======================
+    %% CONTROLLER
+    %% ======================
+    FP --> ControllerServer[controller_server]
+
+    ControllerServer --> LocalCostmap[local_costmap]
+    ControllerServer --> MPPI["MPPI Controller<br>motion_model=Ackermann"]
+
+    Path --> MPPI
+
+    MPPI --> CmdVelRaw[cmd_vel_nav]
+
+    %% ======================
+    %% VELOCITY PIPELINE
+    %% ======================
+    CmdVelRaw --> VelSmooth[velocity_smoother]
+    VelSmooth --> CmdVelSmooth[cmd_vel_smoothed]
+
+    CmdVelSmooth --> CollisionMonitor[collision_monitor]
+
+    CollisionMonitor --> CmdVelFinal[cmd_vel]
+
+    %% ======================
+    %% RECOVERY
+    %% ======================
+    REC --> BehaviorServer[behavior_server]
+    BehaviorServer --> Backup[BackUp]
+    BehaviorServer --> Wait[Wait]
+    BehaviorServer --> Spin[Spin ⚠]
+end
+
+%% ======================
+%% NAV2 EXTERNAL CONNECTIONS
+%% ======================
+LidarScan -->|"/scan"| LocalCostmap
+LidarScan -->|"/scan"| GlobalCostmap
+
+EKF -->|"/odometry/filtered"| ControllerServer
+EKF -->|"/odometry/filtered"| BTNAV
+
+SLAM -->|"/rtabmap/mapData & TF map->odom"| GlobalCostmap
+SLAM -->|"TF map->odom"| LocalCostmap
+
+%% ======================
+%% End of Diagram
+
+```
