@@ -1,0 +1,5 @@
+px4_dds_bridge:
+  ros__parameters:
+    dds_domain_id: 0
+    px4_uav_id: 0
+    command_rate_hz: 50.0
