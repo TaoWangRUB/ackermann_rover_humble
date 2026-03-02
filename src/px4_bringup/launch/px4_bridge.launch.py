@@ -15,14 +15,14 @@ def _launch_mode_node(context, *args, **kwargs):
     nodes = []
 
     # Always launch the odometry bridge
-    nodes.append(
-        Node(
-            package='px4_bringup',
-            executable='px4_odometry_node.py',
-            name='px4_odometry_bridge',
-            output='screen',
-        )
-    )
+    # nodes.append(
+    #     Node(
+    #         package='px4_bringup',
+    #         executable='px4_odometry_node.py',
+    #         name='px4_odometry_bridge',
+    #         output='screen',
+    #     )
+    # )
 
     if use_legacy.lower() == 'true':
         # Legacy Python offboard bridge
@@ -43,6 +43,7 @@ def _launch_mode_node(context, *args, **kwargs):
             'trajectory': 'offboard_trajectory_mode',
             'speed_steering': 'rover_speed_steering_mode',
             'speed_attitude': 'rover_speed_attitude_mode',
+            'manual': 'rover_manual_mode',
         }
 
         executable = mode_executables.get(mode_type)
@@ -72,7 +73,7 @@ def generate_launch_description():
     mode_type_arg = DeclareLaunchArgument(
         'mode_type',
         default_value='speed_steering',
-        description='PX4 mode type: trajectory, speed_steering, or speed_attitude'
+        description='PX4 mode type: trajectory, speed_steering, speed_attitude, or manual'
     )
 
     use_legacy_arg = DeclareLaunchArgument(
