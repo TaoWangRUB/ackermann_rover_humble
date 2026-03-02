@@ -33,7 +33,8 @@ docker compose -f docker/docker-compose.yml exec ackermann_slam bash -c "source 
 docker compose -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && colcon build --symlink-install --packages-up-to ackermann_control safety px4_bringup robot_bringup ackermann_nav2_bringup rtabmap_bringup description_robot"
 
 echo -e "${GREEN}=== Running Unit Tests ===${NC}"
-docker compose -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && colcon test --event-handlers console_direct+ && colcon test-result --verbose"
+# Only test project packages — skip submodule tests (px4-ros2-interface-lib examples, etc.)
+docker compose -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && colcon test --event-handlers console_direct+ --packages-select ackermann_control safety && colcon test-result --verbose"
 
 echo -e "${GREEN}=== Validating Simulation & Launch (Dry Run/Topology Check) ===${NC}"
 # Since a full gazebo launch might run infinitely and block the agent indefinitely unless orchestrated,
