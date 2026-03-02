@@ -61,9 +61,12 @@ jobs:
           sudo apt-get update
           rosdep update
           rosdep install --from-paths src --ignore-src --rosdistro jazzy -y
-          # rosdep may pull pip packages that shadow the system ament_package;
-          # reinstall to guarantee the module is importable by CMake.
-          sudo apt-get install -y --reinstall ros-jazzy-ament-package
+          # rosdep may pip-install ament-package which shadows the system
+          # apt copy and breaks CMake's templates_2_cmake.py.
+          pip3 uninstall -y ament-package 2>/dev/null || true
+          # Skip all example packages from the px4-ros2-interface-lib
+          # submodule — they are not part of this project.
+          touch src/px4-ros2-interface-lib/examples/COLCON_IGNORE
 
       - name: Build and test
         shell: bash
