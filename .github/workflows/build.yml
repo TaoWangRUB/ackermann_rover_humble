@@ -72,6 +72,16 @@ jobs:
           # for px4_ros2_cpp's ament_index_get_resource() call.
           colcon build --symlink-install --packages-up-to px4_msgs
           source install/setup.bash
-          colcon build --symlink-install
+          # Only build the project's own packages (and their deps).
+          # This skips unneeded example packages from the
+          # px4-ros2-interface-lib submodule.
+          colcon build --symlink-install --packages-up-to \
+            ackermann_control \
+            safety \
+            px4_bringup \
+            robot_bringup \
+            ackermann_nav2_bringup \
+            rtabmap_bringup \
+            description_robot
           colcon test --event-handlers console_direct+ --packages-select ackermann_control safety
           colcon test-result --verbose
