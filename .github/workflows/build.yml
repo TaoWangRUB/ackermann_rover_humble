@@ -69,6 +69,11 @@ jobs:
         run: |
           set -eo pipefail
           source /opt/ros/humble/setup.bash
+          # Build px4_msgs first so its ament resource index
+          # (rosidl_interfaces) is available at configure time
+          # for px4_ros2_cpp's ament_index_get_resource() call.
+          colcon build --symlink-install --packages-up-to px4_msgs
+          source install/setup.bash
           colcon build --symlink-install
           colcon test --event-handlers console_direct+ --packages-select ackermann_control safety
           colcon test-result --verbose
