@@ -6,17 +6,17 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Setup ROS 2 Humble
+      - name: Setup ROS 2 Jazzy
         uses: ros-tooling/setup-ros@v0.7
         with:
-          required-ros-distributions: humble
+          required-ros-distributions: jazzy
 
       - name: Install lint dependencies
         shell: bash
@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          source /opt/ros/humble/setup.bash
+          source /opt/ros/jazzy/setup.bash
           ament_cpplint src/ackermann_control src/safety
 
       - name: Run cppcheck static analysis
@@ -41,7 +41,7 @@ jobs:
             src/safety/src
 
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: lint
     steps:
       - name: Checkout repository
@@ -49,26 +49,24 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup ROS 2 Humble
+      - name: Setup ROS 2 Jazzy
         uses: ros-tooling/setup-ros@v0.7
         with:
-          required-ros-distributions: humble
+          required-ros-distributions: jazzy
 
       - name: Install package dependencies
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
-          # Remove pre-installed libunwind-14-dev which conflicts with libunwind-dev required by rosdep
-          sudo apt-get remove -y libunwind-14-dev
           rosdep update
-          rosdep install --from-paths src --ignore-src --rosdistro humble -y
+          rosdep install --from-paths src --ignore-src --rosdistro jazzy -y
 
       - name: Build and test
         shell: bash
         run: |
           set -eo pipefail
-          source /opt/ros/humble/setup.bash
+          source /opt/ros/jazzy/setup.bash
           # Build px4_msgs first so its ament resource index
           # (rosidl_interfaces) is available at configure time
           # for px4_ros2_cpp's ament_index_get_resource() call.
