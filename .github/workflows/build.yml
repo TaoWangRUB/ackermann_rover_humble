@@ -61,6 +61,9 @@ jobs:
           sudo apt-get update
           rosdep update
           rosdep install --from-paths src --ignore-src --rosdistro jazzy -y
+          # rosdep may pull pip packages that shadow the system ament_package;
+          # reinstall to guarantee the module is importable by CMake.
+          sudo apt-get install -y --reinstall ros-jazzy-ament-package
 
       - name: Build and test
         shell: bash

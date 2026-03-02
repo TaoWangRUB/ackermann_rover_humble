@@ -27,7 +27,10 @@ docker compose -f docker/docker-compose.yml up -d ackermann_slam
 sleep 5 # wait for container to be ready
 
 echo -e "${GREEN}=== Running Build ===${NC}"
-docker compose -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install"
+# Stage 1: Build px4_msgs then px4_ros2_cpp (px4_ros2_cpp needs px4_msgs at configure time)
+docker compose -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --packages-up-to px4_ros2_cpp"
+# Stage 2: Source stage-1 artifacts, then build the project's own packages
+docker compose -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && colcon build --symlink-install --packages-up-to ackermann_control safety px4_bringup robot_bringup ackermann_nav2_bringup rtabmap_bringup description_robot"
 
 echo -e "${GREEN}=== Running Unit Tests ===${NC}"
 docker compose -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && colcon test --event-handlers console_direct+ && colcon test-result --verbose"
