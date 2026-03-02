@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include <chrono>
 #include <cmath>
 #include <geometry_msgs/msg/twist.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
 #include <px4_ros2/components/mode.hpp>
 #include <px4_ros2/control/setpoint_types/experimental/rover/speed_steering.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -12,7 +14,10 @@
 /**
  * @brief Rover Speed+Steering mode — maps cmd_vel to normalized speed and steering.
  *
- * Subscribes to /cmd_vel (body FLU). Extracts:
+ * Subscribes to a configurable cmd_vel topic (default: "/cmd_vel").
+ * Accepts both geometry_msgs/Twist and geometry_msgs/TwistStamped.
+ *
+ * Extracts:
  *   - linear.x  → speed_body_x [m/s]
  *   - angular.z → normalized steering [-1 (left), 1 (right)]
  *
@@ -20,7 +25,17 @@
  * and clamping to [-1, 1]. The sign is negated because ROS uses CCW+ while
  * PX4 steering uses right-positive.
  *
- * No frame conversion needed — both values are body-frame scalars.
+ * Safety features:
+ *   - Before any cmd_vel is received: sends zero setpoint (vehicle stays still).
+ *   - After first cmd_vel received: if no message arrives within cmd_vel_timeout
+ *     seconds, the setpoint is zeroed (vehicle stops).
+ *   - On deactivation (mode switch / node shutdown), a zero setpoint is sent.
+ *
+ * Parameters:
+ *   - cmd_vel_topic      (string, default: "/cmd_vel")  — topic name
+ *   - use_stamped        (bool,   default: false)       — true = TwistStamped, false = Twist
+ *   - max_steering_rate  (double, default: 1.0)         — normalization [rad/s]
+ *   - cmd_vel_timeout    (double, default: 2.0)         — watchdog timeout [s]
  */
 class RoverSpeedSteeringMode : public px4_ros2::ModeBase
 {
@@ -32,38 +47,108 @@ public:
     speed_steering_setpoint_ =
       std::make_shared<px4_ros2::RoverSpeedSteeringSetpointType>(*this);
 
-    cmd_vel_sub_ = node_.create_subscription<geometry_msgs::msg::Twist>(
-      "/cmd_vel", 10,
-      [this](const geometry_msgs::msg::Twist::SharedPtr msg) {
-        std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
-        last_cmd_vel_ = *msg;
-      });
+    // ── Parameters ────────────────────────────────────────────────
+    if (!node_.has_parameter("cmd_vel_topic")) {
+      node_.declare_parameter("cmd_vel_topic", std::string("/cmd_vel"));
+    }
+    const auto topic =
+      node_.get_parameter("cmd_vel_topic").as_string();
 
-    // Max steering rate [rad/s] used to normalize angular.z to [-1, 1].
-    // Should match PX4 RA_MAX_STR_ANG or your physical steering limit.
     if (!node_.has_parameter("max_steering_rate")) {
       node_.declare_parameter("max_steering_rate", 1.0);
     }
     max_steering_rate_ =
       static_cast<float>(node_.get_parameter("max_steering_rate").as_double());
+
+    if (!node_.has_parameter("cmd_vel_timeout")) {
+      node_.declare_parameter("cmd_vel_timeout", 2.0);
+    }
+    cmd_vel_timeout_s_ =
+      node_.get_parameter("cmd_vel_timeout").as_double();
+
+    if (!node_.has_parameter("use_stamped")) {
+      node_.declare_parameter("use_stamped", false);
+    }
+    const bool use_stamped =
+      node_.get_parameter("use_stamped").as_bool();
+
+    // ── Subscriber (one type per topic — DDS constraint) ─────────
+    if (use_stamped) {
+      cmd_vel_stamped_sub_ = node_.create_subscription<geometry_msgs::msg::TwistStamped>(
+        topic, 10,
+        [this](const geometry_msgs::msg::TwistStamped::SharedPtr msg) {
+          handleTwist(msg->twist);
+        });
+    } else {
+      cmd_vel_sub_ = node_.create_subscription<geometry_msgs::msg::Twist>(
+        topic, 10,
+        [this](const geometry_msgs::msg::Twist::SharedPtr msg) {
+          handleTwist(*msg);
+        });
+    }
+
+    RCLCPP_INFO(
+      node_.get_logger(),
+      "RoverSpeedSteeringMode: subscribing to '%s' (%s), "
+      "timeout=%.2f s, max_steering_rate=%.2f rad/s",
+      topic.c_str(), use_stamped ? "TwistStamped" : "Twist",
+      cmd_vel_timeout_s_, static_cast<double>(max_steering_rate_));
   }
 
   void onActivate() override
   {
     RCLCPP_INFO(node_.get_logger(), "RoverSpeedSteeringMode activated");
+    {
+      std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+      last_cmd_vel_ = geometry_msgs::msg::Twist{};
+      cmd_vel_received_ = false;
+      cmd_vel_timed_out_ = false;
+    }
   }
 
   void onDeactivate() override
   {
-    RCLCPP_INFO(node_.get_logger(), "RoverSpeedSteeringMode deactivated");
+    RCLCPP_INFO(node_.get_logger(), "RoverSpeedSteeringMode deactivated — sending zero setpoint");
+    speed_steering_setpoint_->update(0.0f, 0.0f);
   }
 
   void updateSetpoint(float /*dt_s*/) override
   {
     geometry_msgs::msg::Twist cmd;
+    bool received = false;
+    bool timed_out = false;
     {
       std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+      received = cmd_vel_received_;
+      if (received) {
+        const double age = (node_.now() - last_cmd_vel_time_).seconds();
+        timed_out = (age > cmd_vel_timeout_s_);
+      }
       cmd = last_cmd_vel_;
+    }
+
+    // Before first cmd_vel: send zeros, wait quietly
+    if (!received) {
+      speed_steering_setpoint_->update(0.0f, 0.0f);
+      return;
+    }
+
+    // After first cmd_vel: apply timeout watchdog
+    if (timed_out) {
+      if (!cmd_vel_timed_out_) {
+        RCLCPP_WARN(
+          node_.get_logger(),
+          "cmd_vel timeout (>%.2f s) — zeroing setpoint (vehicle will stop)",
+          cmd_vel_timeout_s_);
+        cmd_vel_timed_out_ = true;
+      }
+      speed_steering_setpoint_->update(0.0f, 0.0f);
+      return;
+    }
+
+    if (cmd_vel_timed_out_) {
+      RCLCPP_INFO(node_.get_logger(), "cmd_vel resumed — restoring setpoint");
+      cmd_vel_timed_out_ = false;
     }
 
     // Forward speed in body x [m/s]
@@ -80,12 +165,28 @@ public:
   }
 
 private:
+  /// Common handler for both Twist and TwistStamped messages
+  void handleTwist(const geometry_msgs::msg::Twist & twist)
+  {
+    std::lock_guard<std::mutex> lock(cmd_vel_mutex_);
+    last_cmd_vel_ = twist;
+    last_cmd_vel_time_ = node_.now();
+    cmd_vel_received_ = true;
+  }
+
   rclcpp::Node & node_;
   std::shared_ptr<px4_ros2::RoverSpeedSteeringSetpointType> speed_steering_setpoint_;
 
+  // Subscriptions — both active on the same topic; ROS2 DDS type-matches automatically
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_stamped_sub_;
+
   geometry_msgs::msg::Twist last_cmd_vel_;
+  rclcpp::Time last_cmd_vel_time_{0, 0, RCL_ROS_TIME};
   std::mutex cmd_vel_mutex_;
 
   float max_steering_rate_{1.0f};
+  double cmd_vel_timeout_s_{2.0};
+  bool cmd_vel_received_{false};
+  bool cmd_vel_timed_out_{false};
 };

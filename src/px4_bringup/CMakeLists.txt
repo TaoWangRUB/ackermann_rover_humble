@@ -46,12 +46,21 @@ ament_target_dependencies(rover_speed_attitude_mode
   rclcpp geometry_msgs px4_ros2_cpp px4_msgs
 )
 
+# 4. Rover Manual Mode (open-loop throttle + steering)
+add_executable(rover_manual_mode
+  src/rover_manual_main.cpp
+)
+ament_target_dependencies(rover_manual_mode
+  rclcpp geometry_msgs px4_ros2_cpp px4_msgs
+)
+
 # --- Install targets ---
 
 install(TARGETS
   offboard_trajectory_mode
   rover_speed_steering_mode
   rover_speed_attitude_mode
+  rover_manual_mode
   DESTINATION lib/${PROJECT_NAME}
 )
 

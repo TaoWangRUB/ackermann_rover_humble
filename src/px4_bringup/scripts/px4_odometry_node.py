@@ -44,6 +44,10 @@ class Px4OdometryNode(Node):
     def __init__(self):
         super().__init__('px4_odometry_bridge')
 
+        # ── Parameters ────────────────────────────────────────────────────
+        self.declare_parameter('use_3d', False)
+        self._use_3d = self.get_parameter('use_3d').get_parameter_value().bool_value
+
         # Subscriptions
         # Taking standard nav_msgs/Odometry
         self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
@@ -51,7 +55,9 @@ class Px4OdometryNode(Node):
         # Publishers
         self.vehicle_odom_pub = self.create_publisher(VehicleOdometry, '/fmu/in/vehicle_odometry', 10)
         
-        self.get_logger().info("PX4 Odometry Bridge Node started. Waiting for /odom...")
+        self.get_logger().info(
+            f"PX4 Odometry Bridge Node started (3D={self._use_3d}). "
+            f"Waiting for /odom...")
 
     def odom_callback(self, msg: Odometry):
         px4_odom = VehicleOdometry()
@@ -67,11 +73,11 @@ class Px4OdometryNode(Node):
         # Position Conversion: ENU -> NED
         # x_ned = y_enu
         # y_ned = x_enu
-        # z_ned = -z_enu
+        # z_ned = -z_enu  (NaN when 2D — EKF2 ignores it)
         px4_odom.position = [
             float(msg.pose.pose.position.y),
             float(msg.pose.pose.position.x),
-            float(-msg.pose.pose.position.z)
+            float(-msg.pose.pose.position.z) if self._use_3d else float('nan')
         ]
 
         # Orientation Conversion: FLU→ENU quaternion to FRD→NED quaternion
@@ -82,26 +88,35 @@ class Px4OdometryNode(Node):
                       float(q_ned[2]), float(q_ned[3])]
 
         # Velocity Conversion: body FLU -> body FRD (twist is in child/body frame)
+        # In 2D mode, set z-velocity to NaN so EKF2 ignores the vertical component
         px4_odom.velocity = [
             float(msg.twist.twist.linear.x),    # forward (same)
             float(-msg.twist.twist.linear.y),   # left -> -right
-            float(-msg.twist.twist.linear.z),   # up -> -down
+            float(-msg.twist.twist.linear.z) if self._use_3d else float('nan'),
         ]
 
         # Angular Velocity Conversion: FLU body frame -> FRD body frame
-        # roll -> roll (x -> x)
-        # pitch -> -pitch (y -> -y)
-        # yaw -> -yaw (z -> -z)
+        # In 2D mode, set roll/pitch rates to NaN (only yaw rate is meaningful)
         px4_odom.angular_velocity = [
-            float(msg.twist.twist.angular.x),
-            float(-msg.twist.twist.angular.y),
+            float(msg.twist.twist.angular.x) if self._use_3d else float('nan'),
+            float(-msg.twist.twist.angular.y) if self._use_3d else float('nan'),
             float(-msg.twist.twist.angular.z)
         ]
 
-        # Variances (if provided by EKF). For simplicity, set to NaNs if unknown.
-        px4_odom.position_variance = [float('nan'), float('nan'), float('nan')]
-        px4_odom.orientation_variance = [float('nan'), float('nan'), float('nan')]
-        px4_odom.velocity_variance = [float('nan'), float('nan'), float('nan')]
+        # Variances — provide finite values so EKF2 can fuse velocity.
+        # NaN variance causes EKF2 to skip that measurement entirely.
+        _p_var = 0.01 if self._use_3d else 0.05   # position (m²)
+        _v_var = 0.01 if self._use_3d else 0.05   # velocity ((m/s)²)
+        _o_var = 0.01 if self._use_3d else 0.05   # orientation (rad²)
+        px4_odom.position_variance = [
+            _p_var, _p_var,
+            _p_var if self._use_3d else float('nan')
+        ]
+        px4_odom.orientation_variance = [_o_var, _o_var, _o_var]
+        px4_odom.velocity_variance = [
+            _v_var, _v_var,
+            _v_var if self._use_3d else float('nan')
+        ]
 
         # Publish the converted message
         self.vehicle_odom_pub.publish(px4_odom)
