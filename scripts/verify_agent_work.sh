@@ -27,6 +27,11 @@ docker compose -f docker/docker-compose.yml up -d ackermann_slam
 sleep 5 # wait for container to be ready
 
 echo -e "${GREEN}=== Running Build ===${NC}"
+# Exclude submodule example and test packages from the build
+docker compose -f docker/docker-compose.yml exec ackermann_slam bash -c "
+  touch src/px4-ros2-interface-lib/examples/COLCON_IGNORE 2>/dev/null || true
+  touch src/px4-ros2-interface-lib/px4_ros2_py/COLCON_IGNORE 2>/dev/null || true
+"
 # Stage 1: Build px4_msgs then px4_ros2_cpp (px4_ros2_cpp needs px4_msgs at configure time)
 docker compose -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --packages-up-to px4_ros2_cpp"
 # Stage 2: Source stage-1 artifacts, then build the project's own packages
