@@ -75,12 +75,8 @@ jobs:
           set -eo pipefail
           source /opt/ros/jazzy/setup.bash
           # Ensure ament_package is importable by /usr/bin/python3 (CMake uses that explicitly).
-          sudo /usr/bin/python3 -m pip install --upgrade --break-system-packages ament-package
-          /usr/bin/python3 - <<'PY'
-          import ament_package, sys
-          print("ament_package:", ament_package.__file__)
-          print("sys.path sample:", sys.path[:5])
-          PY
+          sudo apt-get install -y --no-install-recommends python3-ament-package
+          /usr/bin/python3 -c "import ament_package, sys; print('ament_package:', ament_package.__file__); print('sys.path sample:', sys.path[:5])"
           # Stage 1: Build px4_msgs then px4_ros2_cpp.
           # px4_ros2_cpp uses ament_index_get_resource() at configure
           # time to discover px4_msgs, and downstream packages
