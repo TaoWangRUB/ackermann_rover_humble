@@ -143,6 +143,7 @@ def generate_launch_description() -> LaunchDescription:
         #'/ackermann/joint_state' + '@sensor_msgs/msg/JointState' + '[gz.msgs.Model',
         #'/ackermann/cmd_vel' + '@geometry_msgs/msg/Twist' + ']gz.msgs.Twist',
         '/rplidar/scan' + '@sensor_msgs/msg/LaserScan' + '[gz.msgs.LaserScan',
+        '/cubepilot/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
     ]
 
     parameter_bridge = Node(
