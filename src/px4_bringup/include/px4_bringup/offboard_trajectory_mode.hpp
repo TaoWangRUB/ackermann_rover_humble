@@ -39,7 +39,7 @@ public:
 
     // Declare parameters with defaults (will not redeclare if already set)
     if (!node_.has_parameter("base_frame")) {
-      node_.declare_parameter("base_frame", "ackermann/base_footprint");
+      node_.declare_parameter("base_frame", "ackermann/base_link");
     }
     if (!node_.has_parameter("odom_frame")) {
       node_.declare_parameter("odom_frame", "odom");

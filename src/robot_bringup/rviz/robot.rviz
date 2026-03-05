@@ -404,80 +404,54 @@ Visualization Manager:
         ackermann/base_footprint:
           ackermann/base_link:
             ackermann/front_left_wheel_steering_link:
-              ackermann/front_left_wheel_link:
-                {}
+              ackermann/front_left_wheel_link: {}
             ackermann/front_right_wheel_steering_link:
-              ackermann/front_right_wheel_link:
-                {}
-            ackermann/rear_left_wheel_link:
-              {}
-            ackermann/rear_right_wheel_link:
-              {}
+              ackermann/front_right_wheel_link: {}
+            ackermann/rear_left_wheel_link: {}
+            ackermann/rear_right_wheel_link: {}
             d435i_bottom_screw_frame:
               d435i_link:
                 d435i_accel_frame:
-                  d435i_accel_optical_frame:
-                    {}
+                  d435i_accel_optical_frame: {}
                 d435i_color_frame:
-                  d435i_color_optical_frame:
-                    {}
+                  d435i_color_optical_frame: {}
                 d435i_depth_frame:
-                  d435i_depth_optical_frame:
-                    {}
+                  d435i_depth_optical_frame: {}
                 d435i_gyro_frame:
-                  d435i_gyro_optical_frame:
-                    {}
+                  d435i_gyro_optical_frame: {}
                   d435i_imu_frame:
-                    d435i_imu_optical_frame:
-                      {}
+                    d435i_imu_optical_frame: {}
                 d435i_infra1_frame:
-                  d435i_infra1_optical_frame:
-                    {}
+                  d435i_infra1_optical_frame: {}
                 d435i_infra2_frame:
-                  d435i_infra2_optical_frame:
-                    {}
+                  d435i_infra2_optical_frame: {}
             l515_bottom_screw_frame:
               l515_link:
                 l515_color_frame:
                   l515_accel_frame:
-                    l515_accel_optical_frame:
-                      {}
-                  l515_color_optical_frame:
-                    {}
+                    l515_accel_optical_frame: {}
+                  l515_color_optical_frame: {}
                   l515_gyro_frame:
-                    l515_gyro_optical_frame:
-                      {}
+                    l515_gyro_optical_frame: {}
                 l515_depth_frame:
-                  l515_depth_optical_frame:
-                    {}
-                l515_imu_optical_frame:
-                  {}
+                  l515_depth_optical_frame: {}
+                l515_imu_optical_frame: {}
                 l515_infra_frame:
-                  l515_infra_optical_frame:
-                    {}
-              l515_lower_mount:
-                {}
-              l515_upper_mount:
-                {}
-            rplidar_link:
-              {}
+                  l515_infra_optical_frame: {}
+              l515_lower_mount: {}
+              l515_upper_mount: {}
+            rplidar_link: {}
             t265_link:
               t265_accel_frame:
-                t265_accel_optical_frame:
-                  {}
+                t265_accel_optical_frame: {}
               t265_fisheye1_frame:
-                t265_fisheye1_optical_frame:
-                  {}
+                t265_fisheye1_optical_frame: {}
               t265_fisheye2_frame:
-                t265_fisheye2_optical_frame:
-                  {}
+                t265_fisheye2_optical_frame: {}
               t265_gyro_frame:
-                t265_gyro_optical_frame:
-                  {}
-                t265_imu_optical_frame:
-                  {}
-              t265_pose_frame:
-                {}
+                t265_gyro_optical_frame: {}
+                t265_imu_optical_frame: {}
+              t265_pose_frame: {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -766,8 +740,7 @@ Visualization Manager:
         - Class: rviz_default_plugins/MarkerArray
           Enabled: false
           Name: Trajectories
-          Namespaces:
-            {}
+          Namespaces: {}
           Topic:
             Depth: 5
             Durability Policy: Volatile
@@ -877,8 +850,7 @@ Visualization Manager:
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: MarkerArray
-      Namespaces:
-        {}
+      Namespaces: {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -889,7 +861,7 @@ Visualization Manager:
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: ackermann/base_footprint
+    Fixed Frame: ackermann/base_link
     Frame Rate: 30
   Name: root
   Tools:
