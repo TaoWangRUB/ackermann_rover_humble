@@ -21,9 +21,9 @@
   <link name="$(arg ns)/base_footprint"/>
 
   <joint name="$(arg ns)/base_joint" type="fixed">
-    <parent link="$(arg ns)/base_footprint"/>
-    <child link="$(arg ns)/base_link"/>
-    <origin xyz="0 0 ${base_elevation}" rpy="0 0 0"/>
+    <parent link="$(arg ns)/base_link"/>
+    <child link="$(arg ns)/base_footprint"/>
+    <origin xyz="0 0 ${-base_elevation}" rpy="0 0 0"/>
   </joint>
 
   <link name="$(arg ns)/base_link">
