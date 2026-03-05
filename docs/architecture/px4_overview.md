@@ -1147,7 +1147,7 @@ The Gazebo `OdometryPublisher` plugin is already present in the main robot URDF:
         name="ignition::gazebo::systems::OdometryPublisher">
   <dimensions>3</dimensions>
   <odom_frame>$odom</odom_frame>
-  <robot_base_frame>ackermann/base_footprint</robot_base_frame>
+  <robot_base_frame>ackermann/base_link</robot_base_frame>
   <odom_topic>ackermann/odom</odom_topic>
   <publish_tf>false</publish_tf>
 </plugin>

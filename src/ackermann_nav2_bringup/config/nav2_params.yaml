@@ -1,7 +1,7 @@
 bt_navigator:
   ros__parameters:
     global_frame: map
-    robot_base_frame: ackermann/base_footprint
+    robot_base_frame: ackermann/base_link
     odom_topic: /odom
     bt_loop_duration: 10
     default_server_timeout: 20
@@ -150,14 +150,13 @@ controller_server:
       #   twirling_cost_power: 1
       #   twirling_cost_weight: 10.0
 
-
 local_costmap:
   local_costmap:
     ros__parameters:
       update_frequency: 5.0
       publish_frequency: 2.0
       global_frame: odom
-      robot_base_frame: ackermann/base_footprint
+      robot_base_frame: ackermann/base_link
       rolling_window: true
       width: 3
       height: 3
@@ -199,7 +198,7 @@ global_costmap:
       update_frequency: 1.0
       publish_frequency: 1.0
       global_frame: map
-      robot_base_frame: ackermann/base_footprint
+      robot_base_frame: ackermann/base_link
       robot_radius: 0.22
       resolution: 0.05
       track_unknown_space: true
@@ -254,7 +253,7 @@ planner_server:
 
 smoother_server:
   ros__parameters:
-    robot_base_frame: ackermann/base_footprint
+    robot_base_frame: ackermann/base_link
     smoother_plugins: ["simple_smoother"]
     simple_smoother:
       plugin: "nav2_smoother::SimpleSmoother"
@@ -283,7 +282,7 @@ behavior_server:
       plugin: "nav2_behaviors::AssistedTeleop"
     local_frame: odom
     global_frame: map
-    robot_base_frame: ackermann/base_footprint
+    robot_base_frame: ackermann/base_link
     transform_tolerance: 0.1
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
@@ -303,7 +302,7 @@ waypoint_follower:
 
 route_server:
   ros__parameters:
-    base_frame: ackermann/base_footprint
+    base_frame: ackermann/base_link
     # The graph_filepath does not need to be specified since it going to be set by defaults in launch.
     # If you'd rather set it in the yaml, remove the default "graph" value in the launch file(s).
     # file & provide full path to map below. If graph config or launch default is provided, it is used
@@ -341,7 +340,7 @@ velocity_smoother:
 
 collision_monitor:
   ros__parameters:
-    base_frame_id: "ackermann/base_footprint"
+    base_frame_id: "ackermann/base_link"
     odom_frame_id: "odom"
     cmd_vel_in_topic: "cmd_vel_smoothed"
     cmd_vel_out_topic: "cmd_vel"
@@ -379,7 +378,7 @@ docking_server:
     undock_linear_tolerance: 0.05
     undock_angular_tolerance: 0.1
     max_retries: 3
-    base_frame: "ackermann/base_footprint"
+    base_frame: "ackermann/base_link"
     fixed_frame: "odom"
     dock_backwards: false
     dock_prestaging_tolerance: 0.5

@@ -27,7 +27,7 @@ ARGUMENTS = [
     ),
     DeclareLaunchArgument(
         'rtabmap_viz',
-        default_value='false',
+        default_value='true',
         choices=['true', 'false'],
         description='Launch rtabmap_viz for debugging.'
     ),
@@ -91,7 +91,7 @@ def generate_launch_description() -> LaunchDescription:
     }
 
     shared_parameters = {
-        'frame_id': 'ackermann/base_footprint',
+        'frame_id': 'ackermann/base_link',
         'use_sim_time': use_sim_time,
         'Reg/Strategy': '1',
         'Reg/Force3DoF': 'true',
@@ -127,7 +127,7 @@ def generate_launch_description() -> LaunchDescription:
         package='imu_transformer',
         executable='imu_transformer_node',
         parameters=[{
-            'target_frame': 'ackermann/base_footprint',
+            'target_frame': 'ackermann/base_link',
             'use_sim_time': use_sim_time,
         }],
         remappings=[
@@ -149,7 +149,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     visual_odom_parameters = {
-        'frame_id': 'ackermann/base_footprint',
+        'frame_id': 'ackermann/base_link',
         'odom_frame_id': 'odom',
         'publish_tf': False,
         'wait_for_imu_to_init': True,
@@ -215,7 +215,7 @@ def generate_launch_description() -> LaunchDescription:
         'publish_tf': True,
         'map_frame': 'map',
         'odom_frame': 'odom',
-        'base_link_frame': 'ackermann/base_footprint',
+        'base_link_frame': 'ackermann/base_link',
         'world_frame': 'odom',
         'sensor_timeout': 0.2,
         'transform_timeout': 0.2,
@@ -294,7 +294,7 @@ def generate_launch_description() -> LaunchDescription:
             'scan_height': 10,
             'range_min': 0.1,
             'range_max': 20.0,
-            'output_frame': 'ackermann/base_footprint',
+            'output_frame': 'ackermann/base_link',
             'angle_min': -3.1415,
             'angle_max': 3.1415,
             'angle_increment': 0.0087,
@@ -317,7 +317,7 @@ def generate_launch_description() -> LaunchDescription:
     
     # Second, we segment the floor from the obstacles.
     obstacle_parameters={
-          'frame_id':'ackermann/base_footprint',
+          'frame_id':'ackermann/base_link',
           'use_sim_time':use_sim_time,
           'subscribe_depth':True,
           'use_action_for_goal':True,

@@ -29,7 +29,7 @@ Resource paths (`GZ_SIM_RESOURCE_PATH`, etc.) are extended so Gazebo can discove
 | --- | --- | --- | --- | --- |
 | `rgbd_sync` (`rtabmap_sync`) | `/ackermann/depth_camera/image`, `/ackermann/depth_camera/depth_image`, `/ackermann/depth_camera/camera_info` | `/rgb/image`, `/depth/image`, `/rgb/camera_info`, `/depth/camera_info` | sensor_msgs/msg/Image, sensor_msgs/msg/CameraInfo | Provides tightly time-synchronized RGB-D streams |
 | `depthimage_to_laserscan` | `/ackermann/depth_camera/depth_image`, `/ackermann/depth_camera/camera_info` | `/scan` | sensor_msgs/msg/LaserScan | Generates planar scan for ICP odom or redundant sensing |
-| `imu_transformer` | `/l515/imu/raw` (from Gazebo) | `/l515/imu/raw_transformed` | sensor_msgs/msg/Imu | Transforms raw Gazebo IMU data into a frame aligned with `ackermann/base_footprint` |
+| `imu_transformer` | `/l515/imu/raw` (from Gazebo) | `/l515/imu/raw_transformed` | sensor_msgs/msg/Imu | Transforms raw Gazebo IMU data into a frame aligned with `ackermann/base_link` |
 | `imu_filter_madgwick` | `/l515/imu/raw_transformed` | `/imu/data` | sensor_msgs/msg/Imu | Filters transformed IMU data and outputs orientation + angular velocity to `/imu/data` for downstream nodes (e.g. EKF) |
 
 ## RTAB-Map & State Estimation Interfaces
@@ -41,7 +41,7 @@ Resource paths (`GZ_SIM_RESOURCE_PATH`, etc.) are extended so Gazebo can discove
 | `/odometry/filtered` | out | nav_msgs/msg/Odometry | `robot_localization` | Primary odom for Nav2 and RTAB-Map |
 | `/rtabmap/odom` | out | nav_msgs/msg/Odometry | `rtabmap_slam` | Pose in `map` frame (SLAM mode) |
 | `/rtabmap/mapData`, `/rtabmap/mapGraph`, `/rtabmap/mapPath` | out | rtabmap_msgs/msg/Map* | `rtabmap_slam` | Graph + occupancy data |
-| `/tf`, `/tf_static` | out | tf2_msgs/msg/TFMessage | `robot_state_publisher`, RTAB-Map | TF tree linking `map` → `odom` → `ackermann/base_footprint` |
+| `/tf`, `/tf_static` | out | tf2_msgs/msg/TFMessage | `robot_state_publisher`, RTAB-Map | TF tree linking `map` → `odom` → `ackermann/base_link` |
 | `/rtabmap/goal` | in | geometry_msgs/msg/PoseStamped | Mission manager | Optional localization goal reset |
 | `/odom` | in | nav_msgs/msg/Odometry | RTAB-Map | Remaps to `/odometry/filtered` during SLAM |
 | `/imu/data` | in | sensor_msgs/msg/Imu | RTAB-Map + EKF | Orientation constraints |
@@ -99,7 +99,7 @@ The `px4_bringup` package provides three C++ custom flight modes (via `px4_ros2_
 
 | Parameter | Default | Mode | Description |
 |---|---|---|---|
-| `base_frame` | `ackermann/base_footprint` | `offboard_trajectory_mode` | TF body frame for velocity rotation |
+| `base_frame` | `ackermann/base_link` | `offboard_trajectory_mode` | TF body frame for velocity rotation |
 | `odom_frame` | `odom` | `offboard_trajectory_mode` | TF world frame for velocity rotation |
 | `max_steering_rate` | `1.0` | `rover_speed_steering_mode` | Max yaw rate [rad/s] for normalizing steering to [-1, 1] |
 | `command_rate_hz` | `50.0` | Legacy bridge | Heartbeat + setpoint publishing rate |

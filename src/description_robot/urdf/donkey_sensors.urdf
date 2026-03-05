@@ -440,7 +440,7 @@
     <plugin filename="ignition-gazebo-odometry-publisher-system" name="ignition::gazebo::systems::OdometryPublisher">
       <dimensions>3</dimensions>
       <odom_frame>$odom</odom_frame>
-      <robot_base_frame>$(arg ns)/base_footprint</robot_base_frame>
+      <robot_base_frame>$(arg ns)/base_link</robot_base_frame>
       <publish_link_pose>true</publish_link_pose>
       <tf_topic>$(arg ns)/tf</tf_topic> 
       <odom_topic>$(arg ns)/odom</odom_topic>
