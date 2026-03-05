@@ -25,6 +25,10 @@
   <xacro:property name="rplidar_y_offset" value="${0*cm2m}"/>
   <xacro:property name="rplidar_z_offset" value="${22*cm2m}"/>
 
+  <xacro:property name="cubepilot_x_offset" value="${0*cm2m}"/>
+  <xacro:property name="cubepilot_y_offset" value="${0*cm2m}"/>
+  <xacro:property name="cubepilot_z_offset" value="${10*cm2m}"/>
+
   <xacro:arg name="base_color"    default="1.0 0.0 0.0 1.0"/>
   <xacro:arg name="ns"    default="ackermann"/>
   
@@ -403,6 +407,13 @@
     <origin xyz="${rplidar_x_offset} ${rplidar_y_offset} ${rplidar_z_offset}"
             rpy="0 0 0"/>
   </xacro:rplidar>
+
+  <!-- CubePilot flight controller (PX4 IMU) -->
+  <xacro:include filename="$(find description_robot)/urdf/cubepilot/cubepilot.urdf.xacro"/>
+  <xacro:cubepilot name="cubepilot" parent_link="$(arg ns)/base_link">
+    <origin xyz="${cubepilot_x_offset} ${cubepilot_y_offset} ${cubepilot_z_offset}"
+            rpy="0 0 0"/>
+  </xacro:cubepilot>
 
   <gazebo>
     <!-- Ackermann steering plugin -->
