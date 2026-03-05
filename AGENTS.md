@@ -14,30 +14,30 @@ The agent MUST execute the following workflow before declaring a task complete.
 Use the compose stack under `docker/` for all container management. Before starting any work:
 
 1. Check whether the development container is already running:
-   - `docker compose -f docker/docker-compose.yml ps`
-   - If it is running, attach with `docker compose -f docker/docker-compose.yml exec ackermann_slam bash`.
+   - `docker-compose -f docker/docker-compose.yml ps`
+   - If it is running, attach with `docker-compose -f docker/docker-compose.yml exec ackermann_slam bash`.
 
 2. If the container is not running, verify whether the image exists:
    - `docker images | grep ${IMAGE_NAME:-ackermann_rover}`
    - Inspect configuration via `cat docker/.env` (adjust ROS/Gazebo/Ubuntu versions if needed).
 
 3. Build or rebuild the image (captures Dockerfile failures early):
-   - `docker compose -f docker/docker-compose.yml build ackermann_slam`
+   - `docker-compose -f docker/docker-compose.yml build ackermann_slam`
    - If this fails, fix `docker/Dockerfile`, supporting scripts, or dependencies, then rebuild until it succeeds.
 
 4. Start the environment:
-   - `docker compose -f docker/docker-compose.yml up -d ackermann_slam`
-   - Follow with `docker compose -f docker/docker-compose.yml logs -f ackermann_slam` to ensure entrypoint completes without errors.
+   - `docker-compose -f docker/docker-compose.yml up -d ackermann_slam`
+   - Follow with `docker-compose -f docker/docker-compose.yml logs -f ackermann_slam` to ensure entrypoint completes without errors.
 
 5. Debugging tips if compose fails:
-   - `docker compose -f docker/docker-compose.yml config` (verify resolved configuration).
-   - `docker compose -f docker/docker-compose.yml ps -a` (check exit codes).
-   - `docker compose -f docker/docker-compose.yml logs ackermann_slam` (inspect stack traces).
-   - If necessary, tear down stale resources: `docker compose -f docker/docker-compose.yml down --remove-orphans`.
+   - `docker-compose -f docker/docker-compose.yml config` (verify resolved configuration).
+   - `docker-compose -f docker/docker-compose.yml ps -a` (check exit codes).
+   - `docker-compose -f docker/docker-compose.yml logs ackermann_slam` (inspect stack traces).
+   - If necessary, tear down stale resources: `docker-compose -f docker/docker-compose.yml down --remove-orphans`.
 
-6. When the container is healthy, enter the shell with `docker compose -f docker/docker-compose.yml exec ackermann_slam bash`. Stay inside this shell for all subsequent steps.
+6. When the container is healthy, enter the shell with `docker-compose -f docker/docker-compose.yml exec ackermann_slam bash`. Stay inside this shell for all subsequent steps.
 
-7. Check Nividia driver is also loaded correctly and verify via run `docker compose -f docker/docker-compose.yml exec ackermann_slam bash` and then run `ros2 launch robot_bringup robot_bringup.launch.py` so that there's no nvidia driver related error/warning.
+7. Check Nividia driver is also loaded correctly and verify via run `docker-compose -f docker/docker-compose.yml exec ackermann_slam bash` and then run `ros2 launch robot_bringup robot_bringup.launch.py` so that there's no nvidia driver related error/warning.
 
 No build or startup errors are allowed. Fix issues immediately before moving on.
 
@@ -93,7 +93,7 @@ Wait until:
 - /map is publishing from RTAB-Map
 - /odometry/filtered is publishing with frame `odom`
 - Nav2 lifecycle nodes are active (planner, controller, behavior server)
-- TF tree is stable with `map  odom  ackermann/base_footprint` available
+- TF tree is stable with `map  odom  ackermann/base_link` available
 - /ackermann/odom and /joint_states are publishing
 
 Fail if:
@@ -115,7 +115,7 @@ Verify:
 - /map topic publishes OccupancyGrid
 - Map resolution matches config
 - Map update rate > 1 Hz
-- use `ros2 topic pub -r 1 /ackermann/cmd_vel geometry_msgs/msg/TwistStamped "{header: {frame_id: 'ackermann/base_footprint'}, twist: {linear: {x: 1.0}, angular: {z: 0.5}}}"` to check robot is moving
+- use `ros2 topic pub -r 1 /ackermann/cmd_vel geometry_msgs/msg/TwistStamped "{header: {frame_id: 'ackermann/base_link'}, twist: {linear: {x: 1.0}, angular: {z: 0.5}}}"` to check robot is moving
 
 ## 4.2 Localization Stability
 Robot stationary for 10 seconds:

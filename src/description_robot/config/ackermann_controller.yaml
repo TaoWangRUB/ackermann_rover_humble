@@ -23,7 +23,7 @@ joint_state_broadcaster:
   ros__parameters:
     use_sim_time: true
     publish_rate: 50.0
-    frame_id: "ackermann/base_footprint"
+    frame_id: "ackermann/base_link"
     joints:
       - ackermann/rear_left_wheel_joint
       - ackermann/rear_right_wheel_joint
@@ -65,7 +65,7 @@ ackermann_steering_controller:
     #odom_topic: /wheel/odom
     #tf_topic: /tf
     odom_frame_id: odom
-    base_frame_id: ackermann/base_footprint
+    base_frame_id: ackermann/base_link
 
     twist_covariance_diagonal: [0.0, 7.0, 14.0, 21.0, 28.0, 35.0]
     pose_covariance_diagonal: [0.0, 7.0, 14.0, 21.0, 28.0, 35.0]
