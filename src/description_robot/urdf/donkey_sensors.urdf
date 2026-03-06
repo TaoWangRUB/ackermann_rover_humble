@@ -12,20 +12,20 @@
   <xacro:property name="wheel_thickness" value="0.024"/>
   <xacro:property name="base_elevation" value="0.01"/>
 
-  <xacro:property name="d435i_x_offset" value="${10*cm2m}"/>
+  <xacro:property name="d435i_x_offset" value="${10*cm2m + wheel_base/2}"/>
   <xacro:property name="d435i_z_offset" value="${17*cm2m}"/>
 
-  <xacro:property name="t265_x_offset" value="${10*cm2m}"/>
+  <xacro:property name="t265_x_offset" value="${10*cm2m + wheel_base/2}"/>
   <xacro:property name="t265_z_offset" value="${21*cm2m}"/>
 
-  <xacro:property name="l515_x_offset" value="${10*cm2m}"/>
+  <xacro:property name="l515_x_offset" value="${10*cm2m + wheel_base/2}"/>
   <xacro:property name="l515_z_offset" value="${50*cm2m}"/>
 
-  <xacro:property name="rplidar_x_offset" value="${-4*cm2m}"/>
+  <xacro:property name="rplidar_x_offset" value="${-4*cm2m + wheel_base/2}"/>
   <xacro:property name="rplidar_y_offset" value="${0*cm2m}"/>
   <xacro:property name="rplidar_z_offset" value="${22*cm2m}"/>
 
-  <xacro:property name="cubepilot_x_offset" value="${0*cm2m}"/>
+  <xacro:property name="cubepilot_x_offset" value="${wheel_base/2}"/>
   <xacro:property name="cubepilot_y_offset" value="${0*cm2m}"/>
   <xacro:property name="cubepilot_z_offset" value="${10*cm2m}"/>
 
@@ -67,7 +67,7 @@
 
   <link name="$(arg ns)/base_link">
     <visual>
-      <origin xyz=".1371 0 -.0115" rpy="0 0 ${PI/2}"/>
+      <origin xyz="${0.1371 + wheel_base/2} 0 -.0115" rpy="0 0 ${PI/2}"/>
       <geometry>
         <mesh filename="package://description_robot/models/donkey/meshes/BaseReduced.dae" scale="1 1 1"/>
       </geometry>
@@ -76,14 +76,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 .06" rpy="0 0 0"/>
+      <origin xyz="${wheel_base/2} 0 .06" rpy="0 0 0"/>
       <geometry>
         <box size=".3 .09 .12"/>
       </geometry>
     </collision>
     
     <inertial>
-      <origin xyz="0 0 ${wheel_diameter-base_elevation}" rpy="0 0 0"/>
+      <origin xyz="${wheel_base/2} 0 ${wheel_diameter-base_elevation}" rpy="0 0 0"/>
       <mass value="3.0"/>
       <inertia ixx="0.0054" ixy="0.0" ixz="0.0"  
                iyy="0.0252" iyz="0.0"  
@@ -101,7 +101,7 @@
     <dynamics damping="0.0" friction="0.0"/>
   </joint>
   <joint name="$(arg ns)/front_left_wheel_steering_joint" type="revolute">
-    <origin xyz="${wheel_base/2} ${wheel_separation/2} 0" rpy="0 0 0"/>
+    <origin xyz="${wheel_base} ${wheel_separation/2} 0" rpy="0 0 0"/>
     <parent link="$(arg ns)/base_link"/>
     <child link="$(arg ns)/front_left_wheel_steering_link"/>
     <axis xyz="0 0 1"/>
@@ -160,7 +160,7 @@
   <joint name="$(arg ns)/front_right_wheel_steering_joint" type="revolute">
     <parent link="$(arg ns)/base_link"/>
     <child link="$(arg ns)/front_right_wheel_steering_link"/>
-    <origin xyz="${wheel_base/2} ${-wheel_separation/2} 0" rpy="0 0 0"/>
+    <origin xyz="${wheel_base} ${-wheel_separation/2} 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
     <limit lower="-0.6" upper="0.6" effort="25" velocity="1"/>
   </joint>
@@ -207,7 +207,7 @@
   </link>
 
   <joint name="$(arg ns)/rear_left_wheel_joint" type="continuous">
-    <origin xyz="${-wheel_base/2} ${wheel_separation/2} 0" rpy="0 0 0"/>
+    <origin xyz="0 ${wheel_separation/2} 0" rpy="0 0 0"/>
     <parent link="$(arg ns)/base_link"/>
     <child link="$(arg ns)/rear_left_wheel_link"/>
     <axis xyz="0 1 0"/>
@@ -247,7 +247,7 @@
   </link>
   
   <joint name="$(arg ns)/rear_right_wheel_joint" type="continuous">
-    <origin xyz="${-wheel_base/2} ${-wheel_separation/2} 0" rpy="0 0 0"/>
+    <origin xyz="0 ${-wheel_separation/2} 0" rpy="0 0 0"/>
     <parent link="$(arg ns)/base_link"/>
     <child link="$(arg ns)/rear_right_wheel_link"/>
     <axis xyz="0 1 0"/>
