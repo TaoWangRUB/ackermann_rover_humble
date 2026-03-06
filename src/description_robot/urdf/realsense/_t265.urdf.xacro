@@ -27,23 +27,14 @@
 
     <!-- camera body, with origin at camera_link -->
     <joint name="${name}_link_joint" type="fixed">
-      <!-- <origin xyz="0 0 0" rpy="0 0 0"/> -->
       <xacro:insert_block name="origin"/>
       <parent link="${parent}"/>
       <child link="${name}_link"/>
     </joint>
-    <link name="${name}_link"/>
 
-    <!-- camera body, with origin at camera_pose_frame -->
-    <joint name="${name}_pose_joint" type="fixed">
-      <origin xyz="0 0.021 0" rpy="0 0 0"/>
-      <parent link="${name}_link"/>
-      <child link="${name}_pose_frame"/>
-    </joint>
-    
-    <link name="${name}_pose_frame">
+    <link name="${name}_link">
       <visual>
-      <origin xyz="0 0 0" rpy="${M_PI / 2} 0 ${M_PI /2}"/>
+        <origin xyz="0 0 0" rpy="${M_PI / 2} 0 ${M_PI /2}"/>
         <geometry>
             <mesh filename="package://description_robot/urdf/realsense/meshes/t265.stl" scale="0.001 0.001 0.001"/>
         </geometry>
@@ -62,6 +53,17 @@
         <inertia ixx="0.0000039782" ixy="0.0" ixz="0.000000034641" iyy="0.000065045" iyz="0.0" izz="0.000067499"/>
       </inertial>
     </link>
+
+    <!-- camera_pose_frame is a static identity child of camera_link.
+         The T265 driver must be configured with publish_tf:=false so it does
+         not publish competing TF for this frame. Only odometry data is consumed
+         (fed to an EKF which owns the odom_frame -> base_link edge). -->
+    <joint name="${name}_pose_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <parent link="${name}_link"/>
+      <child link="${name}_pose_frame"/>
+    </joint>
+    <link name="${name}_pose_frame"/>
 
     <joint name="${name}_fisheye1_joint" type="fixed">
       <origin xyz="${fisheye1_offset_x} ${fisheye1_offset_y} ${fisheye1_offset_z}" rpy="${-M_PI} 0 ${-M_PI}"/>
