@@ -1,0 +1,19 @@
+# PX4 SITL Python build dependencies
+# Subset of PX4-Autopilot/Tools/setup/requirements.txt needed for compilation
+argcomplete
+cerberus
+empy>=3.3,<4
+future
+jinja2>=2.8
+jsonschema
+kconfiglib
+lark
+lxml
+numpy>=1.13
+nunavut>=1.1.0
+packaging
+pyros-genmsg
+pyserial
+pyyaml
+setuptools>=39.2.0
+toml>=0.9

@@ -11,12 +11,17 @@
   CubePilot Orange approximate dimensions: 94.5 x 44.3 x 31.6 mm, ~80 g
   Internal IMU offset from board center: approximately 6 mm forward, 6 mm right, 4 mm down
   (see CubeOrange IMU1 datasheet for exact values).
+
+  When enable_px4_sitl is true, an additional "base_link" (no namespace prefix) is
+  created with PX4-compatible sensor names so that PX4 gz_bridge can discover them
+  at its hardcoded topic paths: /world/{world}/model/{model}/link/base_link/sensor/{name}/{type}
 -->
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
   <xacro:include filename="$(find description_robot)/models/ackermann_rover/common_properties.urdf.xacro"/>
 
   <xacro:macro name="cubepilot" params="name parent_link *origin
+                                         enable_px4_sitl:=false
                                          imu_update_rate:=200
                                          imu_topic:=/cubepilot/imu
                                          baro_update_rate:=50
@@ -58,7 +63,8 @@
       <xacro:inertial_cuboid mass="${board_mass}" x="${board_x}" y="${board_y}" z="${board_z}"/>
     </link>
 
-    <!-- =============== All Gazebo sensors on single link =============== -->
+    <!-- =============== Gazebo sensors (standard mode) =============== -->
+    <xacro:unless value="${enable_px4_sitl}">
     <gazebo reference="${name}_link">
       <!-- IMU -->
       <sensor name="${name}_imu_sensor" type="imu">
@@ -120,6 +126,82 @@
 
       <xacro:material_darkgray/>
     </gazebo>
+    </xacro:unless>
+
+    <!-- =============== PX4 SITL sensors on "base_link" =============== -->
+    <!-- PX4 gz_bridge hardcodes: /world/{w}/model/{m}/link/base_link/sensor/{name}/{type}
+         We create a separate link named exactly "base_link" (no namespace) so
+         the Gazebo topic path matches PX4's expectation. -->
+    <xacro:if value="${enable_px4_sitl}">
+    <joint name="px4_base_link_joint" type="fixed">
+      <parent link="${parent_link}"/>
+      <child link="base_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="base_link">
+      <inertial>
+        <mass value="0.001"/>
+        <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+      </inertial>
+    </link>
+
+    <gazebo reference="base_link">
+      <sensor name="imu_sensor" type="imu">
+        <always_on>true</always_on>
+        <update_rate>${imu_update_rate}</update_rate>
+        <visualize>false</visualize>
+        <gz_frame_id>base_link</gz_frame_id>
+        <imu>
+          <angular_velocity>
+            <x><noise type="gaussian"><mean>0.0</mean><stddev>0.0002</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0.0</mean><stddev>0.0002</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0.0</mean><stddev>0.0002</stddev></noise></z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x><noise type="gaussian"><mean>0.0</mean><stddev>0.017</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0.0</mean><stddev>0.017</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0.0</mean><stddev>0.017</stddev></noise></z>
+          </linear_acceleration>
+        </imu>
+      </sensor>
+
+      <sensor name="air_pressure_sensor" type="air_pressure">
+        <always_on>true</always_on>
+        <update_rate>${baro_update_rate}</update_rate>
+        <gz_frame_id>base_link</gz_frame_id>
+        <air_pressure>
+          <pressure>
+            <noise type="gaussian">
+              <mean>0</mean>
+              <stddev>0.01</stddev>
+            </noise>
+          </pressure>
+        </air_pressure>
+      </sensor>
+
+      <sensor name="magnetometer_sensor" type="magnetometer">
+        <always_on>true</always_on>
+        <update_rate>${mag_update_rate}</update_rate>
+        <gz_frame_id>base_link</gz_frame_id>
+        <magnetometer>
+          <x><noise type="gaussian"><stddev>0.0001</stddev></noise></x>
+          <y><noise type="gaussian"><stddev>0.0001</stddev></noise></y>
+          <z><noise type="gaussian"><stddev>0.0001</stddev></noise></z>
+        </magnetometer>
+      </sensor>
+
+      <sensor name="navsat_sensor" type="navsat">
+        <always_on>true</always_on>
+        <update_rate>${gps_update_rate}</update_rate>
+        <gz_frame_id>base_link</gz_frame_id>
+      </sensor>
+    </gazebo>
+
+    <gazebo reference="px4_base_link_joint">
+      <preserveFixedJoint>true</preserveFixedJoint>
+    </gazebo>
+    </xacro:if>
 
     <gazebo reference="${name}_joint">
       <preserveFixedJoint>true</preserveFixedJoint>
