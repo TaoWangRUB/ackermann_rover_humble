@@ -14,21 +14,21 @@ Supported vehicle types include multirotors, fixed-wing, VTOL, rovers, helicopte
 
 ## Repository Layout
 
-| Path | Purpose |
-|------|---------|
-| `src/modules/` | Flight-stack modules (commander, EKF2, mc_att_control, navigator, mavlink, etc.) |
-| `src/drivers/` | Hardware drivers (IMU, GPS, barometer, magnetometer, actuators, RC, etc.) |
-| `src/lib/` | Shared libraries (mathlib, matrix, geo, parameters, perf, pid, etc.) |
-| `src/systemcmds/` | System commands (param, reboot, top, perf, etc.) |
-| `src/examples/` | Example modules |
-| `src/templates/template_module/` | **Canonical module template — use this as the pattern for new modules** |
-| `msg/` | uORB message definitions (`.msg` files, ROS 2 IDL-compatible) |
-| `boards/` | Board configurations (`.px4board` Kconfig files) |
-| `platforms/` | Platform abstraction layer (NuttX, POSIX, QURT) |
-| `ROMFS/` | ROM filesystem with init scripts (`rcS`, `rc.sensors`) |
-| `Tools/` | Build helpers, simulation, code-style, analysis scripts |
-| `cmake/` | CMake modules (`px4_add_module`, `px4_add_library`, etc.) |
-| `docs/` | Documentation |
+| Path                             | Purpose                                                                          |
+| -------------------------------- | -------------------------------------------------------------------------------- |
+| `src/modules/`                   | Flight-stack modules (commander, EKF2, mc_att_control, navigator, mavlink, etc.) |
+| `src/drivers/`                   | Hardware drivers (IMU, GPS, barometer, magnetometer, actuators, RC, etc.)        |
+| `src/lib/`                       | Shared libraries (mathlib, matrix, geo, parameters, perf, pid, etc.)             |
+| `src/systemcmds/`                | System commands (param, reboot, top, perf, etc.)                                 |
+| `src/examples/`                  | Example modules                                                                  |
+| `src/templates/template_module/` | **Canonical module template — use this as the pattern for new modules**          |
+| `msg/`                           | uORB message definitions (`.msg` files, ROS 2 IDL-compatible)                    |
+| `boards/`                        | Board configurations (`.px4board` Kconfig files)                                 |
+| `platforms/`                     | Platform abstraction layer (NuttX, POSIX, QURT)                                  |
+| `ROMFS/`                         | ROM filesystem with init scripts (`rcS`, `rc.sensors`)                           |
+| `Tools/`                         | Build helpers, simulation, code-style, analysis scripts                          |
+| `cmake/`                         | CMake modules (`px4_add_module`, `px4_add_library`, etc.)                        |
+| `docs/`                          | Documentation                                                                    |
 
 ## Build Targets
 
@@ -53,15 +53,15 @@ Build artefacts go into `build/<target>/`. Never commit build outputs.
 
 ### Naming Conventions
 
-| Element | Convention | Example |
-|---------|------------|---------|
-| Files & directories | `snake_case` | `mc_att_control.cpp` |
-| Classes | `PascalCase` | `MulticopterAttitudeControl` |
-| Functions / methods | `camelCase` or `snake_case` | `updateParams()` |
-| Constants / enums | `UPPER_SNAKE_CASE` | `NAVIGATION_STATE_MANUAL` |
-| Member variables | `_leading_underscore` | `_parameter_update_sub` |
-| Parameters | `UPPER_SNAKE_CASE` with group prefix | `MC_ROLL_P` |
-| uORB topics | `snake_case` | `vehicle_attitude` |
+| Element             | Convention                           | Example                      |
+| ------------------- | ------------------------------------ | ---------------------------- |
+| Files & directories | `snake_case`                         | `mc_att_control.cpp`         |
+| Classes             | `PascalCase`                         | `MulticopterAttitudeControl` |
+| Functions / methods | `camelCase` or `snake_case`          | `updateParams()`             |
+| Constants / enums   | `UPPER_SNAKE_CASE`                   | `NAVIGATION_STATE_MANUAL`    |
+| Member variables    | `_leading_underscore`                | `_parameter_update_sub`      |
+| Parameters          | `UPPER_SNAKE_CASE` with group prefix | `MC_ROLL_P`                  |
+| uORB topics         | `snake_case`                         | `vehicle_attitude`           |
 
 ## Module Architecture
 
@@ -175,12 +175,12 @@ This target first builds the `px4` binary and Gazebo plugins, then launches PX4.
 
 Once the `px4` binary starts with `PX4_SIM_MODEL=gz_rover_ackermann` set in the environment, the init scripts take over:
 
-| Step | Script | What Happens |
-|------|--------|--------------|
-| 1 | `rcS` | Matches `PX4_SIM_MODEL` to airframe file `51000_gz_rover_ackermann`, sets `SYS_AUTOSTART=51000` |
-| 2 | `51000_gz_rover_ackermann` | Sets `PX4_GZ_WORLD=rover`, `SIM_GZ_EN=1`, and rover-specific parameters (wheel base, steering, PID gains, actuator mappings) |
-| 3 | `px4-rc.simulator` | Detects `PX4_SIMULATOR=gz`, sources `px4-rc.gzsim` |
-| 4 | `px4-rc.gzsim` | Launches Gazebo with `worlds/rover.sdf`, spawns the `rover_ackermann` model, starts the `gz_bridge` module |
+| Step | Script                     | What Happens                                                                                                                 |
+| ---- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `rcS`                      | Matches `PX4_SIM_MODEL` to airframe file `51000_gz_rover_ackermann`, sets `SYS_AUTOSTART=51000`                              |
+| 2    | `51000_gz_rover_ackermann` | Sets `PX4_GZ_WORLD=rover`, `SIM_GZ_EN=1`, and rover-specific parameters (wheel base, steering, PID gains, actuator mappings) |
+| 3    | `px4-rc.simulator`         | Detects `PX4_SIMULATOR=gz`, sources `px4-rc.gzsim`                                                                           |
+| 4    | `px4-rc.gzsim`             | Launches Gazebo with `worlds/rover.sdf`, spawns the `rover_ackermann` model, starts the `gz_bridge` module                   |
 
 ### Key init scripts
 
@@ -203,12 +203,12 @@ The Gazebo startup script performs these steps:
 
 ## Phase 7: Model & World Files
 
-| File | Description |
-|------|-------------|
-| `Tools/simulation/gz/worlds/rover.sdf` | Ground plane with physics (500 Hz step), gravity, magnetic field |
-| `Tools/simulation/gz/models/rover_ackermann/model.sdf` | Vehicle SDF: chassis, wheels, steering joints, Ackermann kinematics |
-| `Tools/simulation/gz/models/rover_ackermann/model.config` | Model metadata |
-| `Tools/simulation/gz/models/rover_ackermann/meshes/` | 3D mesh files for visualization |
+| File                                                      | Description                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------------------- |
+| `Tools/simulation/gz/worlds/rover.sdf`                    | Ground plane with physics (500 Hz step), gravity, magnetic field    |
+| `Tools/simulation/gz/models/rover_ackermann/model.sdf`    | Vehicle SDF: chassis, wheels, steering joints, Ackermann kinematics |
+| `Tools/simulation/gz/models/rover_ackermann/model.config` | Model metadata                                                      |
+| `Tools/simulation/gz/models/rover_ackermann/meshes/`      | 3D mesh files for visualization                                     |
 
 ### Sensors defined in the model
 
@@ -225,50 +225,50 @@ On real hardware there is no single bridge module — PX4 uses **many individual
 
 ## Real Hardware Drivers
 
-| Sensor Type | Example Drivers in `src/drivers/` | uORB Topic |
-|---|---|---|
-| **IMU** | `imu/invensense/icm42688p`, `imu/bosch/bmi088`, `imu/invensense/icm45686`, … | `sensor_accel`, `sensor_gyro` |
-| **Barometer** | `barometer/bmp388`, `barometer/ms5611`, `barometer/dps310`, … | `sensor_baro` |
-| **Magnetometer** | `magnetometer/bosch/bmm150`, `magnetometer/rm3100`, `magnetometer/lis3mdl`, … | `sensor_mag` |
-| **GPS** | `gps/` (single driver, multiple protocols: u-blox, NMEA, Septentrio, …) | `sensor_gps` |
-| **Actuators** | `pwm_out`, `dshot`, `px4io`, `pca9685_pwm_out` | Subscribes to actuator commands |
+| Sensor Type      | Example Drivers in `src/drivers/`                                             | uORB Topic                      |
+| ---------------- | ----------------------------------------------------------------------------- | ------------------------------- |
+| **IMU**          | `imu/invensense/icm42688p`, `imu/bosch/bmi088`, `imu/invensense/icm45686`, …  | `sensor_accel`, `sensor_gyro`   |
+| **Barometer**    | `barometer/bmp388`, `barometer/ms5611`, `barometer/dps310`, …                 | `sensor_baro`                   |
+| **Magnetometer** | `magnetometer/bosch/bmm150`, `magnetometer/rm3100`, `magnetometer/lis3mdl`, … | `sensor_mag`                    |
+| **GPS**          | `gps/` (single driver, multiple protocols: u-blox, NMEA, Septentrio, …)       | `sensor_gps`                    |
+| **Actuators**    | `pwm_out`, `dshot`, `px4io`, `pca9685_pwm_out`                                | Subscribes to actuator commands |
 
 ## `gz_bridge` Module (`src/modules/simulation/gz_bridge/`)
 
-| File | Purpose |
-|------|----------|
-| `GZBridge.cpp` / `.hpp` | Main module — subscribes to Gazebo topics, publishes uORB sensor data |
-| `GZMixingInterfaceESC.cpp` / `.hpp` | Sends motor (ESC) commands to Gazebo |
-| `GZMixingInterfaceServo.cpp` / `.hpp` | Sends servo commands to Gazebo |
-| `GZMixingInterfaceWheel.cpp` / `.hpp` | Sends wheel commands to Gazebo (rovers) |
-| `GZGimbal.cpp` / `.hpp` | Gimbal control interface |
-| `CMakeLists.txt` | Build config + auto-generates all `gz_*` simulation targets |
-| `gz_env.sh.in` | Template for Gazebo environment variables |
-| `module.yaml` | Parameter metadata |
+| File                                  | Purpose                                                               |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| `GZBridge.cpp` / `.hpp`               | Main module — subscribes to Gazebo topics, publishes uORB sensor data |
+| `GZMixingInterfaceESC.cpp` / `.hpp`   | Sends motor (ESC) commands to Gazebo                                  |
+| `GZMixingInterfaceServo.cpp` / `.hpp` | Sends servo commands to Gazebo                                        |
+| `GZMixingInterfaceWheel.cpp` / `.hpp` | Sends wheel commands to Gazebo (rovers)                               |
+| `GZGimbal.cpp` / `.hpp`               | Gimbal control interface                                              |
+| `CMakeLists.txt`                      | Build config + auto-generates all `gz_*` simulation targets           |
+| `gz_env.sh.in`                        | Template for Gazebo environment variables                             |
+| `module.yaml`                         | Parameter metadata                                                    |
 
 ### Gazebo → uORB (sensor data)
 
-| Gazebo Topic | uORB Publication |
-|---|---|
-| Clock | Simulation time sync (lockstep) |
-| IMU | `sensor_accel`, `sensor_gyro` |
-| Magnetometer | `sensor_mag` |
-| Barometer | `sensor_baro` |
-| NavSat (GPS) | `sensor_gps` |
-| Airspeed | `differential_pressure` |
-| LaserScan | `obstacle_distance` |
-| Pose | Ground truth (`vehicle_attitude_groundtruth`, etc.) |
-| Odometry | `vehicle_visual_odometry` |
-| Optical Flow | `sensor_optical_flow` |
+| Gazebo Topic | uORB Publication                                    |
+| ------------ | --------------------------------------------------- |
+| Clock        | Simulation time sync (lockstep)                     |
+| IMU          | `sensor_accel`, `sensor_gyro`                       |
+| Magnetometer | `sensor_mag`                                        |
+| Barometer    | `sensor_baro`                                       |
+| NavSat (GPS) | `sensor_gps`                                        |
+| Airspeed     | `differential_pressure`                             |
+| LaserScan    | `obstacle_distance`                                 |
+| Pose         | Ground truth (`vehicle_attitude_groundtruth`, etc.) |
+| Odometry     | `vehicle_visual_odometry`                           |
+| Optical Flow | `sensor_optical_flow`                               |
 
 ### uORB → Gazebo (actuator commands)
 
-| Mixing Interface | Function |
-|---|---|
-| `GZMixingInterfaceESC` | Motor/propeller commands |
+| Mixing Interface         | Function                                    |
+| ------------------------ | ------------------------------------------- |
+| `GZMixingInterfaceESC`   | Motor/propeller commands                    |
 | `GZMixingInterfaceServo` | Servo commands (control surfaces, steering) |
-| `GZMixingInterfaceWheel` | Wheel speed commands (rovers) |
-| `GZGimbal` | Gimbal angle commands |
+| `GZMixingInterfaceWheel` | Wheel speed commands (rovers)               |
+| `GZGimbal`               | Gimbal angle commands                       |
 
 ## Gazebo Simulation Control Strategy
 
@@ -337,15 +337,15 @@ All three implement `OutputModuleInterface` and use `MixingOutput` — the same 
 
 ### Comparison Table
 
-| | ESC | Servo | Wheel |
-|---|---|---|---|
-| **Controls** | Motor/rotor speed | Joint angle | Wheel speed (bidirectional) |
-| **Command type** | Velocity (RPM) | Position (radians) | Velocity (with offset) |
-| **Message type** | `gz::msgs::Actuators` (array) | `gz::msgs::Double` (per joint) | `gz::msgs::Actuators` (array) |
-| **Gazebo plugin** | `JointController` (velocity) | `JointPositionController` (PID) | `JointController` (velocity) |
-| **Feedback** | Yes → `esc_status` | No | Yes → `wheel_encoders` |
-| **Bidirectional** | No (0 to max RPM) | Yes (min to max angle) | Yes (offset-based) |
-| **Typical vehicles** | Multirotors, fixed-wing | Fixed-wing, VTOL, rover steering | Rovers |
+|                      | ESC                           | Servo                            | Wheel                         |
+| -------------------- | ----------------------------- | -------------------------------- | ----------------------------- |
+| **Controls**         | Motor/rotor speed             | Joint angle                      | Wheel speed (bidirectional)   |
+| **Command type**     | Velocity (RPM)                | Position (radians)               | Velocity (with offset)        |
+| **Message type**     | `gz::msgs::Actuators` (array) | `gz::msgs::Double` (per joint)   | `gz::msgs::Actuators` (array) |
+| **Gazebo plugin**    | `JointController` (velocity)  | `JointPositionController` (PID)  | `JointController` (velocity)  |
+| **Feedback**         | Yes → `esc_status`            | No                               | Yes → `wheel_encoders`        |
+| **Bidirectional**    | No (0 to max RPM)             | Yes (min to max angle)           | Yes (offset-based)            |
+| **Typical vehicles** | Multirotors, fixed-wing       | Fixed-wing, VTOL, rover steering | Rovers                        |
 
 ### Rover Ackermann Example
 
@@ -373,11 +373,11 @@ In the model SDF:
 
 Gazebo uses **ENU** (East-North-Up) / **FLU** (Forward-Left-Up) frames while PX4 uses **NED** (North-East-Down) / **FRD** (Forward-Right-Down). The `GZBridge` module converts between them:
 
-| Conversion | Method | Quaternion |
-|---|---|---|
-| FLU → FRD (body frame) | 180° rotation about X | `q_FLU_to_FRD = (0, 1, 0, 0)` |
-| ENU → NED (world frame) | 90° about Z then 180° about X | `q_ENU_to_NED = (0, 0.70711, 0.70711, 0)` |
-| Full attitude: FLU-to-ENU → FRD-to-NED | Composition | `q_FRD_to_NED = q_ENU_to_NED * q_FLU_to_ENU * q_FLU_to_FRD⁻¹` |
+| Conversion                             | Method                        | Quaternion                                                    |
+| -------------------------------------- | ----------------------------- | ------------------------------------------------------------- |
+| FLU → FRD (body frame)                 | 180° rotation about X         | `q_FLU_to_FRD = (0, 1, 0, 0)`                                 |
+| ENU → NED (world frame)                | 90° about Z then 180° about X | `q_ENU_to_NED = (0, 0.70711, 0.70711, 0)`                     |
+| Full attitude: FLU-to-ENU → FRD-to-NED | Composition                   | `q_FRD_to_NED = q_ENU_to_NED * q_FLU_to_ENU * q_FLU_to_FRD⁻¹` |
 
 Applied in sensor callbacks:
 - **IMU**: accel/gyro vectors rotated by `q_FLU_to_FRD` before publishing to uORB
@@ -575,17 +575,17 @@ graph TD
 
 ## Directory Structure
 
-| Path | Purpose |
-|------|---------|
-| `RoverAckermann.cpp/.hpp` | Top-level module — dispatches drive modes and runs controller cascade |
-| `AckermannPosControl/` | Position controller (Pure Pursuit + speed profiling) |
-| `AckermannSpeedControl/` | Speed controller (PI + slew-rate) |
-| `AckermannAttControl/` | Attitude/heading controller (P + yaw slew) |
-| `AckermannRateControl/` | Yaw rate controller (Ackermann kinematic feedforward + PI) |
-| `AckermannActControl/` | Actuator allocation (slew-rate limiting → motor/servo outputs) |
-| `AckermannDriveModes/AckermannManualMode/` | Manual, Acro, Stabilized, Position sub-modes |
-| `AckermannDriveModes/AckermannAutoMode/` | Mission, Loiter, RTL |
-| `AckermannDriveModes/AckermannOffboardMode/` | Offboard position/velocity control |
+| Path                                         | Purpose                                                               |
+| -------------------------------------------- | --------------------------------------------------------------------- |
+| `RoverAckermann.cpp/.hpp`                    | Top-level module — dispatches drive modes and runs controller cascade |
+| `AckermannPosControl/`                       | Position controller (Pure Pursuit + speed profiling)                  |
+| `AckermannSpeedControl/`                     | Speed controller (PI + slew-rate)                                     |
+| `AckermannAttControl/`                       | Attitude/heading controller (P + yaw slew)                            |
+| `AckermannRateControl/`                      | Yaw rate controller (Ackermann kinematic feedforward + PI)            |
+| `AckermannActControl/`                       | Actuator allocation (slew-rate limiting → motor/servo outputs)        |
+| `AckermannDriveModes/AckermannManualMode/`   | Manual, Acro, Stabilized, Position sub-modes                          |
+| `AckermannDriveModes/AckermannAutoMode/`     | Mission, Loiter, RTL                                                  |
+| `AckermannDriveModes/AckermannOffboardMode/` | Offboard position/velocity control                                    |
 
 ## Cascaded Controller Architecture
 
@@ -664,23 +664,23 @@ graph LR
 
 **Block-to-module mapping:**
 
-| Block Diagram Block | PX4 Module | Algorithm |
-|---------------------|-----------|-----------|
-| Pure Pursuit | `AckermannPosControl` | Pure Pursuit path following + S-curve speed profiling |
-| Speed PID + Feed Forward | `AckermannSpeedControl` | PI controller with speed-to-throttle feedforward mapping |
-| Yaw PID | `AckermannAttControl` | P controller with SlewRate-limited heading |
-| Yaw Rate PID + Feed Forward | `AckermannRateControl` | PI controller with Ackermann kinematic feedforward: $\text{steering} = \arctan(\dot\psi \cdot L / v)$ |
-| Inverse Kinematics | `AckermannActControl` | Slew-rate limiting on throttle and steering outputs |
-| Vehicle Dynamics | Physical vehicle / Gazebo simulation | Real sensors or `gz_bridge` simulation feedback |
+| Block Diagram Block         | PX4 Module                           | Algorithm                                                                                             |
+| --------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Pure Pursuit                | `AckermannPosControl`                | Pure Pursuit path following + S-curve speed profiling                                                 |
+| Speed PID + Feed Forward    | `AckermannSpeedControl`              | PI controller with speed-to-throttle feedforward mapping                                              |
+| Yaw PID                     | `AckermannAttControl`                | P controller with SlewRate-limited heading                                                            |
+| Yaw Rate PID + Feed Forward | `AckermannRateControl`               | PI controller with Ackermann kinematic feedforward: $\text{steering} = \arctan(\dot\psi \cdot L / v)$ |
+| Inverse Kinematics          | `AckermannActControl`                | Slew-rate limiting on throttle and steering outputs                                                   |
+| Vehicle Dynamics            | Physical vehicle / Gazebo simulation | Real sensors or `gz_bridge` simulation feedback                                                       |
 
 **Feedback signals:**
 
-| Signal | Source (real HW) | Source (SITL) | uORB Topic |
-|--------|-----------------|---------------|------------|
-| Measured Position | GPS + EKF2 | gz_bridge | `vehicle_local_position` |
-| Measured Speed | EKF2 (NED velocity → body frame rotation) | gz_bridge | `vehicle_local_position` |
-| Measured Yaw | EKF2 (quaternion → Euler) | gz_bridge | `vehicle_attitude` |
-| Measured Yaw Rate | Gyroscope | gz_bridge | `vehicle_angular_velocity` |
+| Signal            | Source (real HW)                          | Source (SITL) | uORB Topic                 |
+| ----------------- | ----------------------------------------- | ------------- | -------------------------- |
+| Measured Position | GPS + EKF2                                | gz_bridge     | `vehicle_local_position`   |
+| Measured Speed    | EKF2 (NED velocity → body frame rotation) | gz_bridge     | `vehicle_local_position`   |
+| Measured Yaw      | EKF2 (quaternion → Euler)                 | gz_bridge     | `vehicle_attitude`         |
+| Measured Yaw Rate | Gyroscope                                 | gz_bridge     | `vehicle_angular_velocity` |
 
 The `updateControllers()` method runs the cascade conditionally based on `vehicle_control_mode` flags:
 
@@ -810,15 +810,15 @@ graph TD
 
 ### Mode Summary Table
 
-| Mode | nav_state | Cascade Entry | Controllers Used |
-|------|-----------|--------------|-----------------|
-| **Manual** | `NAVIGATION_STATE_MANUAL` | ActControl (direct) | Act only |
-| **Acro** | `NAVIGATION_STATE_ACRO` | RateControl | Rate → Act |
-| **Stabilized** | `NAVIGATION_STATE_STAB` | AttControl | Att → Rate → Act |
-| **Position** | `NAVIGATION_STATE_POSCTL` | PosControl (course hold) or SpeedControl+AttControl (stick active) | Full or Speed+Att → Rate → Act |
-| **Auto** (Mission/Loiter/RTL) | `NAVIGATION_STATE_AUTO_*` | PosControl | Full cascade |
-| **Offboard (position)** | `NAVIGATION_STATE_OFFBOARD` | PosControl | Full cascade |
-| **Offboard (velocity)** | `NAVIGATION_STATE_OFFBOARD` | SpeedControl + AttControl | Speed + Att → Rate → Act |
+| Mode                          | nav_state                   | Cascade Entry                                                      | Controllers Used               |
+| ----------------------------- | --------------------------- | ------------------------------------------------------------------ | ------------------------------ |
+| **Manual**                    | `NAVIGATION_STATE_MANUAL`   | ActControl (direct)                                                | Act only                       |
+| **Acro**                      | `NAVIGATION_STATE_ACRO`     | RateControl                                                        | Rate → Act                     |
+| **Stabilized**                | `NAVIGATION_STATE_STAB`     | AttControl                                                         | Att → Rate → Act               |
+| **Position**                  | `NAVIGATION_STATE_POSCTL`   | PosControl (course hold) or SpeedControl+AttControl (stick active) | Full or Speed+Att → Rate → Act |
+| **Auto** (Mission/Loiter/RTL) | `NAVIGATION_STATE_AUTO_*`   | PosControl                                                         | Full cascade                   |
+| **Offboard (position)**       | `NAVIGATION_STATE_OFFBOARD` | PosControl                                                         | Full cascade                   |
+| **Offboard (velocity)**       | `NAVIGATION_STATE_OFFBOARD` | SpeedControl + AttControl                                          | Speed + Att → Rate → Act       |
 
 ### Manual Mode Sub-modes
 
@@ -842,26 +842,26 @@ graph TD
 
 ## uORB Topic Flow
 
-| Topic | Published by | Consumed by |
-|-------|-------------|-------------|
-| `rover_position_setpoint` | AutoMode, ManualMode (position), OffboardMode | PosControl |
-| `rover_speed_setpoint` | PosControl, ManualMode (position), OffboardMode (vel) | SpeedControl |
-| `rover_attitude_setpoint` | PosControl, ManualMode (stab/position), OffboardMode (vel) | AttControl |
-| `rover_throttle_setpoint` | SpeedControl, ManualMode (manual/acro/stab) | ActControl |
-| `rover_rate_setpoint` | AttControl, ManualMode (acro) | RateControl |
-| `rover_steering_setpoint` | RateControl, ManualMode (manual) | ActControl |
-| `actuator_motors` | ActControl | gz_bridge / PWMOut |
-| `actuator_servos` | ActControl | gz_bridge / PWMOut |
+| Topic                     | Published by                                               | Consumed by        |
+| ------------------------- | ---------------------------------------------------------- | ------------------ |
+| `rover_position_setpoint` | AutoMode, ManualMode (position), OffboardMode              | PosControl         |
+| `rover_speed_setpoint`    | PosControl, ManualMode (position), OffboardMode (vel)      | SpeedControl       |
+| `rover_attitude_setpoint` | PosControl, ManualMode (stab/position), OffboardMode (vel) | AttControl         |
+| `rover_throttle_setpoint` | SpeedControl, ManualMode (manual/acro/stab)                | ActControl         |
+| `rover_rate_setpoint`     | AttControl, ManualMode (acro)                              | RateControl        |
+| `rover_steering_setpoint` | RateControl, ManualMode (manual)                           | ActControl         |
+| `actuator_motors`         | ActControl                                                 | gz_bridge / PWMOut |
+| `actuator_servos`         | ActControl                                                 | gz_bridge / PWMOut |
 
 ## Control Algorithm Summary
 
-| Controller | Algorithm | Key Feature |
-|-----------|-----------|-------------|
-| **PosControl** | **Pure Pursuit** + S-curve speed profile | Bearing-based path following with lookahead distance |
-| **SpeedControl** | **PI** (feedforward + feedback) | Slew-rate limited setpoint, asymmetric accel/decel |
-| **AttControl** | **P** (proportional heading error) | SlewRate for smooth heading transitions |
-| **RateControl** | **Ackermann kinematic feedforward + PI** | Inverse kinematics: `atan(ω·L/v)` for steering angle; PI disabled in reverse |
-| **ActControl** | **Slew-rate limiting** | Separate motor throttle and servo steering rate limits |
+| Controller       | Algorithm                                | Key Feature                                                                  |
+| ---------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| **PosControl**   | **Pure Pursuit** + S-curve speed profile | Bearing-based path following with lookahead distance                         |
+| **SpeedControl** | **PI** (feedforward + feedback)          | Slew-rate limited setpoint, asymmetric accel/decel                           |
+| **AttControl**   | **P** (proportional heading error)       | SlewRate for smooth heading transitions                                      |
+| **RateControl**  | **Ackermann kinematic feedforward + PI** | Inverse kinematics: `atan(ω·L/v)` for steering angle; PI disabled in reverse |
+| **ActControl**   | **Slew-rate limiting**                   | Separate motor throttle and servo steering rate limits                       |
 
 ---
 
@@ -1004,16 +1004,16 @@ colcon build --packages-select example_mode_manual_cpp --symlink-install
 
 ## PX4 ROS 2 Interface Library — Key Concepts
 
-| Concept | Description |
-|---|---|
-| `ModeBase` | Base class for custom PX4 flight modes registered via ROS 2 |
-| `Settings` | Builder for mode config: name, `preventArming`, `activateEvenWhileDisarmed`, `replaceInternalMode` |
-| `ManualControlInput` | Reads RC stick inputs (roll, pitch, yaw, throttle) |
-| `RatesSetpointType` | Sends angular rate + thrust commands (experimental) |
-| `AttitudeSetpointType` | Sends quaternion attitude + thrust commands (experimental) |
-| `PeripheralActuatorControls` | Sends servo/actuator passthrough commands |
-| `healthAndArmingChecks()` | Virtual method to report custom arming requirements (default: no-op) |
-| Mode requirements | Automatically inferred from which setpoint types are constructed (e.g. needs attitude estimate, needs local position) |
+| Concept                      | Description                                                                                                           |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `ModeBase`                   | Base class for custom PX4 flight modes registered via ROS 2                                                           |
+| `Settings`                   | Builder for mode config: name, `preventArming`, `activateEvenWhileDisarmed`, `replaceInternalMode`                    |
+| `ManualControlInput`         | Reads RC stick inputs (roll, pitch, yaw, throttle)                                                                    |
+| `RatesSetpointType`          | Sends angular rate + thrust commands (experimental)                                                                   |
+| `AttitudeSetpointType`       | Sends quaternion attitude + thrust commands (experimental)                                                            |
+| `PeripheralActuatorControls` | Sends servo/actuator passthrough commands                                                                             |
+| `healthAndArmingChecks()`    | Virtual method to report custom arming requirements (default: no-op)                                                  |
+| Mode requirements            | Automatically inferred from which setpoint types are constructed (e.g. needs attitude estimate, needs local position) |
 
 ---
 
@@ -1041,12 +1041,12 @@ PX4 stores all configuration as **named parameters** (key-value pairs). Every pa
 
 ### Parameter Precedence (highest → lowest)
 
-| Priority | Source | When Applied |
-|---|---|---|
-| 1 | `param set NAME VALUE` in `pxh>` console | Immediate; persists across reboots |
-| 2 | QGC → Parameters panel → edit value | Immediate; persists across reboots |
-| 3 | Airframe init script (`ROMFS/px4fmu_common/init.d/airframes/`) | At boot, only for newly-set defaults |
-| 4 | Compile-time defaults in source (`PARAM_DEFINE_*` macros) | Fallback if never overridden |
+| Priority | Source                                                         | When Applied                         |
+| -------- | -------------------------------------------------------------- | ------------------------------------ |
+| 1        | `param set NAME VALUE` in `pxh>` console                       | Immediate; persists across reboots   |
+| 2        | QGC → Parameters panel → edit value                            | Immediate; persists across reboots   |
+| 3        | Airframe init script (`ROMFS/px4fmu_common/init.d/airframes/`) | At boot, only for newly-set defaults |
+| 4        | Compile-time defaults in source (`PARAM_DEFINE_*` macros)      | Fallback if never overridden         |
 
 ### Important Parameter Commands (`pxh>` Console)
 
@@ -1234,16 +1234,16 @@ param set EKF2_BARO_CTRL 0
 
 ##### Parameter Reference Table
 
-| Parameter | Default | Set To | Purpose |
-|---|---|---|---|
-| `EKF2_EV_CTRL` | `0` (disabled) | `15` (all) | Enable EV position + velocity + yaw fusion |
-| `EKF2_HGT_REF` | `0` (baro) | `3` (vision) | Use vision as primary height source |
-| `EKF2_EVP_NOISE` | `0.1` | `0.01` (sim) / `0.05` (real) | EV position measurement noise (m) |
-| `EKF2_EVV_NOISE` | `0.1` | `0.01` (sim) / `0.05` (real) | EV velocity measurement noise (m/s) |
-| `EKF2_EVA_NOISE` | `0.05` | `0.01` (sim) / `0.05` (real) | EV yaw measurement noise (rad) |
-| `EKF2_EV_ODOM_FRM` | `0` (NED) | `0` | Frame of incoming EV data (our bridges convert to NED) |
-| `EKF2_GPS_CTRL` | `7` (all) | `0` (off) | Disable GPS if running indoor/no-GPS |
-| `EKF2_BARO_CTRL` | `1` (on) | `0` (off) | Disable baro if using vision height only |
+| Parameter          | Default        | Set To                       | Purpose                                                |
+| ------------------ | -------------- | ---------------------------- | ------------------------------------------------------ |
+| `EKF2_EV_CTRL`     | `0` (disabled) | `15` (all)                   | Enable EV position + velocity + yaw fusion             |
+| `EKF2_HGT_REF`     | `0` (baro)     | `3` (vision)                 | Use vision as primary height source                    |
+| `EKF2_EVP_NOISE`   | `0.1`          | `0.01` (sim) / `0.05` (real) | EV position measurement noise (m)                      |
+| `EKF2_EVV_NOISE`   | `0.1`          | `0.01` (sim) / `0.05` (real) | EV velocity measurement noise (m/s)                    |
+| `EKF2_EVA_NOISE`   | `0.05`         | `0.01` (sim) / `0.05` (real) | EV yaw measurement noise (rad)                         |
+| `EKF2_EV_ODOM_FRM` | `0` (NED)      | `0`                          | Frame of incoming EV data (our bridges convert to NED) |
+| `EKF2_GPS_CTRL`    | `7` (all)      | `0` (off)                    | Disable GPS if running indoor/no-GPS                   |
+| `EKF2_BARO_CTRL`   | `1` (on)       | `0` (off)                    | Disable baro if using vision height only               |
 
 ##### EKF2_HGT_REF — Height Reference vs. Height Fusion
 
@@ -1298,12 +1298,12 @@ In this configuration:
 
 **What `EKF2_HGT_REF` values mean:**
 
-| Value | Reference | What it means |
-|---|---|---|
-| `0` | Barometer | Height origin = pressure altitude at boot. Most stable reference — baro always available, no dropout risk. |
-| `1` | GPS | Height origin = GPS ellipsoid height. Good outdoors, but if GPS is lost, **reference is lost** → EKF2 falls back to baro. |
-| `2` | Range finder | Height origin = distance to ground. Only for low-altitude vehicles (drones < 10 m AGL). |
-| `3` | Vision (EV) | Height origin = EV z-position. If EV drops out, **reference is lost** → EKF2 falls back to baro. |
+| Value | Reference    | What it means                                                                                                             |
+| ----- | ------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `0`   | Barometer    | Height origin = pressure altitude at boot. Most stable reference — baro always available, no dropout risk.                |
+| `1`   | GPS          | Height origin = GPS ellipsoid height. Good outdoors, but if GPS is lost, **reference is lost** → EKF2 falls back to baro. |
+| `2`   | Range finder | Height origin = distance to ground. Only for low-altitude vehicles (drones < 10 m AGL).                                   |
+| `3`   | Vision (EV)  | Height origin = EV z-position. If EV drops out, **reference is lost** → EKF2 falls back to baro.                          |
 
 **Automatic fallback behavior:**
 
@@ -1330,12 +1330,12 @@ Timeline:
 
 **Recommended settings for our rover:**
 
-| Environment | `EKF2_HGT_REF` | Why |
-|---|---|---|
-| Indoor only (2D SLAM) | `0` (baro) | SLAM has no height; baro is always available |
-| Indoor only (3D SLAM) | `3` (vision) | Vision provides height; falls back to baro if SLAM fails |
-| Outdoor only (GPS) | `1` (GPS) | GPS height is absolute; falls back to baro if fix lost |
-| Mixed indoor/outdoor | `0` (baro) | **Safest** — baro never drops out; GPS and EV heights are fused as corrections on top of baro |
+| Environment           | `EKF2_HGT_REF` | Why                                                                                           |
+| --------------------- | -------------- | --------------------------------------------------------------------------------------------- |
+| Indoor only (2D SLAM) | `0` (baro)     | SLAM has no height; baro is always available                                                  |
+| Indoor only (3D SLAM) | `3` (vision)   | Vision provides height; falls back to baro if SLAM fails                                      |
+| Outdoor only (GPS)    | `1` (GPS)      | GPS height is absolute; falls back to baro if fix lost                                        |
+| Mixed indoor/outdoor  | `0` (baro)     | **Safest** — baro never drops out; GPS and EV heights are fused as corrections on top of baro |
 
 **Why baro is the safest reference for mixed environments:**
 - Baro is always available (no dropouts)
@@ -1357,11 +1357,11 @@ EKF2_EV_CTRL bitmask:
 
 **Recommended values for 2D SLAM:**
 
-| Scenario | `EKF2_EV_CTRL` | Bits | Notes |
-|---|---|---|---|
-| Position + yaw only | `9` | 1 + 8 | Safest — only fuse what 2D SLAM reliably provides |
-| Position + velocity + yaw | `13` | 1 + 4 + 8 | If bridge sends velocity; z-velocity must be NaN in the message |
-| Full 3D (Gazebo / 3D SLAM) | `15` | 1 + 2 + 4 + 8 | Only for 3D odometry sources |
+| Scenario                   | `EKF2_EV_CTRL` | Bits          | Notes                                                           |
+| -------------------------- | -------------- | ------------- | --------------------------------------------------------------- |
+| Position + yaw only        | `9`            | 1 + 8         | Safest — only fuse what 2D SLAM reliably provides               |
+| Position + velocity + yaw  | `13`           | 1 + 4 + 8     | If bridge sends velocity; z-velocity must be NaN in the message |
+| Full 3D (Gazebo / 3D SLAM) | `15`           | 1 + 2 + 4 + 8 | Only for 3D odometry sources                                    |
 
 **Height source with 2D SLAM:** Since 2D SLAM has no height, keep barometer as height reference:
 
@@ -1420,25 +1420,25 @@ param set EKF2_EV_QMIN 1        # 0 = accept all; 1–100 = minimum quality
 
 **What happens in practice:**
 
-| Scenario | GPS Status | EV Status | EKF2 Behavior |
-|---|---|---|---|
-| Outdoors, GPS good | ✅ good fix | ✅ publishing | Fuses both; GPS typically dominates (lower noise setting) |
-| Moving indoors | ❌ lost fix / high DOP | ✅ publishing | GPS innovations fail → GPS rejected, EV continues |
-| Back outdoors | ✅ fix recovered | ✅ publishing | GPS innovations pass again → GPS re-accepted alongside EV |
-| EV failure | ✅ good fix | ❌ stopped publishing | EV timeout → GPS only |
-| Both lost | ❌ no fix | ❌ stopped | IMU dead-reckoning only (drifts) |
+| Scenario           | GPS Status            | EV Status            | EKF2 Behavior                                             |
+| ------------------ | --------------------- | -------------------- | --------------------------------------------------------- |
+| Outdoors, GPS good | ✅ good fix            | ✅ publishing         | Fuses both; GPS typically dominates (lower noise setting) |
+| Moving indoors     | ❌ lost fix / high DOP | ✅ publishing         | GPS innovations fail → GPS rejected, EV continues         |
+| Back outdoors      | ✅ fix recovered       | ✅ publishing         | GPS innovations pass again → GPS re-accepted alongside EV |
+| EV failure         | ✅ good fix            | ❌ stopped publishing | EV timeout → GPS only                                     |
+| Both lost          | ❌ no fix              | ❌ stopped            | IMU dead-reckoning only (drifts)                          |
 
 **Key parameters for dual-fusion tuning:**
 
-| Parameter | Purpose | Dual-Fusion Setting |
-|---|---|---|
-| `EKF2_GPS_CTRL` | GPS fusion bitmask | `7` (all) |
-| `EKF2_EV_CTRL` | EV fusion bitmask | `9` (2D) or `15` (3D) |
-| `EKF2_EVP_NOISE` | EV position noise | Higher than GPS noise → GPS preferred when both available |
-| `EKF2_GPS_P_NOISE` | GPS position noise | Default `0.5` m |
-| `EKF2_EV_QMIN` | Min EV quality to fuse | `1` (reject quality=0) |
-| `EKF2_GPS_CHECK` | GPS pre-flight checks | Keep default for safety |
-| `EKF2_HGT_REF` | Primary height source | `0` (baro) for mixed; `1` (GPS) for outdoor-only |
+| Parameter          | Purpose                | Dual-Fusion Setting                                       |
+| ------------------ | ---------------------- | --------------------------------------------------------- |
+| `EKF2_GPS_CTRL`    | GPS fusion bitmask     | `7` (all)                                                 |
+| `EKF2_EV_CTRL`     | EV fusion bitmask      | `9` (2D) or `15` (3D)                                     |
+| `EKF2_EVP_NOISE`   | EV position noise      | Higher than GPS noise → GPS preferred when both available |
+| `EKF2_GPS_P_NOISE` | GPS position noise     | Default `0.5` m                                           |
+| `EKF2_EV_QMIN`     | Min EV quality to fuse | `1` (reject quality=0)                                    |
+| `EKF2_GPS_CHECK`   | GPS pre-flight checks  | Keep default for safety                                   |
+| `EKF2_HGT_REF`     | Primary height source  | `0` (baro) for mixed; `1` (GPS) for outdoor-only          |
 
 **Important limitations:**
 - There is **no parameter to say "prefer EV indoors, prefer GPS outdoors"** — EKF2 does this implicitly via innovation checks and noise settings.
@@ -1451,10 +1451,10 @@ param set EKF2_EV_QMIN 1        # 0 = accept all; 1–100 = minimum quality
 
 Two bridge nodes exist in `src/px4_bringup/scripts/`:
 
-| Node | Subscribes | Publishes | Notes |
-|---|---|---|---|
-| `px4_odometry_node.py` | `/odom` | `/fmu/in/vehicle_odometry` | Simple, no TF2, variances = NaN |
-| `px4_vision_odom.py` | `/odom` (configurable) | `/fmu/in/vehicle_visual_odometry` | TF2 lookup, 50 Hz output timer, `quality=100`, proper variances |
+| Node                   | Subscribes             | Publishes                         | Notes                                                           |
+| ---------------------- | ---------------------- | --------------------------------- | --------------------------------------------------------------- |
+| `px4_odometry_node.py` | `/odom`                | `/fmu/in/vehicle_odometry`        | Simple, no TF2, variances = NaN                                 |
+| `px4_vision_odom.py`   | `/odom` (configurable) | `/fmu/in/vehicle_visual_odometry` | TF2 lookup, 50 Hz output timer, `quality=100`, proper variances |
 
 **Recommendation:** Use `px4_vision_odom.py` — it publishes to `vehicle_visual_odometry` (the standard EV input), uses TF2 for accurate transforms, publishes at a fixed 50 Hz rate, and sets proper variance values.
 
@@ -1515,19 +1515,19 @@ shows:
 pxh> listener estimator_status_flags
 ```
 
-| Flag | Expected | Meaning |
-|------|----------|---------|
-| `cs_ev_pos` | `True` | EV horizontal position fused |
-| `cs_ev_vel` | `True` | EV velocity fused |
-| `cs_ev_yaw` | `True` | EV yaw fused |
-| `cs_ev_hgt` | `False` (2D SLAM) / `True` (3D) | EV height fusion — off for 2D SLAM |
-| `cs_gnss_pos` | `True` | GPS horizontal position fused |
-| `cs_gnss_vel` | `True` | GPS velocity fused |
-| `cs_gps_hgt` | `True` | GPS height fused |
-| `cs_baro_hgt` | `True` | Barometer height fused |
-| `cs_tilt_align` | `True` | IMU tilt aligned |
-| `cs_yaw_align` | `True` | Yaw aligned |
-| `cs_mag_dec` | `True` | Magnetic declination fused |
+| Flag            | Expected                        | Meaning                            |
+| --------------- | ------------------------------- | ---------------------------------- |
+| `cs_ev_pos`     | `True`                          | EV horizontal position fused       |
+| `cs_ev_vel`     | `True`                          | EV velocity fused                  |
+| `cs_ev_yaw`     | `True`                          | EV yaw fused                       |
+| `cs_ev_hgt`     | `False` (2D SLAM) / `True` (3D) | EV height fusion — off for 2D SLAM |
+| `cs_gnss_pos`   | `True`                          | GPS horizontal position fused      |
+| `cs_gnss_vel`   | `True`                          | GPS velocity fused                 |
+| `cs_gps_hgt`    | `True`                          | GPS height fused                   |
+| `cs_baro_hgt`   | `True`                          | Barometer height fused             |
+| `cs_tilt_align` | `True`                          | IMU tilt aligned                   |
+| `cs_yaw_align`  | `True`                          | Yaw aligned                        |
+| `cs_mag_dec`    | `True`                          | Magnetic declination fused         |
 
 **Fault flags** (`fs_*`) should **all** be `False`.  Any `True` fault flag
 (e.g., `fs_bad_mag_x`, `fs_bad_acc_vertical`) indicates a sensor problem.
@@ -1560,16 +1560,16 @@ pxh> listener estimator_innovations
 
 Key fields to check:
 
-| Innovation | Healthy Range | What it means |
-|------------|---------------|---------------|
-| `ev_hpos` | < 0.05 m | EV horizontal position agrees with EKF |
-| `ev_hvel` | < 0.05 m/s | EV velocity agrees with EKF |
-| `ev_vpos` | < 0.05 m | EV vertical position (if fusing height) |
-| `gps_hpos` | < 0.5 m | GPS horizontal position agrees (~1–5 cm in sim) |
-| `gps_vpos` | < 0.5 m | GPS vertical position agrees |
-| `gps_hvel` | < 0.5 m/s | GPS velocity agrees |
-| `heading` | < 0.01 rad | Yaw estimate consistent |
-| `baro_vpos` | < 0.5 m | Barometer height agrees (can drift over time) |
+| Innovation  | Healthy Range | What it means                                   |
+| ----------- | ------------- | ----------------------------------------------- |
+| `ev_hpos`   | < 0.05 m      | EV horizontal position agrees with EKF          |
+| `ev_hvel`   | < 0.05 m/s    | EV velocity agrees with EKF                     |
+| `ev_vpos`   | < 0.05 m      | EV vertical position (if fusing height)         |
+| `gps_hpos`  | < 0.5 m       | GPS horizontal position agrees (~1–5 cm in sim) |
+| `gps_vpos`  | < 0.5 m       | GPS vertical position agrees                    |
+| `gps_hvel`  | < 0.5 m/s     | GPS velocity agrees                             |
+| `heading`   | < 0.01 rad    | Yaw estimate consistent                         |
+| `baro_vpos` | < 0.5 m       | Barometer height agrees (can drift over time)   |
 
 Example of verified-healthy innovations (robot stationary in SITL):
 
@@ -1605,27 +1605,83 @@ If any of these fail, see the **Troubleshooting** table below.
 
 ### Summary: Sim vs Real Hardware
 
-| Component | Simulation (Gazebo) | Real Hardware (2D SLAM) | Real Hardware (3D SLAM) |
-|---|---|---|---|
-| Odometry source | Gazebo `OdometryPublisher` → `/ackermann/odom` | RTAB-Map 2D → `robot_localization` → `/odometry/filtered` | RTAB-Map 3D → `robot_localization` → `/odometry/filtered` |
-| Bridge input topic | `/odom` or `/ackermann/odom` | `/odometry/filtered` | `/odometry/filtered` |
-| Bridge node | `px4_vision_odom.py` | `px4_vision_odom.py` | `px4_vision_odom.py` |
-| `EKF2_EV_CTRL` | `15` (all) | `9` (hpos + yaw) | `15` (all) |
-| `EKF2_HGT_REF` | `3` (vision) | `0` (baro) or `1` (GPS) | `3` (vision) |
-| PX4 EV noise | Low (`0.01`) — Gazebo is ground truth | Higher (`0.05–0.1`) — real sensors have noise | Higher (`0.05–0.1`) |
-| GPS | Disabled (`EKF2_GPS_CTRL 0`) for indoor | `0` indoor-only; `7` for GPS+EV dual-fusion | `0` indoor; `7` dual |
+| Component          | Simulation (Gazebo)                            | Real Hardware (2D SLAM)                                   | Real Hardware (3D SLAM)                                   |
+| ------------------ | ---------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
+| Odometry source    | Gazebo `OdometryPublisher` → `/ackermann/odom` | RTAB-Map 2D → `robot_localization` → `/odometry/filtered` | RTAB-Map 3D → `robot_localization` → `/odometry/filtered` |
+| Bridge input topic | `/odom` or `/ackermann/odom`                   | `/odometry/filtered`                                      | `/odometry/filtered`                                      |
+| Bridge node        | `px4_vision_odom.py`                           | `px4_vision_odom.py`                                      | `px4_vision_odom.py`                                      |
+| `EKF2_EV_CTRL`     | `15` (all)                                     | `9` (hpos + yaw)                                          | `15` (all)                                                |
+| `EKF2_HGT_REF`     | `3` (vision)                                   | `0` (baro) or `1` (GPS)                                   | `3` (vision)                                              |
+| PX4 EV noise       | Low (`0.01`) — Gazebo is ground truth          | Higher (`0.05–0.1`) — real sensors have noise             | Higher (`0.05–0.1`)                                       |
+| GPS                | Disabled (`EKF2_GPS_CTRL 0`) for indoor        | `0` indoor-only; `7` for GPS+EV dual-fusion               | `0` indoor; `7` dual                                      |
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| QGC not connecting | MAVLink going to WSL loopback | Redirect MAVLink to Windows host IP |
-| `invalid mode` on `mavlink start` | Used `normal` instead of valid mode | Use `onboard`, `custom`, etc. |
-| `mavlink stop` returns -1 | Wrong argument syntax | Use `-u <local_port>`, not `instance N` |
-| Arming denied in custom mode | `preventArming(true)` on the mode | Arm in standard mode first, then switch; or set flag to `false` |
-| Joystick not in QGC | Windows doesn't see the controller | Check `joy.cpl`, install driver, restart QGC |
-| Hidden modes in QGC | QGC filters unsupported modes per vehicle type | Normal behavior; modes entered programmatically still work |
-| EKF2 not fusing EV data | `EKF2_EV_CTRL` is `0` (default) | Set `EKF2_EV_CTRL 15` and other EV params |
-| `vehicle_visual_odometry` not arriving | Bridge node not running or wrong topic | Launch `px4_bridge.launch.py`, check remappings |
+| Symptom                                | Cause                                          | Fix                                                             |
+| -------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------- |
+| QGC not connecting                     | MAVLink going to WSL loopback                  | Redirect MAVLink to Windows host IP                             |
+| `invalid mode` on `mavlink start`      | Used `normal` instead of valid mode            | Use `onboard`, `custom`, etc.                                   |
+| `mavlink stop` returns -1              | Wrong argument syntax                          | Use `-u <local_port>`, not `instance N`                         |
+| Arming denied in custom mode           | `preventArming(true)` on the mode              | Arm in standard mode first, then switch; or set flag to `false` |
+| Joystick not in QGC                    | Windows doesn't see the controller             | Check `joy.cpl`, install driver, restart QGC                    |
+| Hidden modes in QGC                    | QGC filters unsupported modes per vehicle type | Normal behavior; modes entered programmatically still work      |
+| EKF2 not fusing EV data                | `EKF2_EV_CTRL` is `0` (default)                | Set `EKF2_EV_CTRL 15` and other EV params                       |
+| `vehicle_visual_odometry` not arriving | Bridge node not running or wrong topic         | Launch `px4_bridge.launch.py`, check remappings                 |
+
+---
+
+## URDF / SDF Model Comparison
+
+Comparison between the PX4 upstream Ackermann rover SDF (`PX4-Autopilot/Tools/simulation/gz/models/rover_ackermann/model.sdf`) and the project URDF (`description_robot/urdf/donkey_sensors.urdf`).
+
+### Links
+
+| PX4 model.sdf                             | donkey_sensors.urdf                         | Role                                 |
+| ----------------------------------------- | ------------------------------------------- | ------------------------------------ |
+| `base_link`                               | `ackermann/base_link`                       | Chassis body                         |
+| *(none)*                                  | `ackermann/base_footprint`                  | Ground-plane frame (URDF convention) |
+| `rover_ackermann/FrontLeftWheelSteering`  | `ackermann/front_left_wheel_steering_link`  | Front-left steering knuckle          |
+| `rover_ackermann/FrontRightWheelSteering` | `ackermann/front_right_wheel_steering_link` | Front-right steering knuckle         |
+| `rover_ackermann/FrontLeftWheel`          | `ackermann/front_left_wheel_link`           | Front-left wheel                     |
+| `rover_ackermann/FrontRightWheel`         | `ackermann/front_right_wheel_link`          | Front-right wheel                    |
+| `rover_ackermann/RearLeftWheel`           | `ackermann/rear_left_wheel_link`            | Rear-left wheel                      |
+| `rover_ackermann/RearRightWheel`          | `ackermann/rear_right_wheel_link`           | Rear-right wheel                     |
+
+### Joints
+
+| PX4 model.sdf          | donkey_sensors.urdf                | Type                    | Parent → Child                                                                 | Axis |
+| ---------------------- | ---------------------------------- | ----------------------- | ------------------------------------------------------------------------------ | ---- |
+| `servo_0`              | `front_left_wheel_steering_joint`  | revolute (Z)            | `base_link` → `FrontLeftWheelSteering` / `steering_link`                       | Z    |
+| `servo_1`              | `front_right_wheel_steering_joint` | revolute (Z)            | `base_link` → `FrontRightWheelSteering` / `steering_link`                      | Z    |
+| `FrontLeftWheelJoint`  | `front_left_wheel_joint`           | revolute/continuous (Y) | `FrontLeftWheelSteering` → `FrontLeftWheel` / `steering_link` → `wheel_link`   | Y    |
+| `FrontRightWheelJoint` | `front_right_wheel_joint`          | revolute/continuous (Y) | `FrontRightWheelSteering` → `FrontRightWheel` / `steering_link` → `wheel_link` | Y    |
+| `RearLeftWheelJoint`   | `rear_left_wheel_joint`            | revolute/continuous (Y) | `base_link` → `RearLeftWheel` / `rear_left_wheel_link`                         | Y    |
+| `RearRightWheelJoint`  | `rear_right_wheel_joint`           | revolute/continuous (Y) | `base_link` → `RearRightWheel` / `rear_right_wheel_link`                       | Y    |
+
+### Kinematic Chain (identical structure)
+
+Both use the same Ackermann topology:
+
+```
+base_link
+├── steering_joint (revolute Z) → steering_link → wheel_joint (continuous Y) → FrontLeftWheel
+├── steering_joint (revolute Z) → steering_link → wheel_joint (continuous Y) → FrontRightWheel
+├── wheel_joint (continuous Y) → RearLeftWheel
+└── wheel_joint (continuous Y) → RearRightWheel
+```
+
+### Key Differences
+
+| Property                    | PX4 model.sdf                                             | donkey_sensors.urdf                                     |
+| --------------------------- | --------------------------------------------------------- | ------------------------------------------------------- |
+| **Steering limit**          | ±0.5236 rad (±30°)                                        | ±0.6 rad (±34°)                                         |
+| **Steering joint position** | x=0.120, y=±0.1                                           | x=0.174 (`wheel_base`), y=±0.087 (`wheel_separation/2`) |
+| **Rear wheel position**     | x=-0.192, y=±0.1                                          | x=0, y=±0.087                                           |
+| **Wheel radius**            | 0.06                                                      | 0.0365                                                  |
+| **base_link origin**        | Between axles (front +0.12, rear -0.192)                  | At rear axle (front at `wheel_base`, rear at 0)         |
+| **Wheel drive**             | All 4 wheels driven (JointController on all)              | Rear 2 only (velocity command); front wheels passive    |
+| **Control**                 | Gz plugins (`JointController`, `JointPositionController`) | ros2_control (`gz_ros2_control/GazeboSimSystem`)        |
+| **Namespace**               | `rover_ackermann/`                                        | `ackermann/` (via `$(arg ns)`)                          |
+| **Sensors**                 | IMU, barometer, magnetometer, NavSat (on `base_link`)     | d435i, l515, t265, rplidar, cubepilot (separate links)  |
