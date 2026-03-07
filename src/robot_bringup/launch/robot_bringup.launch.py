@@ -116,6 +116,17 @@ ARGUMENTS = [
         choices=['true', 'false'],
         description='When true, start rviz2 with the configured view.'
     ),
+    DeclareLaunchArgument(
+        'enable_px4_sitl',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Enable PX4 SITL mode (disables ros2_control, enables PX4 joint plugins).'
+    ),
+    DeclareLaunchArgument(
+        'px4_mode_type',
+        default_value='speed_steering',
+        description='PX4 bridge mode: trajectory, speed_steering, speed_attitude, or manual.'
+    ),
 ]
 
 
@@ -137,6 +148,8 @@ def generate_launch_description() -> LaunchDescription:
     nav2_through_bt = LaunchConfiguration('nav2_through_poses_bt')
     rviz_config = LaunchConfiguration('rviz_config')
     rviz_enable = LaunchConfiguration('rviz')
+    enable_px4_sitl = LaunchConfiguration('enable_px4_sitl')
+    px4_mode_type = LaunchConfiguration('px4_mode_type')
 
     robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
@@ -154,6 +167,18 @@ def generate_launch_description() -> LaunchDescription:
             'x': x_pos,
             'y': y_pos,
             'z': z_pos,
+            'enable_px4_sitl': enable_px4_sitl,
+        }.items()
+    )
+
+    px4_bringup_share = get_package_share_directory('px4_bringup')
+    px4_bridge_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(px4_bringup_share, 'launch', 'px4_bridge.launch.py')
+        ),
+        condition=IfCondition(enable_px4_sitl),
+        launch_arguments={
+            'mode_type': px4_mode_type,
         }.items()
     )
 
@@ -200,6 +225,7 @@ def generate_launch_description() -> LaunchDescription:
 
     ld = LaunchDescription(ARGUMENTS)
     ld.add_action(gazebo_launch)
+    ld.add_action(px4_bridge_launch)
     ld.add_action(rtabmap_launch)
     ld.add_action(nav2_launch)
     ld.add_action(rviz_delayed)

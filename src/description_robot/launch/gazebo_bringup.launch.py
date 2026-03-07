@@ -12,6 +12,7 @@ from launch.actions import (
     SetEnvironmentVariable,
     RegisterEventHandler,
 )
+from launch.conditions import UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, TextSubstitution, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -172,7 +173,8 @@ def generate_launch_description() -> LaunchDescription:
         event_handler=OnProcessExit(
             target_action=spawn_entity,
             on_exit=[ros2_controller],
-        )
+        ),
+        condition=UnlessCondition(LaunchConfiguration('enable_px4_sitl')),
     )
     
     return LaunchDescription(

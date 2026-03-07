@@ -29,11 +29,12 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
 
-    # Volumes: X11 socket, workspace, Gazebo cache, full /dev access
+    # Volumes: X11 socket, workspace, Gazebo cache, PX4, full /dev access
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ..:/workspace
       - ../gazebo_cache:/root/.gazebo
+      - ${PX4_DIR:-../../PX4-Autopilot}:/px4
       - /dev:/dev
 
     # Same isolation model as your manual docker run

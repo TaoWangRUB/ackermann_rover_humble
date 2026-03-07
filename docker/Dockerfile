@@ -88,6 +88,31 @@ RUN mkdir -p src && \
 #     -v "$PWD":/workspace/src/ackermann_rover_humble \
 #     ${IMAGE_NAME:-ackermann_rover}_${ROS_DISTRO}
 
+# PX4 SITL build dependencies (gz-harmonic dev libs already installed above)
+# cmake, ninja-build, build-essential, git, python3-pip already installed above
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    ccache \
+    astyle \
+    libssl-dev \
+    libxml2-dev \
+    libxml2-utils \
+    ninja-build \
+    libunwind-dev \
+    cppzmq-dev \
+    libeigen3-dev \
+    libopencv-dev \
+    protobuf-compiler \
+    pkg-config \
+    bc \
+    gdb \
+    dmidecode \
+    && rm -rf /var/lib/apt/lists/*
+
+# PX4 Python dependencies
+COPY docker/px4_requirements.txt /tmp/px4_requirements.txt
+RUN python3 -m pip install --break-system-packages -r /tmp/px4_requirements.txt \
+    && rm /tmp/px4_requirements.txt
+
 # (Optional) Install package dependencies for any repos brought in via ros2.repos.
 # Your bind-mounted project can run rosdep / colcon inside the container.
 RUN apt-get update && source /opt/ros/$ROS_DISTRO/setup.bash && \

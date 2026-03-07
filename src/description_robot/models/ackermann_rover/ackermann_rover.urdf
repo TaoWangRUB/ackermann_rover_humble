@@ -366,7 +366,8 @@
   <!-- CubePilot flight controller (PX4 IMU, barometer, magnetometer, GPS) -->
   <xacro:include filename="$(find description_robot)/models/ackermann_rover/cubepilot/cubepilot.urdf.xacro"/>
   <xacro:if value="$(arg enable_cubepilot)">
-    <xacro:cubepilot name="cubepilot" parent_link="$(arg ns)/base_link">
+    <xacro:cubepilot name="cubepilot" parent_link="$(arg ns)/base_link"
+                     enable_px4_sitl="$(arg enable_px4_sitl)">
       <origin xyz="${cubepilot_x_offset} ${cubepilot_y_offset} ${cubepilot_z_offset}"
               rpy="0 0 0"/>
     </xacro:cubepilot>
@@ -394,6 +395,7 @@
       <odom_topic>encoder</odom_topic>
     </plugin> -->
 
+    <xacro:unless value="$(arg enable_px4_sitl)">
     <plugin 
       filename="libgz_ros2_control-system.so" 
       name="gz_ros2_control::GazeboSimROS2ControlPlugin">
@@ -405,6 +407,7 @@
         <!-- <remapping>ackermann_steering_controller/tf_odometry:=tf</remapping>  -->
       </ros> 
     </plugin>
+    </xacro:unless>
 
     <!-- World odometry plugin (by default, odometry topic is used) -->
     <plugin 
