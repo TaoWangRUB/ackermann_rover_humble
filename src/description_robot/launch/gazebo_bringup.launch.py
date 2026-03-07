@@ -24,7 +24,7 @@ def generate_launch_description() -> LaunchDescription:
     gz_share = get_package_share_directory('ros_gz_sim')
     realsense_share = get_package_share_directory('realsense2_description')
     default_world = os.path.join(pkg_share, 'worlds', 'warehouse.sdf')
-    xacro_file = os.path.join(pkg_share, 'urdf', 'donkey_sensors.urdf')
+    xacro_file = os.path.join(pkg_share, 'models', 'ackermann_rover', 'ackermann_rover.urdf')
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     robot_name = LaunchConfiguration('robot_name')
@@ -77,6 +77,7 @@ def generate_launch_description() -> LaunchDescription:
     declare_enable_t265 = DeclareLaunchArgument('enable_t265', default_value='false', description='Enable T265 tracking camera.')
     declare_enable_rplidar = DeclareLaunchArgument('enable_rplidar', default_value='true', description='Enable RPLiDAR.')
     declare_enable_cubepilot = DeclareLaunchArgument('enable_cubepilot', default_value='true', description='Enable CubePilot (IMU, baro, mag, GPS).')
+    declare_enable_px4_sitl = DeclareLaunchArgument('enable_px4_sitl', default_value='false', description='Enable PX4 SITL joint plugins.')
 
     set_model_path = SetEnvironmentVariable(name='GAZEBO_MODEL_PATH', value=combined_resource_path)
     set_ign_resource_path = SetEnvironmentVariable(
@@ -99,7 +100,8 @@ def generate_launch_description() -> LaunchDescription:
                 'enable_l515:=', enable_l515, ' ',
                 'enable_t265:=', enable_t265, ' ',
                 'enable_rplidar:=', enable_rplidar, ' ',
-                'enable_cubepilot:=', enable_cubepilot]),
+                'enable_cubepilot:=', enable_cubepilot,
+                ' enable_px4_sitl:=', LaunchConfiguration('enable_px4_sitl')]),
                 'use_sim_time': use_sim_time,
             }
         ],
@@ -187,6 +189,7 @@ def generate_launch_description() -> LaunchDescription:
             declare_enable_t265,
             declare_enable_rplidar,
             declare_enable_cubepilot,
+            declare_enable_px4_sitl,
             set_model_path,
             set_ign_resource_path,
             set_gz_resource_path,

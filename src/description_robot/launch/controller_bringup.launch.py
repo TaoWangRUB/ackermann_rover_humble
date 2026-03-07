@@ -15,7 +15,7 @@ ARGUMENTS = [
     DeclareLaunchArgument('use_sim_time', default_value='true',
                           choices=['true', 'false'],
                           description='use_sim_time'),
-    DeclareLaunchArgument('use_stamped', default_value='false',
+    DeclareLaunchArgument('use_stamped', default_value='true',
                           choices=['true', 'false'],
                           description='Whether to use stamped messages for the controller input (e.g., /cmd_vel vs /cmd_vel_unstamped). If true, the controller will expect stamped messages and will publish TF frames with timestamps. If false, the controller will use unstamped messages and publish TF frames without timestamps.'),  
 ]
@@ -23,7 +23,7 @@ ARGUMENTS = [
 
 def generate_launch_description():
     pkg_control = get_package_share_directory('description_robot')
-    xacro_file = os.path.join(pkg_control, 'urdf', 'donkey_sensors.urdf')
+    xacro_file = os.path.join(pkg_control, 'models', 'ackermann_rover', 'ackermann_rover.urdf')
 
     namespace = LaunchConfiguration('namespace')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -74,8 +74,8 @@ def generate_launch_description():
         arguments=[
             'ackermann_steering_controller',
             '--param-file', control_params_file,
-            '--controller-ros-args',
-            '--ros-args --remap /ackermann_steering_controller/reference:=/cmd_vel',
+            '--controller-ros-args', 
+            '-r /ackermann_steering_controller/reference:=/cmd_vel',
         ],
         output='screen',
         condition=IfCondition(use_stamped),
