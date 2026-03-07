@@ -62,6 +62,7 @@ RUN apt-get update && apt-get install -y \
     ros-$ROS_DISTRO-ros2controlcli \
     ros-$ROS_DISTRO-rtabmap-* \
     ros-$ROS_DISTRO-turtlebot3* \
+    ros-$ROS_DISTRO-plotjuggler-ros \
     && rm -rf /var/lib/apt/lists/*
 
 # Initialize rosdep

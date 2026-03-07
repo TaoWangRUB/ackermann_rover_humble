@@ -3,7 +3,7 @@ project(description_robot)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY launch urdf worlds models config
+install(DIRECTORY launch worlds models config
   DESTINATION share/${PROJECT_NAME}
 )
 

@@ -2,7 +2,8 @@
 <!--
   CubePilot (The Cube) flight controller xacro macro.
   Defines the visual mesh, collision box, inertia, IMU sensor link,
-  and a Gazebo IMU sensor plugin.
+  and Gazebo sensor plugins (IMU, barometer, magnetometer, GPS/NavSat)
+  required by PX4 SITL.
 
   The IMU reference frame follows ROS convention (FLU: X-forward, Y-left, Z-up).
   PX4 internally converts FLU -> FRD/NED.
@@ -17,7 +18,13 @@
 
   <xacro:macro name="cubepilot" params="name parent_link *origin
                                          imu_update_rate:=200
-                                         imu_topic:=/cubepilot/imu">
+                                         imu_topic:=/cubepilot/imu
+                                         baro_update_rate:=50
+                                         baro_topic:=/cubepilot/air_pressure
+                                         mag_update_rate:=100
+                                         mag_topic:=/cubepilot/magnetometer
+                                         gps_update_rate:=30
+                                         gps_topic:=/cubepilot/navsat">
 
     <!-- Board dimensions (metres) -->
     <xacro:property name="board_x"  value="${94.5*mm2m}"/>
@@ -25,33 +32,16 @@
     <xacro:property name="board_z"  value="${31.6*mm2m}"/>
     <xacro:property name="board_mass" value="0.080"/>
 
-    <!-- IMU offset from board centre (in board/base_link FLU frame) -->
-    <!-- CubeOrange IMU1 sits ~6 mm fwd, 6 mm right (-Y in FLU), 4 mm below centre -->
-    <xacro:property name="imu_x_offset" value="${6.0*mm2m}"/>
-    <xacro:property name="imu_y_offset" value="${-6.0*mm2m}"/>
-    <xacro:property name="imu_z_offset" value="${-4.0*mm2m}"/>
-
-    <!-- =============== Mount link (at board bottom / mounting surface) =============== -->
-    <joint name="${name}_mount_joint" type="fixed">
-      <parent link="${parent_link}"/>
-      <child link="${name}_mount_link"/>
-      <xacro:insert_block name="origin"/>
-    </joint>
-
-    <link name="${name}_mount_link">
-      <xacro:inertial_dummy/>
-    </link>
-
-    <!-- =============== Board link (at geometric centre) =============== -->
+    <!-- =============== Single link for the whole board =============== -->
     <joint name="${name}_joint" type="fixed">
-      <parent link="${name}_mount_link"/>
+      <parent link="${parent_link}"/>
       <child link="${name}_link"/>
-      <origin xyz="0 0 ${board_z/2}" rpy="0 0 0"/>
+      <xacro:insert_block name="origin"/>
     </joint>
 
     <link name="${name}_link">
       <visual>
-        <origin xyz="0 0 ${-board_z/2}" rpy="0 0 0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
           <mesh filename="package://description_robot/urdf/cubepilot/cubepilot.stl" scale="0.001 0.001 0.001"/>
         </geometry>
@@ -60,7 +50,7 @@
         </material>
       </visual>
       <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0 0 ${board_z/2}" rpy="0 0 0"/>
         <geometry>
           <box size="${board_x} ${board_y} ${board_z}"/>
         </geometry>
@@ -68,26 +58,15 @@
       <xacro:inertial_cuboid mass="${board_mass}" x="${board_x}" y="${board_y}" z="${board_z}"/>
     </link>
 
-    <!-- =============== IMU frame =============== -->
-    <!-- Physical IMU position inside the Cube, relative to board centre -->
-    <joint name="${name}_imu_joint" type="fixed">
-      <parent link="${name}_link"/>
-      <child link="${name}_imu_link"/>
-      <origin xyz="${imu_x_offset} ${imu_y_offset} ${imu_z_offset}" rpy="0 0 0"/>
-    </joint>
-
-    <link name="${name}_imu_link">
-      <xacro:inertial_dummy/>
-    </link>
-
-    <!-- =============== Gazebo IMU sensor =============== -->
-    <gazebo reference="${name}_imu_link">
+    <!-- =============== All Gazebo sensors on single link =============== -->
+    <gazebo reference="${name}_link">
+      <!-- IMU -->
       <sensor name="${name}_imu_sensor" type="imu">
         <always_on>true</always_on>
         <update_rate>${imu_update_rate}</update_rate>
         <visualize>false</visualize>
         <topic>${imu_topic}</topic>
-        <gz_frame_id>${name}_imu_link</gz_frame_id>
+        <gz_frame_id>${name}_link</gz_frame_id>
         <imu>
           <angular_velocity>
             <x><noise type="gaussian"><mean>0.0</mean><stddev>0.0002</stddev></noise></x>
@@ -101,22 +80,49 @@
           </linear_acceleration>
         </imu>
       </sensor>
+
+      <!-- Air pressure (barometer) -->
+      <sensor name="${name}_air_pressure_sensor" type="air_pressure">
+        <always_on>true</always_on>
+        <update_rate>${baro_update_rate}</update_rate>
+        <topic>${baro_topic}</topic>
+        <gz_frame_id>${name}_link</gz_frame_id>
+        <air_pressure>
+          <pressure>
+            <noise type="gaussian">
+              <mean>0</mean>
+              <stddev>0.01</stddev>
+            </noise>
+          </pressure>
+        </air_pressure>
+      </sensor>
+
+      <!-- Magnetometer -->
+      <sensor name="${name}_magnetometer_sensor" type="magnetometer">
+        <always_on>true</always_on>
+        <update_rate>${mag_update_rate}</update_rate>
+        <topic>${mag_topic}</topic>
+        <gz_frame_id>${name}_link</gz_frame_id>
+        <magnetometer>
+          <x><noise type="gaussian"><stddev>0.0001</stddev></noise></x>
+          <y><noise type="gaussian"><stddev>0.0001</stddev></noise></y>
+          <z><noise type="gaussian"><stddev>0.0001</stddev></noise></z>
+        </magnetometer>
+      </sensor>
+
+      <!-- NavSat (GPS) -->
+      <sensor name="${name}_navsat_sensor" type="navsat">
+        <always_on>true</always_on>
+        <update_rate>${gps_update_rate}</update_rate>
+        <topic>${gps_topic}</topic>
+        <gz_frame_id>${name}_link</gz_frame_id>
+      </sensor>
+
+      <xacro:material_darkgray/>
     </gazebo>
 
-    <!-- Preserve the fixed joints in Gazebo so TF stays intact -->
-    <gazebo reference="${name}_mount_joint">
-      <preserveFixedJoint>true</preserveFixedJoint>
-    </gazebo>
     <gazebo reference="${name}_joint">
       <preserveFixedJoint>true</preserveFixedJoint>
-    </gazebo>
-    <gazebo reference="${name}_imu_joint">
-      <preserveFixedJoint>true</preserveFixedJoint>
-    </gazebo>
-
-    <!-- Gazebo visual material -->
-    <gazebo reference="${name}_link">
-      <xacro:material_darkgray/>
     </gazebo>
 
   </xacro:macro>

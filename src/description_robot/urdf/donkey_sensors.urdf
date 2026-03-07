@@ -31,6 +31,13 @@
 
   <xacro:arg name="base_color"    default="1.0 0.0 0.0 1.0"/>
   <xacro:arg name="ns"    default="ackermann"/>
+
+  <!-- Sensor enable flags -->
+  <xacro:arg name="enable_d435i"    default="true"/>
+  <xacro:arg name="enable_l515"     default="true"/>
+  <xacro:arg name="enable_t265"     default="true"/>
+  <xacro:arg name="enable_rplidar"  default="true"/>
+  <xacro:arg name="enable_cubepilot" default="true"/>
   
   <!-- Custom color (for Gz and RViz) -->
   <material name="gray">
@@ -328,92 +335,41 @@
   <xacro:property name="t265_name" value="t265" />
 
   <xacro:include filename="$(find description_robot)/urdf/realsense/_d435i.urdf.xacro"/>
-  <xacro:sensor_d435i name="${d435_name}" parent="$(arg ns)/base_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)">
-    <origin xyz="${d435i_x_offset} 0 ${d435i_z_offset}" rpy="0 0 0"/>
-  </xacro:sensor_d435i>
+  <xacro:if value="$(arg enable_d435i)">
+    <xacro:sensor_d435i name="${d435_name}" parent="$(arg ns)/base_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)">
+      <origin xyz="${d435i_x_offset} 0 ${d435i_z_offset}" rpy="0 0 0"/>
+    </xacro:sensor_d435i>
+  </xacro:if>
 
   <xacro:include filename="$(find description_robot)/urdf/realsense/_l515.urdf.xacro" />
-  <xacro:sensor_l515 name="${l515_name}" parent="$(arg ns)/base_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)" add_plug="$(arg add_plug)" use_mesh="$(arg use_mesh)">
-    <origin xyz="${l515_x_offset} 0 ${l515_z_offset}" rpy="0 0 0"/>
-  </xacro:sensor_l515>
+  <xacro:if value="$(arg enable_l515)">
+    <xacro:sensor_l515 name="${l515_name}" parent="$(arg ns)/base_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)" add_plug="$(arg add_plug)" use_mesh="$(arg use_mesh)">
+      <origin xyz="${l515_x_offset} 0 ${l515_z_offset}" rpy="0 0 0"/>
+    </xacro:sensor_l515>
+  </xacro:if>
 
   <xacro:include filename="$(find description_robot)/urdf/realsense/_t265.urdf.xacro"/>
-  <xacro:sensor_t265 name="${t265_name}" parent="$(arg ns)/base_link">
-    <origin xyz="${t265_x_offset} 0 ${t265_z_offset}" rpy="0.0 0.0 0.0"/>
-  </xacro:sensor_t265>
+  <xacro:if value="$(arg enable_t265)">
+    <xacro:sensor_t265 name="${t265_name}" parent="$(arg ns)/base_link">
+      <origin xyz="${t265_x_offset} 0 ${t265_z_offset}" rpy="0.0 0.0 0.0"/>
+    </xacro:sensor_t265>
+  </xacro:if>
 
-  <!-- Depth camera sensor -->
-  <!-- <gazebo reference="${l515_name}_depth_frame">
-    <sensor name="rgbd_camera" type="rgbd_camera">
-      <camera name="${l515_name}">
-        <horizontal_fov>1.39626</horizontal_fov>
-        <image>
-          <width>480</width>
-          <height>360</height>
-        </image>
-        <clip>
-          <near>0.3</near>
-          <far>20</far>
-        </clip>
-        <lens>
-          <intrinsics>
-            <fx>286.0</fx>
-            <fy>214.5</fy>
-            <cx>240.0</cx>
-            <cy>180.0</cy>
-          </intrinsics>
-          <projection>
-            <p_fx>286.0</p_fx>
-            <p_fy>214.5</p_fy>
-            <p_cx>240.0</p_cx>
-            <p_cy>180.0</p_cy>
-          </projection>
-        </lens>
-        <optical_frame_id>${l515_name}_depth_optical_frame</optical_frame_id>
-      </camera>
-      <always_on>1</always_on>
-      <update_rate>30</update_rate>
-      <visualize>true</visualize>
-      <topic>/${l515_name}</topic>
-    </sensor>
-  </gazebo>
-  
-  <gazebo reference="${l515_name}_imu_optical_frame">
-    <sensor name="imu_sensor" type="imu">
-      <always_on>true</always_on>
-      <update_rate>100.0</update_rate>
-      <visualize>false</visualize>
-      <topic>/${l515_name}/imu/raw</topic>
-      <ignition_frame_id>${l515_name}_imu_optical_frame</ignition_frame_id>
-      <gz_frame_id>${l515_name}_imu_optical_frame</gz_frame_id>
-      <imu>
-        <angular_velocity>
-          <x>true</x>
-          <y>true</y>
-          <z>true</z>
-        </angular_velocity>
-        <linear_acceleration>
-          <x>true</x>
-          <y>true</y>
-          <z>true</z>
-        </linear_acceleration>
-      </imu>
-      
-    </sensor>
-  </gazebo> -->
+  <xacro:if value="$(arg enable_rplidar)">
+    <xacro:rplidar name="rplidar" parent_link="$(arg ns)/base_link" gazebo="ignition">
+      <origin xyz="${rplidar_x_offset} ${rplidar_y_offset} ${rplidar_z_offset}"
+              rpy="0 0 0"/>
+    </xacro:rplidar>
+  </xacro:if>
 
-
-  <xacro:rplidar name="rplidar" parent_link="$(arg ns)/base_link" gazebo="ignition">
-    <origin xyz="${rplidar_x_offset} ${rplidar_y_offset} ${rplidar_z_offset}"
-            rpy="0 0 0"/>
-  </xacro:rplidar>
-
-  <!-- CubePilot flight controller (PX4 IMU) -->
+  <!-- CubePilot flight controller (PX4 IMU, barometer, magnetometer, GPS) -->
   <xacro:include filename="$(find description_robot)/urdf/cubepilot/cubepilot.urdf.xacro"/>
-  <xacro:cubepilot name="cubepilot" parent_link="$(arg ns)/base_link">
-    <origin xyz="${cubepilot_x_offset} ${cubepilot_y_offset} ${cubepilot_z_offset}"
-            rpy="0 0 0"/>
-  </xacro:cubepilot>
+  <xacro:if value="$(arg enable_cubepilot)">
+    <xacro:cubepilot name="cubepilot" parent_link="$(arg ns)/base_link">
+      <origin xyz="${cubepilot_x_offset} ${cubepilot_y_offset} ${cubepilot_z_offset}"
+              rpy="0 0 0"/>
+    </xacro:cubepilot>
+  </xacro:if>
 
   <gazebo>
     <!-- Ackermann steering plugin -->
@@ -437,7 +393,9 @@
       <odom_topic>encoder</odom_topic>
     </plugin> -->
 
-    <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+    <plugin 
+      filename="libgz_ros2_control-system.so" 
+      name="gz_ros2_control::GazeboSimROS2ControlPlugin">
       <parameters>$(find description_robot)/config/ackermann_controller.yaml</parameters>
       <ros> 
         <namespace></namespace> 
@@ -448,7 +406,9 @@
     </plugin>
 
     <!-- World odometry plugin (by default, odometry topic is used) -->
-    <plugin filename="ignition-gazebo-odometry-publisher-system" name="ignition::gazebo::systems::OdometryPublisher">
+    <plugin 
+      filename="ignition-gazebo-odometry-publisher-system" 
+      name="ignition::gazebo::systems::OdometryPublisher">
       <dimensions>3</dimensions>
       <odom_frame>$odom</odom_frame>
       <robot_base_frame>$(arg ns)/base_link</robot_base_frame>
@@ -458,11 +418,66 @@
       <publish_tf>false</publish_tf>
     </plugin>
 
-    <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+    <plugin 
+      filename="gz-sim-joint-state-publisher-system" 
+      name="gz::sim::systems::JointStatePublisher">
       <ros>
         <namespace>$(arg ns)</namespace>
       </ros>
       <topic>joint_states</topic>
+    </plugin>
+
+    <!-- =============== PX4 SITL joint plugins =============== -->
+    <!-- Wheel velocity controllers (PX4 gz_bridge sends actuator commands here) -->
+    <plugin filename="gz-sim-joint-controller-system"
+            name="gz::sim::systems::JointController">
+      <joint_name>$(arg ns)/front_left_wheel_joint</joint_name>
+      <sub_topic>command/motor_speed</sub_topic>
+      <use_actuator_msg>true</use_actuator_msg>
+      <actuator_number>0</actuator_number>
+      <p_gain>10.0</p_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-controller-system"
+            name="gz::sim::systems::JointController">
+      <joint_name>$(arg ns)/front_right_wheel_joint</joint_name>
+      <sub_topic>command/motor_speed</sub_topic>
+      <use_actuator_msg>true</use_actuator_msg>
+      <actuator_number>0</actuator_number>
+      <p_gain>10.0</p_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-controller-system"
+            name="gz::sim::systems::JointController">
+      <joint_name>$(arg ns)/rear_left_wheel_joint</joint_name>
+      <sub_topic>command/motor_speed</sub_topic>
+      <use_actuator_msg>true</use_actuator_msg>
+      <actuator_number>0</actuator_number>
+      <p_gain>10.0</p_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-controller-system"
+            name="gz::sim::systems::JointController">
+      <joint_name>$(arg ns)/rear_right_wheel_joint</joint_name>
+      <sub_topic>command/motor_speed</sub_topic>
+      <use_actuator_msg>true</use_actuator_msg>
+      <actuator_number>0</actuator_number>
+      <p_gain>10.0</p_gain>
+    </plugin>
+
+    <!-- Steering position controllers (PX4 gz_bridge sends servo commands here) -->
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>$(arg ns)/front_left_wheel_steering_joint</joint_name>
+      <sub_topic>servo_0</sub_topic>
+      <p_gain>10</p_gain>
+      <i_gain>0</i_gain>
+      <d_gain>0</d_gain>
+    </plugin>
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>$(arg ns)/front_right_wheel_steering_joint</joint_name>
+      <sub_topic>servo_0</sub_topic>
+      <p_gain>10</p_gain>
+      <i_gain>0</i_gain>
+      <d_gain>0</d_gain>
     </plugin>
   </gazebo>
 

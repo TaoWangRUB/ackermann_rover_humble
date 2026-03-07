@@ -2,7 +2,6 @@
 """Gazebo bring-up launch file for the Ackermann rover."""
 
 import os
-import tempfile
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -19,8 +18,6 @@ from launch_ros.actions import Node
 
 from launch.event_handlers import OnProcessExit
 
-import xacro
-
 
 def generate_launch_description() -> LaunchDescription:
     pkg_share = get_package_share_directory('description_robot')
@@ -29,13 +26,6 @@ def generate_launch_description() -> LaunchDescription:
     default_world = os.path.join(pkg_share, 'worlds', 'warehouse.sdf')
     xacro_file = os.path.join(pkg_share, 'urdf', 'donkey_sensors.urdf')
 
-    # Preprocess the legacy URDF/Xacro tree once so shared nodes can consume it.
-    description_robot_config = xacro.process_file(xacro_file).toxml()
-
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.urdf') as temp_urdf:
-        temp_urdf.write(description_robot_config)
-        robot_urdf_path = temp_urdf.name
-
     use_sim_time = LaunchConfiguration('use_sim_time')
     robot_name = LaunchConfiguration('robot_name')
     namespace = LaunchConfiguration('namespace')
@@ -43,6 +33,11 @@ def generate_launch_description() -> LaunchDescription:
     y_pos = LaunchConfiguration('y')
     z_pos = LaunchConfiguration('z')
     gz_args = LaunchConfiguration('gz_args')
+    enable_d435i = LaunchConfiguration('enable_d435i')
+    enable_l515 = LaunchConfiguration('enable_l515')
+    enable_t265 = LaunchConfiguration('enable_t265')
+    enable_rplidar = LaunchConfiguration('enable_rplidar')
+    enable_cubepilot = LaunchConfiguration('enable_cubepilot')
 
     resource_roots = [
         os.path.dirname(pkg_share),  # .../share
@@ -77,6 +72,11 @@ def generate_launch_description() -> LaunchDescription:
     declare_x = DeclareLaunchArgument('x', default_value='0.0', description='Initial X position in meters.')
     declare_y = DeclareLaunchArgument('y', default_value='0.0', description='Initial Y position in meters.')
     declare_z = DeclareLaunchArgument('z', default_value='0.1', description='Initial Z position in meters.')
+    declare_enable_d435i = DeclareLaunchArgument('enable_d435i', default_value='false', description='Enable D435i depth camera.')
+    declare_enable_l515 = DeclareLaunchArgument('enable_l515', default_value='true', description='Enable L515 LiDAR camera.')
+    declare_enable_t265 = DeclareLaunchArgument('enable_t265', default_value='false', description='Enable T265 tracking camera.')
+    declare_enable_rplidar = DeclareLaunchArgument('enable_rplidar', default_value='true', description='Enable RPLiDAR.')
+    declare_enable_cubepilot = DeclareLaunchArgument('enable_cubepilot', default_value='true', description='Enable CubePilot (IMU, baro, mag, GPS).')
 
     set_model_path = SetEnvironmentVariable(name='GAZEBO_MODEL_PATH', value=combined_resource_path)
     set_ign_resource_path = SetEnvironmentVariable(
@@ -94,56 +94,43 @@ def generate_launch_description() -> LaunchDescription:
                 'robot_description': Command([
                 'xacro', ' ', xacro_file, ' ',
                 'gazebo:=harmonic', ' ',
-                'namespace:=', namespace]),
+                'namespace:=', namespace, ' ',
+                'enable_d435i:=', enable_d435i, ' ',
+                'enable_l515:=', enable_l515, ' ',
+                'enable_t265:=', enable_t265, ' ',
+                'enable_rplidar:=', enable_rplidar, ' ',
+                'enable_cubepilot:=', enable_cubepilot]),
                 'use_sim_time': use_sim_time,
             }
         ],
     )
-
-    # Joint state publisher ensures TF tree stays populated even before Gazebo starts
-    # when ros2_control is used then joint states are published by the controller, 
-    # so this is not strictly necessary, but it can help with early visualization and 
-    # debugging before the controllers are up
-    joint_state_publisher = Node(
-        package='joint_state_publisher',
-        executable='joint_state_publisher',
-        namespace=namespace,
-        output='screen',
-        parameters=[
-            {
-                'robot_description': description_robot_config,
-                'use_sim_time': use_sim_time,
-            }
-        ],
-    )
-
 
     # Bridge Gazebo Transport topics to ROS 2 so RTAB-Map can consume them
     bridge_topics = [
         '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
-        '/d435i/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
+        #'/d435i/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
         #'/d435i/points' + '@sensor_msgs/msg/PointCloud2' + '[gz.msgs.PointCloudPacked',
-        '/d435i/depth_image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-        '/d435i/image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-        '/d435i/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
+        #'/d435i/depth_image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+        #'/d435i/image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+        #'/d435i/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
         '/l515/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
         '/l515/points' + '@sensor_msgs/msg/PointCloud2' + '[gz.msgs.PointCloudPacked',
         '/l515/depth_image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
         '/l515/image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
         '/l515/imu/raw' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
-        '/t265/fisheye1/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
-        '/t265/fisheye1/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-        '/t265/fisheye2/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
-        '/t265/fisheye2/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-        '/t265/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
-        '/t265/pose' + '@nav_msgs/msg/Odometry' + '[gz.msgs.Odometry',
+        #'/t265/fisheye1/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
+        #'/t265/fisheye1/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+        #'/t265/fisheye2/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
+        #'/t265/fisheye2/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
+        #'/t265/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
+        '/t265/pose/sample' + '@nav_msgs/msg/Odometry' + '[gz.msgs.Odometry',
         '/ackermann/odom' + '@nav_msgs/msg/Odometry' + '[gz.msgs.Odometry',
         '/ackermann/tf' + '@tf2_msgs/msg/TFMessage' + '[gz.msgs.Pose_V',
         '/model/ackermann/tf' + '@tf2_msgs/msg/TFMessage' + '[gz.msgs.Pose_V',
         #'/ackermann/joint_state' + '@sensor_msgs/msg/JointState' + '[gz.msgs.Model',
         #'/ackermann/cmd_vel' + '@geometry_msgs/msg/Twist' + ']gz.msgs.Twist',
         '/rplidar/scan' + '@sensor_msgs/msg/LaserScan' + '[gz.msgs.LaserScan',
-        '/cubepilot/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
+        #'/cubepilot/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
     ]
 
     parameter_bridge = Node(
@@ -195,6 +182,11 @@ def generate_launch_description() -> LaunchDescription:
             declare_x,
             declare_y,
             declare_z,
+            declare_enable_d435i,
+            declare_enable_l515,
+            declare_enable_t265,
+            declare_enable_rplidar,
+            declare_enable_cubepilot,
             set_model_path,
             set_ign_resource_path,
             set_gz_resource_path,
