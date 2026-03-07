@@ -6,12 +6,13 @@ Panels:
       Expanded:
         - /Global Options1
         - /RobotModel1
+        - /TF1
         - /TF1/Frames1
         - /TF1/Tree1
         - /Realsense1/RealsenseCamera1
         - /Realsense1/RealsenseDepthImage1
       Splitter Ratio: 0.5833333134651184
-    Tree Height: 385
+    Tree Height: 557
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Tool Properties
@@ -47,7 +48,7 @@ Visualization Manager:
       Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
       Value: true
-    - Alpha: 1
+    - Alpha: 0.4000000059604645
       Class: rviz_default_plugins/RobotModel
       Collision Enabled: false
       Description File: ""
@@ -102,6 +103,11 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        cubepilot_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         d435i_accel_frame:
           Alpha: 1
           Show Axes: false
@@ -273,11 +279,11 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
+          Value: true
         t265_pose_frame:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -309,6 +315,8 @@ Visualization Manager:
           Value: true
         ackermann/rear_right_wheel_link:
           Value: true
+        cubepilot_link:
+          Value: true
         d435i_accel_frame:
           Value: true
         d435i_accel_optical_frame:
@@ -395,63 +403,92 @@ Visualization Manager:
           Value: true
         t265_pose_frame:
           Value: true
-      Marker Scale: 1
+      Marker Scale: 0.10000000149011612
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: false
       Tree:
-        ackermann/base_footprint:
-          ackermann/base_link:
-            ackermann/front_left_wheel_steering_link:
-              ackermann/front_left_wheel_link: {}
-            ackermann/front_right_wheel_steering_link:
-              ackermann/front_right_wheel_link: {}
-            ackermann/rear_left_wheel_link: {}
-            ackermann/rear_right_wheel_link: {}
-            d435i_bottom_screw_frame:
-              d435i_link:
-                d435i_accel_frame:
-                  d435i_accel_optical_frame: {}
-                d435i_color_frame:
-                  d435i_color_optical_frame: {}
-                d435i_depth_frame:
-                  d435i_depth_optical_frame: {}
-                d435i_gyro_frame:
-                  d435i_gyro_optical_frame: {}
-                  d435i_imu_frame:
-                    d435i_imu_optical_frame: {}
-                d435i_infra1_frame:
-                  d435i_infra1_optical_frame: {}
-                d435i_infra2_frame:
-                  d435i_infra2_optical_frame: {}
-            l515_bottom_screw_frame:
-              l515_link:
-                l515_color_frame:
-                  l515_accel_frame:
-                    l515_accel_optical_frame: {}
-                  l515_color_optical_frame: {}
-                  l515_gyro_frame:
-                    l515_gyro_optical_frame: {}
-                l515_depth_frame:
-                  l515_depth_optical_frame: {}
-                l515_imu_optical_frame: {}
-                l515_infra_frame:
-                  l515_infra_optical_frame: {}
-              l515_lower_mount: {}
-              l515_upper_mount: {}
-            rplidar_link: {}
-            t265_link:
-              t265_accel_frame:
-                t265_accel_optical_frame: {}
-              t265_fisheye1_frame:
-                t265_fisheye1_optical_frame: {}
-              t265_fisheye2_frame:
-                t265_fisheye2_optical_frame: {}
-              t265_gyro_frame:
-                t265_gyro_optical_frame: {}
-                t265_imu_optical_frame: {}
-              t265_pose_frame: {}
+        ackermann/base_link:
+          ackermann/base_footprint:
+            {}
+          ackermann/front_left_wheel_steering_link:
+            ackermann/front_left_wheel_link:
+              {}
+          ackermann/front_right_wheel_steering_link:
+            ackermann/front_right_wheel_link:
+              {}
+          ackermann/rear_left_wheel_link:
+            {}
+          ackermann/rear_right_wheel_link:
+            {}
+          cubepilot_link:
+            {}
+          d435i_bottom_screw_frame:
+            d435i_link:
+              d435i_accel_frame:
+                d435i_accel_optical_frame:
+                  {}
+              d435i_color_frame:
+                d435i_color_optical_frame:
+                  {}
+              d435i_depth_frame:
+                d435i_depth_optical_frame:
+                  {}
+              d435i_gyro_frame:
+                d435i_gyro_optical_frame:
+                  {}
+                d435i_imu_frame:
+                  d435i_imu_optical_frame:
+                    {}
+              d435i_infra1_frame:
+                d435i_infra1_optical_frame:
+                  {}
+              d435i_infra2_frame:
+                d435i_infra2_optical_frame:
+                  {}
+          l515_bottom_screw_frame:
+            l515_link:
+              l515_color_frame:
+                l515_accel_frame:
+                  l515_accel_optical_frame:
+                    {}
+                l515_color_optical_frame:
+                  {}
+                l515_gyro_frame:
+                  l515_gyro_optical_frame:
+                    {}
+              l515_depth_frame:
+                l515_depth_optical_frame:
+                  {}
+              l515_imu_optical_frame:
+                {}
+              l515_infra_frame:
+                l515_infra_optical_frame:
+                  {}
+            l515_lower_mount:
+              {}
+            l515_upper_mount:
+              {}
+          rplidar_link:
+            {}
+          t265_link:
+            t265_accel_frame:
+              t265_accel_optical_frame:
+                {}
+            t265_fisheye1_frame:
+              t265_fisheye1_optical_frame:
+                {}
+            t265_fisheye2_frame:
+              t265_fisheye2_optical_frame:
+                {}
+            t265_gyro_frame:
+              t265_gyro_optical_frame:
+                {}
+              t265_imu_optical_frame:
+                {}
+            t265_pose_frame:
+              {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -740,7 +777,8 @@ Visualization Manager:
         - Class: rviz_default_plugins/MarkerArray
           Enabled: false
           Name: Trajectories
-          Namespaces: {}
+          Namespaces:
+            {}
           Topic:
             Depth: 5
             Durability Policy: Volatile
@@ -850,7 +888,8 @@ Visualization Manager:
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: MarkerArray
-      Namespaces: {}
+      Namespaces:
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -896,7 +935,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 5.687339782714844
+      Distance: 3.4106712341308594
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -919,12 +958,12 @@ Visualization Manager:
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 1581
+  Height: 2086
   Hide Left Dock: false
   Hide Right Dock: false
   Navigation 2:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000400000000000002240000059bfc020000000afb0000001200530065006c0065006300740069006f006e00000001e10000009b000000ab00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c0061007900730100000069000001e50000017800fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb00000018004e0061007600690067006100740069006f006e00200032010000025a000003aa000002d900fffffffb0000001e005200650061006c00730065006e0073006500430061006d00650072006100000005db000000290000002100ffffff000000010000014d0000059bfc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a0056006900650077007301000000690000059b0000012300fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004420000003efc0100000002fb0000000800540069006d00650100000000000004420000000000000000fb0000000800540069006d00650100000000000004500000000000000000000005510000059b00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000022400000794fc020000000afb0000001200530065006c0065006300740069006f006e00000001e10000009b000000ab00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c0061007900730100000069000002910000017800fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb00000018004e0061007600690067006100740069006f006e002000320100000306000004f7000002d900fffffffb0000001e005200650061006c00730065006e0073006500430061006d00650072006100000005db000000290000002100ffffff000000010000014d00000794fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730100000069000007940000012300fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004420000003efc0100000002fb0000000800540069006d00650100000000000004420000000000000000fb0000000800540069006d0065010000000000000450000000000000000000000b770000079400000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   RealsenseCamera:
     collapsed: false
   Selection:
@@ -933,6 +972,6 @@ Window Geometry:
     collapsed: false
   Views:
     collapsed: false
-  Width: 2266
-  X: 375
-  Y: 111
+  Width: 3840
+  X: 0
+  Y: 0

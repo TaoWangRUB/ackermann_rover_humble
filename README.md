@@ -81,11 +81,11 @@ The `px4_bringup` package provides both Python and C++ bridges between the ROS 2
 
 ### Modes
 
-| Executable | PX4 Mode Type | `/cmd_vel` Mapping | Use Case |
-|---|---|---|---|
-| `offboard_trajectory_mode` | Offboard (TrajectorySetpoint) | TF2 body→odom (ENU→NED) velocity | Generic offboard velocity control |
-| `rover_speed_steering_mode` | Custom registered (RoverSpeedSteering) | `linear.x` → speed, `angular.z` → normalized steering | **Recommended for Ackermann** |
-| `rover_speed_attitude_mode` | Custom registered (RoverSpeedAttitude) | `linear.x` → speed, `angular.z` integrated → yaw heading | Heading-hold driving |
+| Executable                  | PX4 Mode Type                          | `/cmd_vel` Mapping                                       | Use Case                          |
+| --------------------------- | -------------------------------------- | -------------------------------------------------------- | --------------------------------- |
+| `offboard_trajectory_mode`  | Offboard (TrajectorySetpoint)          | TF2 body→odom (ENU→NED) velocity                         | Generic offboard velocity control |
+| `rover_speed_steering_mode` | Custom registered (RoverSpeedSteering) | `linear.x` → speed, `angular.z` → normalized steering    | **Recommended for Ackermann**     |
+| `rover_speed_attitude_mode` | Custom registered (RoverSpeedAttitude) | `linear.x` → speed, `angular.z` integrated → yaw heading | Heading-hold driving              |
 
 ### Launch
 
