@@ -75,6 +75,21 @@ ros2 launch robot_bringup robot_bringup.launch.py \
 - Avoid launching the same stack from multiple terminals at the same time.
 - If debugging, run `rviz:=false` first, confirm stability, then launch RViz in a separate step.
 
+## Stopping All ROS 2 Nodes
+
+To stop all running ROS 2 nodes, Gazebo, and related processes inside the Docker container:
+
+```bash
+docker-compose -f docker/docker-compose.yml exec ackermann_slam bash -c "pkill -9 -f 'ros2|gz|ruby'"
+```
+
+This kills:
+- `ros2` — all ROS 2 nodes and launch processes
+- `gz` — Gazebo simulator
+- `ruby` — Gazebo's internal Ruby processes
+
+Always run this before starting a new simulation session to avoid stale processes or `/clock` conflicts.
+
 ## PX4 Bridge (`px4_bringup`)
 
 The `px4_bringup` package provides both Python and C++ bridges between the ROS 2 navigation stack and PX4 autopilot. Three C++ custom flight modes are implemented using the [`px4_ros2_interface_lib`](https://github.com/Auterion/px4-ros2-interface-lib) (added as a git submodule), plus two legacy Python bridge nodes.

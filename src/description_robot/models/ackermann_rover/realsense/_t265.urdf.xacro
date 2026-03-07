@@ -2,7 +2,7 @@
 
 <robot name="sensor_t265" xmlns:xacro="http://ros.org/wiki/xacro">
   <!-- includes-->
-  <xacro:include filename="$(find description_robot)/urdf/realsense/_t265_sensors.urdf.xacro"/>
+  <xacro:include filename="$(find description_robot)/models/ackermann_rover/realsense/_t265_sensors.urdf.xacro"/>
 
     <!-- odom_xyz, odom_rpy params are the transformation from the robot base_link to the camera reference frame (camerea_pose_frame) 
   they are needed for the simulation of the camera slam capabilities -->
@@ -36,14 +36,14 @@
       <visual>
         <origin xyz="0 0 0" rpy="${M_PI / 2} 0 ${M_PI /2}"/>
         <geometry>
-            <mesh filename="package://description_robot/urdf/realsense/meshes/t265.stl" scale="0.001 0.001 0.001"/>
+            <mesh filename="package://description_robot/models/ackermann_rover/realsense/meshes/t265.stl" scale="0.001 0.001 0.001"/>
         </geometry>
         <material name="${name}_aluminum"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="${M_PI / 2} 0 ${M_PI /2}"/>
         <geometry>
-          <mesh filename="package://description_robot/urdf/realsense/meshes/t265.stl"  scale="0.001 0.001 0.001"/>
+          <mesh filename="package://description_robot/models/ackermann_rover/realsense/meshes/t265.stl"  scale="0.001 0.001 0.001"/>
         </geometry>
       </collision>
       <inertial>
