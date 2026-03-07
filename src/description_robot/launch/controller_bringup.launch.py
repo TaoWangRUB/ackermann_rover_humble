@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, RegisterEventHandler
 from launch.conditions import LaunchConfigurationNotEquals
 from launch.event_handlers import OnProcessExit
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 import xacro
 
@@ -15,6 +15,9 @@ ARGUMENTS = [
     DeclareLaunchArgument('use_sim_time', default_value='true',
                           choices=['true', 'false'],
                           description='use_sim_time'),
+    DeclareLaunchArgument('use_stamped', default_value='false',
+                          choices=['true', 'false'],
+                          description='Whether to use stamped messages for the controller input (e.g., /cmd_vel vs /cmd_vel_unstamped). If true, the controller will expect stamped messages and will publish TF frames with timestamps. If false, the controller will use unstamped messages and publish TF frames without timestamps.'),  
 ]
 
 
@@ -24,6 +27,7 @@ def generate_launch_description():
 
     namespace = LaunchConfiguration('namespace')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    use_stamped = LaunchConfiguration('use_stamped')
 
     control_params_file = PathJoinSubstitution(
         [pkg_control, 'config', 'ackermann_controller.yaml'])
@@ -76,7 +80,11 @@ def generate_launch_description():
             'ackermann_steering_controller',
             '--param-file', control_params_file,
             '--controller-ros-args', 
-            '-r /ackermann_steering_controller/reference:=/cmd_vel',
+            # This argument only appears as its value if the condition is met
+            '-r', PythonExpression([
+                "'/ackermann_steering_controller/reference:=/cmd_vel' if ", use_stamped, " else '/ackermann_steering_controller/reference_unstamped:=/cmd_vel'"
+            ]),
+            
         ],
         output='screen',
     )
