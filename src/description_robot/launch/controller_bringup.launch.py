@@ -3,9 +3,9 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, RegisterEventHandler
-from launch.conditions import LaunchConfigurationNotEquals
+from launch.conditions import IfCondition, LaunchConfigurationNotEquals, UnlessCondition
 from launch.event_handlers import OnProcessExit
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 import xacro
 
@@ -66,34 +66,41 @@ def generate_launch_description():
         output='screen',
     )
     
-    # Ackermann steering controller
-    # This controller is used to control the steering of the robot
-    # It is a part of the ros2_control framework
-    # and is responsible for controlling the steering angle of the front wheels
-    # It is a required controller for the ackermann drive system
-    # It is used to control the steering angle of the front wheels
-    ackermann_controller_node = Node(
+    # Ackermann steering controller (stamped cmd input)
+    ackermann_controller_stamped_node = Node(
         package='controller_manager',
         executable='spawner',
         namespace=namespace,
         arguments=[
             'ackermann_steering_controller',
             '--param-file', control_params_file,
-            '--controller-ros-args', 
-            # This argument only appears as its value if the condition is met
-            '-r', PythonExpression([
-                "'/ackermann_steering_controller/reference:=/cmd_vel' if ", use_stamped, " else '/ackermann_steering_controller/reference_unstamped:=/cmd_vel'"
-            ]),
-            
+            '--controller-ros-args',
+            '--ros-args --remap /ackermann_steering_controller/reference:=/cmd_vel',
         ],
         output='screen',
+        condition=IfCondition(use_stamped),
+    )
+
+    # Ackermann steering controller (unstamped cmd input)
+    ackermann_controller_unstamped_node = Node(
+        package='controller_manager',
+        executable='spawner',
+        namespace=namespace,
+        arguments=[
+            'ackermann_steering_controller',
+            '--param-file', control_params_file,
+            '--controller-ros-args',
+            '--ros-args --remap /ackermann_steering_controller/reference_unstamped:=/cmd_vel',
+        ],
+        output='screen',
+        condition=UnlessCondition(use_stamped),
     )
 
     # Ensure diffdrive_controller_node starts after joint_state_broadcaster_spawner
     ackermann_controller_callback = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=joint_state_controller_node,
-            on_exit=[ackermann_controller_node],
+            on_exit=[ackermann_controller_stamped_node, ackermann_controller_unstamped_node],
         )
     )
 
