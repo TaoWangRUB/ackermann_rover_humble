@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot name="ackermann" xmlns:xacro="http://ros.org/wiki/xacro"> 
-  <xacro:include filename="$(find description_robot)/urdf/common_properties.urdf.xacro" />
-  <xacro:include filename="$(find description_robot)/urdf/sensors/rplidar.urdf.xacro" />
+  <xacro:include filename="$(find description_robot)/models/ackermann_rover/common_properties.urdf.xacro" />
+  <xacro:include filename="$(find description_robot)/models/ackermann_rover/sensors/rplidar.urdf.xacro" />
 
   <xacro:property name="package_name" value="rebot_description"/>
   <xacro:property name="PI" value="3.14159265"/>
@@ -38,6 +38,7 @@
   <xacro:arg name="enable_t265"     default="true"/>
   <xacro:arg name="enable_rplidar"  default="true"/>
   <xacro:arg name="enable_cubepilot" default="true"/>
+  <xacro:arg name="enable_px4_sitl" default="false"/>
   
   <!-- Custom color (for Gz and RViz) -->
   <material name="gray">
@@ -334,21 +335,21 @@
   <xacro:property name="l515_name" value="l515" />
   <xacro:property name="t265_name" value="t265" />
 
-  <xacro:include filename="$(find description_robot)/urdf/realsense/_d435i.urdf.xacro"/>
+  <xacro:include filename="$(find description_robot)/models/ackermann_rover/realsense/_d435i.urdf.xacro"/>
   <xacro:if value="$(arg enable_d435i)">
     <xacro:sensor_d435i name="${d435_name}" parent="$(arg ns)/base_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)">
       <origin xyz="${d435i_x_offset} 0 ${d435i_z_offset}" rpy="0 0 0"/>
     </xacro:sensor_d435i>
   </xacro:if>
 
-  <xacro:include filename="$(find description_robot)/urdf/realsense/_l515.urdf.xacro" />
+  <xacro:include filename="$(find description_robot)/models/ackermann_rover/realsense/_l515.urdf.xacro" />
   <xacro:if value="$(arg enable_l515)">
     <xacro:sensor_l515 name="${l515_name}" parent="$(arg ns)/base_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)" add_plug="$(arg add_plug)" use_mesh="$(arg use_mesh)">
       <origin xyz="${l515_x_offset} 0 ${l515_z_offset}" rpy="0 0 0"/>
     </xacro:sensor_l515>
   </xacro:if>
 
-  <xacro:include filename="$(find description_robot)/urdf/realsense/_t265.urdf.xacro"/>
+  <xacro:include filename="$(find description_robot)/models/ackermann_rover/realsense/_t265.urdf.xacro"/>
   <xacro:if value="$(arg enable_t265)">
     <xacro:sensor_t265 name="${t265_name}" parent="$(arg ns)/base_link">
       <origin xyz="${t265_x_offset} 0 ${t265_z_offset}" rpy="0.0 0.0 0.0"/>
@@ -363,7 +364,7 @@
   </xacro:if>
 
   <!-- CubePilot flight controller (PX4 IMU, barometer, magnetometer, GPS) -->
-  <xacro:include filename="$(find description_robot)/urdf/cubepilot/cubepilot.urdf.xacro"/>
+  <xacro:include filename="$(find description_robot)/models/ackermann_rover/cubepilot/cubepilot.urdf.xacro"/>
   <xacro:if value="$(arg enable_cubepilot)">
     <xacro:cubepilot name="cubepilot" parent_link="$(arg ns)/base_link">
       <origin xyz="${cubepilot_x_offset} ${cubepilot_y_offset} ${cubepilot_z_offset}"
@@ -429,6 +430,7 @@
 
     <!-- =============== PX4 SITL joint plugins =============== -->
     <!-- Wheel velocity controllers (PX4 gz_bridge sends actuator commands here) -->
+    <xacro:if value="$(arg enable_px4_sitl)">
     <plugin filename="gz-sim-joint-controller-system"
             name="gz::sim::systems::JointController">
       <joint_name>$(arg ns)/front_left_wheel_joint</joint_name>
@@ -479,6 +481,7 @@
       <i_gain>0</i_gain>
       <d_gain>0</d_gain>
     </plugin>
+    </xacro:if>
   </gazebo>
 
 </robot>

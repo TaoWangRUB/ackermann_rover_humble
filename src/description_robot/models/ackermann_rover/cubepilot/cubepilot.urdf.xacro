@@ -14,7 +14,7 @@
 -->
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
-  <xacro:include filename="$(find description_robot)/urdf/common_properties.urdf.xacro"/>
+  <xacro:include filename="$(find description_robot)/models/ackermann_rover/common_properties.urdf.xacro"/>
 
   <xacro:macro name="cubepilot" params="name parent_link *origin
                                          imu_update_rate:=200
@@ -43,7 +43,7 @@
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="package://description_robot/urdf/cubepilot/cubepilot.stl" scale="0.001 0.001 0.001"/>
+          <mesh filename="package://description_robot/models/ackermann_rover/cubepilot/cubepilot.stl" scale="0.001 0.001 0.001"/>
         </geometry>
         <material name="cubepilot_gray">
           <color rgba="0.25 0.25 0.25 1.0"/>
