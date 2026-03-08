@@ -113,6 +113,20 @@ COPY docker/px4_requirements.txt /tmp/px4_requirements.txt
 RUN python3 -m pip install --break-system-packages -r /tmp/px4_requirements.txt \
     && rm /tmp/px4_requirements.txt
 
+# Micro-XRCE-DDS-Agent (PX4 ↔ ROS 2 DDS bridge)
+# Uses SUPERBUILD=ON to bundle its own FastRTPS/spdlog/fmt (avoids fmt v9
+# incompatibility with Ubuntu 24.04 system packages). Installed to /opt/microxrce
+# to isolate from the system ROS 2 FastRTPS and prevent ABI conflicts.
+# Compatible with PX4's built-in uxrce_dds_client v2.4.x.
+RUN cd /tmp && \
+    git clone --depth 1 --branch v2.4.3 https://github.com/eProsima/Micro-XRCE-DDS-Agent.git && \
+    cd Micro-XRCE-DDS-Agent && mkdir build && cd build && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/microxrce \
+    -DUAGENT_SUPERBUILD=ON -DUAGENT_FAST_PROFILE=ON -DUAGENT_CED_PROFILE=OFF \
+    -DUAGENT_USE_SYSTEM_LOGGER=OFF -DUAGENT_BUILD_TESTS=OFF && \
+    make -j$(nproc) && make install && ldconfig && \
+    rm -rf /tmp/Micro-XRCE-DDS-Agent
+
 # (Optional) Install package dependencies for any repos brought in via ros2.repos.
 # Your bind-mounted project can run rosdep / colcon inside the container.
 RUN apt-get update && source /opt/ros/$ROS_DISTRO/setup.bash && \
