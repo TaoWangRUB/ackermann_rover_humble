@@ -10,6 +10,8 @@
 #   1. Docker container must be running (docker-compose up -d)
 #   2. Gazebo must already be running (robot_bringup with enable_px4_sitl:=true)
 #   3. PX4-Autopilot is mounted read-write at /px4 via docker-compose.yml
+#   4. For ROS 2 DDS bridge: start MicroXRCEAgent BEFORE this script
+#      (./scripts/start_microxrce_agent.sh in a separate terminal)
 #
 # Environment overrides:
 #   PX4_MODEL_NAME Gazebo model to bind to     (default: ackermann)
@@ -54,5 +56,39 @@ exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
   export PX4_GZ_WORLD=${PX4_GZ_WORLD}
   export PX4_SIMULATOR=gz
   export GZ_DISTRO=harmonic
-  ${PX4_BUILD_DIR}/bin/px4 -s ${PX4_BUILD_DIR}/etc/init.d-posix/rcS ${PX4_BUILD_DIR}/etc
+  ${PX4_BUILD_DIR}/bin/px4 -s ${PX4_BUILD_DIR}/etc/init.d-posix/rcS ${PX4_BUILD_DIR}/etc &
+  PX4_PID=\$!
+
+  # Wait for PX4 to finish initialization
+  echo 'Waiting for PX4 to initialize...'
+  for i in \$(seq 1 30); do
+    if ${PX4_BUILD_DIR}/bin/px4-param show SYS_AUTOSTART >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+  sleep 3
+
+  # Rover-specific parameter overrides:
+  # - COM_RC_IN_MODE=4: Disable manual RC requirement for SITL without joystick.
+  echo 'Applying rover SITL parameter overrides...'
+  ${PX4_BUILD_DIR}/bin/px4-param set COM_RC_IN_MODE 4
+
+  # Switch to Hold mode so preflight check passes (Manual mode requires RC).
+  ${PX4_BUILD_DIR}/bin/px4-commander mode auto:loiter
+
+  # === Actuator Test Notes ===
+  # To test motors/servos via actuator_test, the rover MUST be DISARMED.
+  # When armed (even in Hold mode), PX4's rover controller sends zero-velocity
+  # commands that override actuator_test output.
+  #
+  # Disarm first, then run from the PX4 shell:
+  #   ./px4-commander disarm
+  #   ./px4-actuator_test set -m 1 -v 0.5 -t 3   # motor test
+  #   ./px4-actuator_test set -s 1 -v 0.5 -t 3   # servo test
+  #
+  # To drive the rover via ROS 2 /cmd_vel, launch px4_bridge AFTER this script:
+  #   ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_steering
+
+  wait \$PX4_PID
 "

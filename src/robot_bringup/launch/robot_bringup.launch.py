@@ -171,16 +171,9 @@ def generate_launch_description() -> LaunchDescription:
         }.items()
     )
 
-    px4_bringup_share = get_package_share_directory('px4_bringup')
-    px4_bridge_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(px4_bringup_share, 'launch', 'px4_bridge.launch.py')
-        ),
-        condition=IfCondition(enable_px4_sitl),
-        launch_arguments={
-            'mode_type': px4_mode_type,
-        }.items()
-    )
+    # NOTE: px4_bridge (rover_speed_steering_mode etc.) is NOT launched here.
+    # It must be started AFTER MicroXRCEAgent + PX4 SITL are running:
+    #   ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_steering
 
     rtabmap_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -225,7 +218,6 @@ def generate_launch_description() -> LaunchDescription:
 
     ld = LaunchDescription(ARGUMENTS)
     ld.add_action(gazebo_launch)
-    ld.add_action(px4_bridge_launch)
     ld.add_action(rtabmap_launch)
     ld.add_action(nav2_launch)
     ld.add_action(rviz_delayed)
