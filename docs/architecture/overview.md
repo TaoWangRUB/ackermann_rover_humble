@@ -59,19 +59,19 @@ Reference implementation: `PX4-Autopilot/src/modules/simulation/gz_bridge/GZBrid
 
 ### Frame Conventions
 
-| Context | ROS 2 / Gazebo | PX4 |
-|---|---|---|
-| **World frame** | ENU (East-North-Up) | NED (North-East-Down) |
-| **Body frame** | FLU (Forward-Left-Up) | FRD (Forward-Right-Down) |
+| Context         | ROS 2 / Gazebo        | PX4                      |
+| --------------- | --------------------- | ------------------------ |
+| **World frame** | ENU (East-North-Up)   | NED (North-East-Down)    |
+| **Body frame**  | FLU (Forward-Left-Up) | FRD (Forward-Right-Down) |
 
 ### `nav_msgs/Odometry` Two-Frame Structure
 
 A ROS `nav_msgs/Odometry` message contains two distinct reference frames:
 
-| Field | Frame | Purpose |
-|---|---|---|
-| `header.frame_id` | World frame (e.g. `odom`) | Reference frame for `pose` — the vehicle's position and orientation in the world |
-| `child_frame_id` | Body frame (e.g. `base_footprint`) | Reference frame for `twist` — the vehicle's linear and angular velocity |
+| Field             | Frame                              | Purpose                                                                          |
+| ----------------- | ---------------------------------- | -------------------------------------------------------------------------------- |
+| `header.frame_id` | World frame (e.g. `odom`)          | Reference frame for `pose` — the vehicle's position and orientation in the world |
+| `child_frame_id`  | Body frame (e.g. `base_footprint`) | Reference frame for `twist` — the vehicle's linear and angular velocity          |
 
 This means:
 - **`pose.pose.position`** and **`pose.pose.orientation`** are expressed in the **world frame** (ENU for ROS).
@@ -148,13 +148,13 @@ PX4 `VehicleOdometry.velocity_frame` must be set to `VELOCITY_FRAME_BODY_FRD`.
 
 ### Summary Table
 
-| Data | Source Frame | Target Frame | Conversion |
-|---|---|---|---|
-| World position | ENU `(x,y,z)` | NED | `(y, x, -z)` |
-| Orientation quat | FLU→ENU `(w,x,y,z)` | FRD→NED | `q_ENU→NED · q · inv(q_FLU→FRD)` |
-| Body linear vel | FLU `(x,y,z)` | FRD | `(x, -y, -z)` |
-| Body angular vel | FLU `(x,y,z)` | FRD | `(x, -y, -z)` |
-| cmd_vel to setpoint | body FLU | world NED | TF rotate to ENU, then `(y, x, -z)` |
+| Data                | Source Frame        | Target Frame | Conversion                          |
+| ------------------- | ------------------- | ------------ | ----------------------------------- |
+| World position      | ENU `(x,y,z)`       | NED          | `(y, x, -z)`                        |
+| Orientation quat    | FLU→ENU `(w,x,y,z)` | FRD→NED      | `q_ENU→NED · q · inv(q_FLU→FRD)`    |
+| Body linear vel     | FLU `(x,y,z)`       | FRD          | `(x, -y, -z)`                       |
+| Body angular vel    | FLU `(x,y,z)`       | FRD          | `(x, -y, -z)`                       |
+| cmd_vel to setpoint | body FLU            | world NED    | TF rotate to ENU, then `(y, x, -z)` |
 
 ## PX4 Bridge & Custom Modes (`px4_bringup`)
 
@@ -164,14 +164,14 @@ The `px4_bringup` package bridges the ROS 2 navigation stack with PX4 autopilot 
 
 Custom registered modes (`px4_ros2::ModeBase`) differ from traditional offboard control:
 
-| Aspect | Offboard Mode | Custom Registered Mode |
-|---|---|---|
-| `nav_state` | `NAVIGATION_STATE_OFFBOARD` | `NAVIGATION_STATE_EXTERNAL1+` |
-| Heartbeat | Manual `OffboardControlMode` at ≥2 Hz | Automatic (library handles it) |
-| GCS display | "Offboard" | Custom name (e.g. "Rover Speed Steering") |
-| Setpoint types | `TrajectorySetpoint` only (translated internally) | Any — including rover-specific setpoints |
-| Failsafe | Basic offboard timeout | Full failsafe state machine integration |
-| Coexistence | One controller | Multiple modes selectable via RC/QGC |
+| Aspect         | Offboard Mode                                     | Custom Registered Mode                    |
+| -------------- | ------------------------------------------------- | ----------------------------------------- |
+| `nav_state`    | `NAVIGATION_STATE_OFFBOARD`                       | `NAVIGATION_STATE_EXTERNAL1+`             |
+| Heartbeat      | Manual `OffboardControlMode` at ≥2 Hz             | Automatic (library handles it)            |
+| GCS display    | "Offboard"                                        | Custom name (e.g. "Rover Speed Steering") |
+| Setpoint types | `TrajectorySetpoint` only (translated internally) | Any — including rover-specific setpoints  |
+| Failsafe       | Basic offboard timeout                            | Full failsafe state machine integration   |
+| Coexistence    | One controller                                    | Multiple modes selectable via RC/QGC      |
 
 ### Three Implemented Modes
 
@@ -245,6 +245,241 @@ src/px4_bringup/
 ├── CMakeLists.txt
 └── package.xml
 ```
+
+## PX4 SITL Co-Simulation
+
+PX4 Software-In-The-Loop (SITL) runs alongside Gazebo Harmonic inside the same Docker container. PX4's built-in `gz_bridge` module connects directly to the Gazebo simulation over gz-transport — no ROS bridge is needed for the PX4 ↔ Gazebo link. The ROS 2 side communicates with PX4 via the Micro-XRCE-DDS bridge (`MicroXRCEAgent` + PX4's built-in `uxrce_dds_client`).
+
+### Prerequisites
+
+- PX4 v1.16+ compiled **inside Docker** with `GZ_DISTRO=harmonic` so the `gz_bridge` module links against the container's gz-harmonic libraries.
+- Airframe **51000** (`gz_rover_ackermann`).
+- `warehouse.sdf` must contain `<spherical_coordinates>` for GPS/magnetometer reference.
+
+### Launch
+
+#### Gazebo + PX4 SITL (no Nav2, no RTAB-Map)
+
+```bash
+# Start the Docker container
+docker-compose -f docker/docker-compose.yml up -d ackermann_slam
+docker-compose -f docker/docker-compose.yml exec ackermann_slam bash
+
+# Inside Docker: launch Gazebo with PX4-compatible sensors
+source /opt/ros/$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash
+ros2 launch robot_bringup robot_bringup.launch.py enable_px4_sitl:=true rtabmap:=false nav2:=false
+
+# In a second Docker shell: start MicroXRCEAgent (must start BEFORE PX4)
+bash /workspace/scripts/start_microxrce_agent.sh
+
+# In a third Docker shell: start PX4 SITL (attaches to running Gazebo)
+bash /workspace/scripts/start_px4_sitl.sh
+
+# In a fourth Docker shell: launch the ROS 2 ↔ PX4 bridge node
+source /opt/ros/$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash
+ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_steering
+```
+
+> **Startup order matters:** MicroXRCEAgent must be running **before** PX4 starts.
+> PX4's `uxrce_dds_client` connects on startup and does not reliably reconnect.
+> The `px4_bridge` node must start **after** PX4 so it can register with the FMU.
+
+#### Full Stack (Gazebo + PX4 + RTAB-Map + Nav2)
+
+```bash
+ros2 launch robot_bringup robot_bringup.launch.py enable_px4_sitl:=true rtabmap:=true nav2:=true
+# In a second shell:
+bash /workspace/scripts/start_microxrce_agent.sh
+# In a third shell:
+bash /workspace/scripts/start_px4_sitl.sh
+# In a fourth shell:
+ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_steering
+```
+
+### How It Works
+
+When `enable_px4_sitl:=true`:
+
+1. **Sensors**: `cubepilot.urdf.xacro` creates a non-namespaced `base_link` with PX4-compatible sensor names (`imu_sensor`, `air_pressure_sensor`, `magnetometer_sensor`, `navsat_sensor`) and no explicit `<topic>` overrides, so Gazebo publishes on path-based topic names that PX4's `gz_bridge` expects:
+   ```
+   /world/warehouse/model/ackermann/link/base_link/sensor/imu_sensor/imu
+   /world/warehouse/model/ackermann/link/base_link/sensor/air_pressure_sensor/air_pressure
+   /world/warehouse/model/ackermann/link/base_link/sensor/magnetometer_sensor/magnetometer
+   /world/warehouse/model/ackermann/link/base_link/sensor/navsat_sensor/navsat
+   ```
+
+2. **Actuators**: PX4 airframe 51000 maps:
+   - `SIM_GZ_WH_FUNC1=101` → `/model/ackermann/command/motor_speed` (wheel motor)
+   - `SIM_GZ_SV_FUNC1=201` → `/model/ackermann/servo_0` (steering servo)
+
+3. **DDS Bridge**: PX4's built-in `uxrce_dds_client` module connects to `MicroXRCEAgent` on UDP port 8888 (localhost). Once connected, all PX4 uORB topics are bridged to ROS 2 as `/fmu/in/*` (subscriptions) and `/fmu/out/*` (publications).
+
+4. **ros2_control**: `gazebo_bringup.launch.py` skips the `ros2_control` controller spawner when PX4 mode is active, since PX4 directly commands the Gazebo joints.
+
+### Verification Commands
+
+All commands run **inside the Docker container** after PX4 SITL is running.
+
+#### Check Sensor Data Flow
+
+```bash
+# IMU data from Gazebo
+gz topic -e -t /world/warehouse/model/ackermann/link/base_link/sensor/imu_sensor/imu -n 1
+
+# Verify PX4 receives accelerometer (z should be ≈ -9.81)
+cd /px4/build/px4_sitl_default/bin && timeout 5 ./px4-listener sensor_accel -n 1
+```
+
+#### Check EKF2 Convergence
+
+```bash
+cd /px4/build/px4_sitl_default/bin && timeout 5 ./px4-listener vehicle_local_position -n 1
+# Verify: ref_lat/ref_lon match spherical_coordinates, heading is stable, eph/epv < 1.0
+```
+
+#### Preflight & Arming
+
+> **Note:** The `start_px4_sitl.sh` helper script already sets `COM_RC_IN_MODE=4`
+> (disable manual RC requirement) and switches to Hold mode (`auto:loiter`) on
+> startup. These are required for SITL without a joystick/RC transmitter.
+
+```bash
+cd /px4/build/px4_sitl_default/bin
+
+# Preflight check
+timeout 5 ./px4-commander check       # Should print "Preflight check: OK"
+
+# Arm (no stdout output — verify with status command)
+timeout 5 ./px4-commander arm
+
+# Verify armed status
+timeout 5 ./px4-commander status      # Should show "Armed", Hold mode, no failsafe
+
+# Clean disarm
+timeout 5 ./px4-commander disarm
+```
+
+> `heading_good_for_control: False` in `vehicle_local_position` is **expected** for
+> ground rovers — PX4's EKF2 requires in-flight magnetometer alignment which is
+> impossible for a rover. This does not block arming in Hold mode.
+
+#### Test Actuator Flow
+
+Use PX4's built-in `actuator_test` to drive actuators through the full PX4 →
+gz_bridge → Gazebo pipeline.
+
+> **Important:** The rover **must be disarmed** for `actuator_test` to work.
+> When armed in Hold mode, PX4's rover controller actively sends zero commands
+> that override the test output. Direct `gz topic -p` commands also **will not
+> work** because PX4's gz_bridge continuously overwrites them.
+
+```bash
+cd /px4/build/px4_sitl_default/bin
+
+# Disarm first (if armed)
+./px4-commander disarm
+
+# Motor: run wheel motor at 50% for 3 seconds
+./px4-actuator_test set -m 1 -v 0.5 -t 3
+# The rover should physically move forward in Gazebo.
+
+# Steering: deflect steering servo to 50% for 3 seconds
+./px4-actuator_test set -s 1 -v 0.5 -t 3
+# Steering joints should deflect visibly in Gazebo.
+
+# Iterate all motors (cycles through each at 15%)
+./px4-actuator_test iterate-motors
+
+# Iterate all servos
+./px4-actuator_test iterate-servos
+```
+
+Verify the gz-transport side receives the commands:
+
+```bash
+# In a second shell, while actuator_test is running:
+gz topic -e -t /model/ackermann/command/motor_speed -n 3   # Should show non-zero velocity
+gz topic -e -t /model/ackermann/servo_0 -n 3               # Should show non-zero data
+```
+
+Check rover position changed (confirms physical movement in Gazebo):
+
+```bash
+gz topic -e -t /model/ackermann/odometry_with_covariance -n 1 | grep -A3 'position {'
+```
+
+#### Check DDS Bridge (PX4 ↔ ROS 2)
+
+```bash
+# Verify MicroXRCEAgent is running and PX4 client is connected
+ps aux | grep MicroXRCE
+
+# List PX4 topics in ROS 2 (should show 67+ /fmu/* topics)
+ros2 topic list | grep fmu | wc -l
+
+# Read live attitude data
+ros2 topic echo /fmu/out/vehicle_attitude --once
+
+# Read vehicle status
+ros2 topic echo /fmu/out/vehicle_status --once
+```
+
+#### Drive the Robot
+
+**ros2_control mode** (`enable_px4_sitl:=false`, the default):
+
+```bash
+ros2 topic pub -r 1 /ackermann/cmd_vel geometry_msgs/msg/TwistStamped \
+  "{header: {frame_id: 'ackermann/base_link'}, twist: {linear: {x: 1.0}, angular: {z: 0.5}}}"
+```
+
+**PX4 mode** (`enable_px4_sitl:=true`): Requires 4 shells (Gazebo → Agent → PX4 → px4_bridge).
+
+```bash
+# Shell 4: Launch the ROS 2 ↔ PX4 bridge node (AFTER PX4 is running)
+ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_steering
+```
+
+Then arm and activate the external mode:
+
+```bash
+cd /px4/build/px4_sitl_default/bin
+./px4-commander arm
+
+# Switch to the registered external mode (nav_state 23)
+ros2 topic pub --once /fmu/in/vehicle_command px4_msgs/msg/VehicleCommand \
+  '{command: 100001, param1: 23.0, target_system: 1, target_component: 1, source_system: 255, source_component: 0, from_external: true}'
+```
+
+Now send velocity commands:
+
+```bash
+ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist \
+  '{linear: {x: 1.0}, angular: {z: 0.0}}'
+```
+
+### Shutdown
+
+```bash
+# Kill all ROS/Gazebo/PX4 processes inside Docker
+docker-compose -f docker/docker-compose.yml exec ackermann_slam bash -c "pkill -9 -f 'ros2|rviz2|gz|ruby|px4|MicroXRCE'"
+```
+
+### Key Files
+
+| File                               | Role                                        |
+| ---------------------------------- | ------------------------------------------- |
+| `docker/Dockerfile`                | PX4 build dependencies layer                |
+| `docker/docker-compose.yml`        | PX4 volume mount (read-write)               |
+| `docker/px4_requirements.txt`      | Python deps for PX4 build                   |
+| `cubepilot/cubepilot.urdf.xacro`   | Dual-mode sensors (`enable_px4_sitl`)       |
+| `ackermann_rover.urdf`             | Passes `enable_px4_sitl` to cubepilot macro |
+| `worlds/warehouse.sdf`             | Spherical coordinates for GPS reference     |
+| `gazebo_bringup.launch.py`         | Conditional ros2_control skip               |
+| `robot_bringup.launch.py`          | `enable_px4_sitl` and `px4_mode_type` args  |
+| `scripts/start_px4_sitl.sh`        | PX4 SITL launcher (airframe 51000)          |
+| `scripts/start_microxrce_agent.sh` | MicroXRCEAgent launcher (UDP port 8888)     |
+| `scripts/stop_all.sh`              | Process cleanup script                      |
 
 ## Software Architecture Diagram
 
