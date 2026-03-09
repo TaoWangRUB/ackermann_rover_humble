@@ -12,6 +12,6 @@ COMPOSE_FILE="${WORKSPACE_DIR}/docker/docker-compose.yml"
 
 echo "Stopping all simulation processes in Docker (PX4 + ROS 2 + Gazebo)..."
 docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam \
-    bash -c "pkill -9 -f 'ros2|gz|ruby|px4'" 2>/dev/null || true
+    bash -c "pkill -9 -f 'ros2|rviz2|gz|ruby|px4|MicroXRCE'" 2>/dev/null || true
 
 echo "All processes stopped."
