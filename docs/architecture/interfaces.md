@@ -74,13 +74,13 @@ The `px4_bringup` package provides three C++ custom flight modes (via `px4_ros2_
 | Topic | Type | Consumer | Description |
 |---|---|---|---|
 | `/cmd_vel` | `geometry_msgs/msg/Twist` | All 3 C++ mode nodes + legacy bridge | Velocity command from Nav2 (body FLU) |
-| `/odom` | `nav_msgs/msg/Odometry` | `px4_odometry_node.py` | Fused odometry (ENU/FLU), converted to NED/FRD for PX4 EKF |
+| `/odom` | `nav_msgs/msg/Odometry` | `px4_vision_odom.py` | Fused odometry (ENU/FLU), converted to NED/FRD for PX4 EKF |
 
 ### Output Topics (to PX4 via DDS)
 
 | Topic | Type | Producer | Description |
 |---|---|---|---|
-| `/fmu/in/vehicle_odometry` | `px4_msgs/msg/VehicleOdometry` | `px4_odometry_node.py` | Odometry in NED/FRD for PX4 EKF fusion |
+| `/fmu/in/vehicle_visual_odometry` | `px4_msgs/msg/VehicleOdometry` | `px4_vision_odom.py` | Odometry in NED/FRD for PX4 EKF fusion |
 | `/fmu/in/trajectory_setpoint` | `px4_msgs/msg/TrajectorySetpoint` | `offboard_trajectory_mode` | NED velocity setpoint (offboard mode only) |
 | `/fmu/in/offboard_control_mode` | `px4_msgs/msg/OffboardControlMode` | `offboard_trajectory_mode` (auto) / legacy bridge (manual) | Offboard heartbeat — automatic for C++ modes |
 | `/fmu/in/rover_speed_setpoint` | `px4_msgs/msg/RoverSpeedSetpoint` | `rover_speed_steering_mode`, `rover_speed_attitude_mode` | Body-x speed [m/s] |
