@@ -1,0 +1,90 @@
+# ============================================================================
+# PX4 Parameter File — Cube Black (FMUv3) Ackermann Rover
+# ============================================================================
+#
+# Load via QGroundControl:  Vehicle Setup → Parameters → Tools → Load from file
+#
+# Target hardware:  Cube Black (STM32F427, 2 MB flash, FMUv3)
+# Airframe:         51000 — Generic Rover Ackermann
+# PX4 version:      v1.17+
+#
+# Robot dimensions (from URDF):
+#   Wheelbase:       0.174 m
+#   Track width:     0.174 m
+#   Wheel radius:    0.038 m
+#   Max steer angle: ±0.6 rad (±34.4°)
+#   Base mass:       3.0 kg
+#
+# ============================================================================
+
+# ── Airframe ─────────────────────────────────────────────────────────────────
+1	1	SYS_AUTOSTART	51000	6	# Generic Rover Ackermann
+
+# ── Ackermann Geometry ───────────────────────────────────────────────────────
+# RA_WHEEL_BASE: distance between front and rear axle [m]
+1	1	RA_WHEEL_BASE	0.174	9
+
+# RA_MAX_STR_ANG: maximum steering angle [deg] — URDF limit = ±0.6 rad = ±34.4°
+# VERIFY on physical rover that this is mechanically achievable!
+1	1	RA_MAX_STR_ANG	34.4	9
+
+# RO_MAX_THR_SPEED: max speed at full throttle [m/s]
+# TODO: Measure on physical rover. 2.0 is a conservative placeholder.
+1	1	RO_MAX_THR_SPEED	2.0	9
+
+# ── PWM Actuator Mapping (MAIN outputs) ─────────────────────────────────────
+# MAIN OUT 1 → Throttle (Motor 1)
+1	1	PWM_MAIN_FUNC1	101	6
+
+# MAIN OUT 2 → Steering (Servo 1)
+1	1	PWM_MAIN_FUNC2	201	6
+
+# ── EKF2: External Vision Fusion ─────────────────────────────────────────────
+# Bitmask: bit0=hpos(1) + bit1=vpos(2) + bit2=vel(4) + bit3=yaw(8) = 15
+1	1	EKF2_EV_CTRL	15	6
+
+# Height reference: 3 = Vision
+1	1	EKF2_HGT_REF	3	6
+
+# EV measurement noise (real SLAM is noisier than sim — tune as needed)
+1	1	EKF2_EVP_NOISE	0.05	9
+1	1	EKF2_EVV_NOISE	0.05	9
+1	1	EKF2_EVA_NOISE	0.05	9
+
+# EV data arrives in NED frame (our bridge converts ENU→NED)
+1	1	EKF2_EV_ODOM_FRM	0	6
+
+# ── EKF2: Disable GPS (indoor / no GPS on rover) ────────────────────────────
+1	1	EKF2_GPS_CTRL	0	6
+
+# ── EKF2: Magnetometer config ───────────────────────────────────────────────
+# MAG_TYPE=5: no magnetometer (use VIO heading). Avoids mag interference on rover.
+1	1	EKF2_MAG_TYPE	5	6
+
+# ── Micro-XRCE-DDS (serial via TELEM2) ──────────────────────────────────────
+# UXRCE_DDS_CFG: serial port selection
+#   0 = disabled, 100 = TELEM1, 102 = TELEM2, 200 = USB
+1	1	UXRCE_DDS_CFG	102	6
+
+# TELEM2 baud rate: 921600 for DDS throughput
+1	1	SER_TEL2_BAUD	921600	6
+
+# ── Safety ───────────────────────────────────────────────────────────────────
+# Disable RC requirement (companion computer control only)
+1	1	COM_RC_IN_MODE	4	6
+
+# Disable manual RC loss failsafe (no RC transmitter on rover)
+1	1	COM_RCL_EXCEPT	4	6
+
+# Geofence action: 0 = None (indoor rover, no geofence needed)
+1	1	GF_ACTION	0	6
+
+# ── Speed Controller Tuning (defaults — tune on real HW) ────────────────────
+# These are PX4 firmware defaults for the rover; listed here for reference.
+# Uncomment and adjust after field testing.
+# 1	1	RO_SPEED_P	1.0	9
+# 1	1	RO_SPEED_I	0.1	9
+# 1	1	RO_YAW_P	5.0	9
+# 1	1	RO_YAW_RATE_P	0.1	9
+# 1	1	RO_YAW_RATE_I	0.0	9
+# 1	1	RA_STR_RATE_LIM	400.0	9

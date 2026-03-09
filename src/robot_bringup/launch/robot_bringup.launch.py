@@ -173,7 +173,7 @@ def generate_launch_description() -> LaunchDescription:
 
     # NOTE: px4_bridge (rover_speed_steering_mode etc.) is NOT launched here.
     # It must be started AFTER MicroXRCEAgent + PX4 SITL are running:
-    #   ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_steering
+    #   ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
 
     rtabmap_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(

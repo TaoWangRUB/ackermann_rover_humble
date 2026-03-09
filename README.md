@@ -106,21 +106,21 @@ The `px4_bringup` package provides both Python and C++ bridges between the ROS 2
 
 ```bash
 # Default: rover speed+steering (recommended for Ackermann)
-ros2 launch px4_bringup px4_bridge.launch.py
+ros2 launch px4_bringup px4_bringup.launch.py
 
 # Offboard trajectory mode
-ros2 launch px4_bringup px4_bridge.launch.py mode_type:=trajectory
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=trajectory
 
 # Heading-hold mode
-ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_attitude
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_attitude
 
 # Legacy Python offboard bridge (fallback/debug)
-ros2 launch px4_bringup px4_bridge.launch.py use_legacy_bridge:=true
+ros2 launch px4_bringup px4_bringup.launch.py use_legacy_bridge:=true
 ```
 
 ### Odometry Bridge
 
-The `px4_odometry_node.py` script converts `nav_msgs/Odometry` (ENU/FLU) to PX4 `VehicleOdometry` (NED/FRD), matching the coordinate conventions defined in PX4's `GZBridge.cpp`. See [Architecture Overview](docs/architecture/overview.md) for the full coordinate conversion reference.
+The `px4_vision_odom.py` script converts `nav_msgs/Odometry` (ENU/FLU) to PX4 `VehicleOdometry` (NED/FRD) using TF2 lookups at 50 Hz, matching the coordinate conventions defined in PX4's `GZBridge.cpp`. See [Architecture Overview](docs/architecture/overview.md) for the full coordinate conversion reference.
 
 ## Architecture Blueprints
 
