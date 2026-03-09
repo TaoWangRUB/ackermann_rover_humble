@@ -25,154 +25,232 @@
 # but excluded here to save CPU. Re-enable by uncommenting if needed.
 #
 # ============================================================================
-
+#####
+#
+# This file maps all the topics that are to be used on the uXRCE-DDS client.
+#
+#####
 publications:
-  # ── Vehicle state (needed by custom modes & GCS) ────────────────────────
-  - topic: /fmu/out/vehicle_status
-    type: px4_msgs::msg::VehicleStatus
-    rate_limit: 5 # Hz — was unlimited; 5 Hz sufficient for mode logic
+  - topic: /fmu/out/register_ext_component_reply
+    type: px4_msgs::msg::RegisterExtComponentReply
 
-  - topic: /fmu/out/vehicle_control_mode
-    type: px4_msgs::msg::VehicleControlMode
-    rate_limit: 5
+  - topic: /fmu/out/arming_check_request
+    type: px4_msgs::msg::ArmingCheckRequest
+    rate_limit: 5.
 
-  # ── Attitude & position (EKF output, needed for mode nodes) ─────────────
-  - topic: /fmu/out/vehicle_attitude
-    type: px4_msgs::msg::VehicleAttitude
-    rate_limit: 30 # Hz — modes read heading from this
+  - topic: /fmu/out/mode_completed
+    type: px4_msgs::msg::ModeCompleted
+    rate_limit: 50.
 
-  - topic: /fmu/out/vehicle_local_position
-    type: px4_msgs::msg::VehicleLocalPosition
-    rate_limit: 30
-
-  - topic: /fmu/out/vehicle_global_position
-    type: px4_msgs::msg::VehicleGlobalPosition
-    rate_limit: 5
-
-  # ── Odometry (useful for diagnostics / comparing EKF vs VO) ────────────
-  - topic: /fmu/out/vehicle_odometry
-    type: px4_msgs::msg::VehicleOdometry
-    rate_limit: 10
-
-  # ── Failsafe & arming ──────────────────────────────────────────────────
-  - topic: /fmu/out/failsafe_flags
-    type: px4_msgs::msg::FailsafeFlags
-    rate_limit: 2
-
-  # ── Actuator feedback (verify commands are reaching outputs) ────────────
-  # DISABLED: - topic: /fmu/out/actuator_motors
-  # DISABLED:   type: px4_msgs::msg::ActuatorMotors
-
-  # DISABLED: - topic: /fmu/out/actuator_servos
-  # DISABLED:   type: px4_msgs::msg::ActuatorServos
-
-  # ── Battery (useful for GCS / safety logic) ────────────────────────────
   - topic: /fmu/out/battery_status
     type: px4_msgs::msg::BatteryStatus
-    rate_limit: 1
+    rate_limit: 1.
 
-  # ── Sensor diagnostics ─────────────────────────────────────────────────
+  # DISABLED: - topic: /fmu/out/collision_constraints
+  # DISABLED:   type: px4_msgs::msg::CollisionConstraints
+  # DISABLED:   rate_limit: 50.
+
+  # DISABLED: - topic: /fmu/out/estimator_status_flags
+  # DISABLED:   type: px4_msgs::msg::EstimatorStatusFlags
+  # DISABLED:   rate_limit: 5.
+
+  - topic: /fmu/out/failsafe_flags
+    type: px4_msgs::msg::FailsafeFlags
+    rate_limit: 5.
+
+  # DISABLED: - topic: /fmu/out/manual_control_setpoint
+  # DISABLED:   type: px4_msgs::msg::ManualControlSetpoint
+  # DISABLED:   rate_limit: 25.
+
+  # DISABLED: - topic: /fmu/out/message_format_response
+  # DISABLED:   type: px4_msgs::msg::MessageFormatResponse
+
+  # DISABLED: - topic: /fmu/out/position_setpoint_triplet
+  # DISABLED:   type: px4_msgs::msg::PositionSetpointTriplet
+  # DISABLED:   rate_limit: 5.
+
   # DISABLED: - topic: /fmu/out/sensor_combined
   # DISABLED:   type: px4_msgs::msg::SensorCombined
 
-  # DISABLED: - topic: /fmu/out/estimator_status
-  # DISABLED:   type: px4_msgs::msg::EstimatorStatus
+  # DISABLED: - topic: /fmu/out/timesync_status
+  # DISABLED:   type: px4_msgs::msg::TimesyncStatus
+  # DISABLED:   rate_limit: 10.
 
-  # DISABLED: - topic: /fmu/out/vehicle_angular_velocity
-  # DISABLED:   type: px4_msgs::msg::VehicleAngularVelocity
+  # DISABLED: - topic: /fmu/out/transponder_report
+  # DISABLED:   type: px4_msgs::msg::TransponderReport
 
-  # DISABLED: - topic: /fmu/out/vehicle_acceleration
-  # DISABLED:   type: px4_msgs::msg::VehicleAcceleration
+  # - topic: /fmu/out/vehicle_angular_velocity
+  #   type: px4_msgs::msg::VehicleAngularVelocity
 
-  # DISABLED: - topic: /fmu/out/vehicle_imu
-  # DISABLED:   type: px4_msgs::msg::VehicleImu
+  # DISABLED: - topic: /fmu/out/vehicle_land_detected
+  # DISABLED:   type: px4_msgs::msg::VehicleLandDetected
+  # DISABLED:   rate_limit: 5.
 
-  # DISABLED: - topic: /fmu/out/vehicle_magnetometer
-  # DISABLED:   type: px4_msgs::msg::VehicleMagnetometer
+  # DISABLED: - topic: /fmu/out/vehicle_attitude
+  # DISABLED:   type: px4_msgs::msg::VehicleAttitude
+  # DISABLED:   rate_limit: 50.
 
-  # DISABLED: - topic: /fmu/out/vehicle_gps_position
-  # DISABLED:   type: px4_msgs::msg::SensorGps
-
-  # DISABLED: - topic: /fmu/out/vehicle_air_data
-  # DISABLED:   type: px4_msgs::msg::VehicleAirData
+  # DISABLED: - topic: /fmu/out/vehicle_control_mode
+  # DISABLED:   type: px4_msgs::msg::VehicleControlMode
+  # DISABLED:   rate_limit: 50.
 
   # DISABLED: - topic: /fmu/out/vehicle_command_ack
   # DISABLED:   type: px4_msgs::msg::VehicleCommandAck
 
+  # DISABLED: - topic: /fmu/out/vehicle_global_position
+  # DISABLED:   type: px4_msgs::msg::VehicleGlobalPosition
+  # DISABLED:   rate_limit: 50.
+
+  # DISABLED: - topic: /fmu/out/vehicle_gps_position
+  # DISABLED:   type: px4_msgs::msg::SensorGps
+  # DISABLED:   rate_limit: 50.
+
+  # DISABLED: - topic: /fmu/out/vehicle_local_position
+  # DISABLED:   type: px4_msgs::msg::VehicleLocalPosition
+  # DISABLED:   rate_limit: 50.
+
+  - topic: /fmu/out/vehicle_odometry
+    type: px4_msgs::msg::VehicleOdometry
+    rate_limit: 10.
+
+  - topic: /fmu/out/vehicle_status
+    type: px4_msgs::msg::VehicleStatus
+    rate_limit: 5.
+
+  # DISABLED: - topic: /fmu/out/airspeed_validated
+  # DISABLED:   type: px4_msgs::msg::AirspeedValidated
+  # DISABLED:   rate_limit: 50.
+
+  # DISABLED: - topic: /fmu/out/vtol_vehicle_status
+  # DISABLED:   type: px4_msgs::msg::VtolVehicleStatus
+
   # DISABLED: - topic: /fmu/out/home_position
   # DISABLED:   type: px4_msgs::msg::HomePosition
+  # DISABLED:   rate_limit: 5.
 
-  # DISABLED: - topic: /fmu/out/mission_result
-  # DISABLED:   type: px4_msgs::msg::MissionResult
+  # DISABLED: - topic: /fmu/out/wind
+  # DISABLED:   type: px4_msgs::msg::Wind
+  # DISABLED:   rate_limit: 1.
 
-  # DISABLED: - topic: /fmu/out/timesync_status
-  # DISABLED:   type: px4_msgs::msg::TimesyncStatus
+  # DISABLED: - topic: /fmu/out/gimbal_device_attitude_status
+  # DISABLED:   type: px4_msgs::msg::GimbalDeviceAttitudeStatus
+  # DISABLED:   rate_limit: 20.
 
-  # DISABLED: - topic: /fmu/out/vehicle_land_detected
-  # DISABLED:   type: px4_msgs::msg::VehicleLandDetected
-
+# Create uORB::Publication
 subscriptions:
-  # ── Visual odometry (VO bridge → EKF2) ─────────────────────────────────
-  - topic: /fmu/in/vehicle_visual_odometry
-    type: px4_msgs::msg::VehicleOdometry
-
-  # ── Vehicle commands (arm/disarm/mode set from ROS 2) ──────────────────
-  - topic: /fmu/in/vehicle_command
-    type: px4_msgs::msg::VehicleCommand
-
-  # ── Offboard control (used by px4_ros2_interface_lib for heartbeat) ─────
-  - topic: /fmu/in/offboard_control_mode
-    type: px4_msgs::msg::OffboardControlMode
-
-  # ── Trajectory setpoint (offboard_trajectory_mode) ─────────────────────
-  - topic: /fmu/in/trajectory_setpoint
-    type: px4_msgs::msg::TrajectorySetpoint
-
-  # ── Rover setpoints (custom registered modes) ─────────────────────────
-  - topic: /fmu/in/rover_speed_setpoint
-    type: px4_msgs::msg::RoverSpeedSetpoint
-
-  - topic: /fmu/in/rover_steering_setpoint
-    type: px4_msgs::msg::RoverSteeringSetpoint
-
-  - topic: /fmu/in/rover_attitude_setpoint
-    type: px4_msgs::msg::RoverAttitudeSetpoint
-
-  # ── Mode registration (px4_ros2_interface_lib internal) ────────────────
   - topic: /fmu/in/register_ext_component_request
     type: px4_msgs::msg::RegisterExtComponentRequest
 
   - topic: /fmu/in/unregister_ext_component
     type: px4_msgs::msg::UnregisterExtComponent
 
-  - topic: /fmu/in/mode_completed
-    type: px4_msgs::msg::ModeCompleted
-
-  - topic: /fmu/in/config_overrides
+  - topic: /fmu/in/config_overrides_request
     type: px4_msgs::msg::ConfigOverrides
 
   - topic: /fmu/in/arming_check_reply
     type: px4_msgs::msg::ArmingCheckReply
 
-  # DISABLED: - topic: /fmu/in/vehicle_odometry
+  - topic: /fmu/in/message_format_request
+    type: px4_msgs::msg::MessageFormatRequest
+
+  - topic: /fmu/in/mode_completed
+    type: px4_msgs::msg::ModeCompleted
+
+  - topic: /fmu/in/config_control_setpoints
+    type: px4_msgs::msg::VehicleControlMode
+
+  - topic: /fmu/in/distance_sensor
+    type: px4_msgs::msg::DistanceSensor
+
+  - topic: /fmu/in/manual_control_input
+    type: px4_msgs::msg::ManualControlSetpoint
+
+  - topic: /fmu/in/offboard_control_mode
+    type: px4_msgs::msg::OffboardControlMode
+
+  - topic: /fmu/in/onboard_computer_status
+    type: px4_msgs::msg::OnboardComputerStatus
+
+  - topic: /fmu/in/obstacle_distance
+    type: px4_msgs::msg::ObstacleDistance
+
+  - topic: /fmu/in/sensor_optical_flow
+    type: px4_msgs::msg::SensorOpticalFlow
+
+  - topic: /fmu/in/goto_setpoint
+    type: px4_msgs::msg::GotoSetpoint
+
+  - topic: /fmu/in/telemetry_status
+    type: px4_msgs::msg::TelemetryStatus
+
+  - topic: /fmu/in/trajectory_setpoint
+    type: px4_msgs::msg::TrajectorySetpoint
+
+  - topic: /fmu/in/vehicle_attitude_setpoint
+    type: px4_msgs::msg::VehicleAttitudeSetpoint
+
+  # DISABLED: - topic: /fmu/in/vehicle_mocap_odometry
   # DISABLED:   type: px4_msgs::msg::VehicleOdometry
 
-  # DISABLED: - topic: /fmu/in/sensor_optical_flow
-  # DISABLED:   type: px4_msgs::msg::SensorOpticalFlow
+  - topic: /fmu/in/vehicle_rates_setpoint
+    type: px4_msgs::msg::VehicleRatesSetpoint
 
-  # DISABLED: - topic: /fmu/in/obstacle_distance
-  # DISABLED:   type: px4_msgs::msg::ObstacleDistance
+  - topic: /fmu/in/vehicle_visual_odometry
+    type: px4_msgs::msg::VehicleOdometry
 
-  # DISABLED: - topic: /fmu/in/manual_control_setpoint
-  # DISABLED:   type: px4_msgs::msg::ManualControlSetpoint
+  - topic: /fmu/in/vehicle_command
+    type: px4_msgs::msg::VehicleCommand
+
+  - topic: /fmu/in/vehicle_command_mode_executor
+    type: px4_msgs::msg::VehicleCommand
+
+  - topic: /fmu/in/vehicle_thrust_setpoint
+    type: px4_msgs::msg::VehicleThrustSetpoint
+
+  - topic: /fmu/in/vehicle_torque_setpoint
+    type: px4_msgs::msg::VehicleTorqueSetpoint
+
+  - topic: /fmu/in/actuator_motors
+    type: px4_msgs::msg::ActuatorMotors
+
+  - topic: /fmu/in/actuator_servos
+    type: px4_msgs::msg::ActuatorServos
 
   # DISABLED: - topic: /fmu/in/aux_global_position
-  # DISABLED:   type: px4_msgs::msg::VehicleGlobalPosition
+  # DISABLED:   type: px4_msgs::msg::AuxGlobalPosition
 
+  # DISABLED: - topic: /fmu/in/fixed_wing_longitudinal_setpoint
+  # DISABLED:   type: px4_msgs::msg::FixedWingLongitudinalSetpoint
+
+  # DISABLED: - topic: /fmu/in/fixed_wing_lateral_setpoint
+  # DISABLED:   type: px4_msgs::msg::FixedWingLateralSetpoint
+
+  # DISABLED: - topic: /fmu/in/longitudinal_control_configuration
+  # DISABLED:   type: px4_msgs::msg::LongitudinalControlConfiguration
+
+  # DISABLED: - topic: /fmu/in/lateral_control_configuration
+  # DISABLED:   type: px4_msgs::msg::LateralControlConfiguration
+
+  - topic: /fmu/in/rover_position_setpoint
+    type: px4_msgs::msg::RoverPositionSetpoint
+
+  - topic: /fmu/in/rover_speed_setpoint
+    type: px4_msgs::msg::RoverSpeedSetpoint
+
+  - topic: /fmu/in/rover_attitude_setpoint
+    type: px4_msgs::msg::RoverAttitudeSetpoint
+
+  - topic: /fmu/in/rover_rate_setpoint
+    type: px4_msgs::msg::RoverRateSetpoint
+
+  - topic: /fmu/in/rover_throttle_setpoint
+    type: px4_msgs::msg::RoverThrottleSetpoint
+
+  - topic: /fmu/in/rover_steering_setpoint
+    type: px4_msgs::msg::RoverSteeringSetpoint
+
+  # DISABLED: - topic: /fmu/in/landing_gear
+  # DISABLED:   type: px4_msgs::msg::LandingGear
+
+# Create uORB::PublicationMulti
 subscriptions_multi:
-  # ── Mode registration responses (px4_ros2_interface_lib internal) ──────
-  - topic: /fmu/out/register_ext_component_reply
-    type: px4_msgs::msg::RegisterExtComponentReply
-
-  - topic: /fmu/out/arming_check_request
-    type: px4_msgs::msg::ArmingCheckRequest
