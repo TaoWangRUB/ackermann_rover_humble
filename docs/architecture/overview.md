@@ -258,7 +258,48 @@ PX4 Software-In-The-Loop (SITL) runs alongside Gazebo Harmonic inside the same D
 
 ### Launch
 
-#### Gazebo + PX4 SITL (no Nav2, no RTAB-Map)
+#### Quick Start (from host)
+
+The helper script `scripts/start_ros2_nodes.sh` wraps `robot_bringup` (and
+optionally `px4_bridge`) so you don't need to source workspaces or type long
+commands:
+
+```bash
+# Gazebo only (no PX4, no SLAM, no Nav2)
+./scripts/start_ros2_nodes.sh
+
+# Gazebo + PX4 sensors
+./scripts/start_ros2_nodes.sh --px4
+
+# Gazebo + PX4 + px4_bridge (speed_steering)
+./scripts/start_ros2_nodes.sh --px4 --bridge
+
+# Gazebo + PX4 + px4_bridge (trajectory mode)
+./scripts/start_ros2_nodes.sh --px4 --bridge=trajectory
+
+# Gazebo + RTAB-Map + Nav2
+./scripts/start_ros2_nodes.sh --rtabmap --nav2
+
+# Full stack (PX4 + SLAM + Nav2 + bridge)
+./scripts/start_ros2_nodes.sh --px4 --rtabmap --nav2 --bridge
+
+# Any combo without RViz
+./scripts/start_ros2_nodes.sh --px4 --no-rviz
+```
+
+For PX4 co-simulation you still need to start MicroXRCEAgent and PX4 SITL in
+separate terminals **before** `--bridge` can register with the FMU:
+
+```bash
+# Terminal 2:
+./scripts/start_microxrce_agent.sh
+# Terminal 3:
+./scripts/start_px4_sitl.sh
+```
+
+#### Manual Launch (inside Docker)
+
+If you prefer running commands manually inside the container:
 
 ```bash
 # Start the Docker container
@@ -369,11 +410,25 @@ Use PX4's built-in `actuator_test` to drive actuators through the full PX4 →
 gz_bridge → Gazebo pipeline.
 
 > **Important:** The rover **must be disarmed** for `actuator_test` to work.
-> When armed in Hold mode, PX4's rover controller actively sends zero commands
-> that override the test output. Direct `gz topic -p` commands also **will not
-> work** because PX4's gz_bridge continuously overwrites them.
+> When armed, PX4's rover controller sends zero commands that override the test
+> output. The helper script disarms automatically.
+
+**Quick (from host):**
 
 ```bash
+./scripts/test_actuators.sh motor              # motor at 50% for 3s
+./scripts/test_actuators.sh motor 0.8 5        # motor at 80% for 5s
+./scripts/test_actuators.sh servo              # servo at 50% for 3s
+./scripts/test_actuators.sh servo 0.3 2        # servo at 30% for 2s
+./scripts/test_actuators.sh iterate-motors     # cycle through all motors
+./scripts/test_actuators.sh iterate-servos     # cycle through all servos
+./scripts/test_actuators.sh shell              # open interactive PX4 shell
+```
+
+**Manual (inside Docker):**
+
+```bash
+docker-compose -f docker/docker-compose.yml exec ackermann_slam bash
 cd /px4/build/px4_sitl_default/bin
 
 # Disarm first (if armed)
@@ -394,11 +449,11 @@ cd /px4/build/px4_sitl_default/bin
 ./px4-actuator_test iterate-servos
 ```
 
-Verify the gz-transport side receives the commands:
+**Verify** the gz-transport side receives the commands (in a second Docker
+shell, run while actuator_test is still active):
 
 ```bash
-# In a second shell, while actuator_test is running:
-gz topic -e -t /model/ackermann/command/motor_speed -n 3   # Should show non-zero velocity
+gz topic -e -t /model/ackermann/command/motor_speed -n 3   # Should show non-zero velocity (e.g. 15)
 gz topic -e -t /model/ackermann/servo_0 -n 3               # Should show non-zero data
 ```
 
@@ -467,19 +522,19 @@ docker-compose -f docker/docker-compose.yml exec ackermann_slam bash -c "pkill -
 
 ### Key Files
 
-| File                               | Role                                        |
-| ---------------------------------- | ------------------------------------------- |
-| `docker/Dockerfile`                | PX4 build dependencies layer                |
-| `docker/docker-compose.yml`        | PX4 volume mount (read-write)               |
-| `docker/px4_requirements.txt`      | Python deps for PX4 build                   |
-| `cubepilot/cubepilot.urdf.xacro`   | Dual-mode sensors (`enable_px4_sitl`)       |
-| `ackermann_rover.urdf`             | Passes `enable_px4_sitl` to cubepilot macro |
-| `worlds/warehouse.sdf`             | Spherical coordinates for GPS reference     |
-| `gazebo_bringup.launch.py`         | Conditional ros2_control skip               |
-| `robot_bringup.launch.py`          | `enable_px4_sitl` and `px4_mode_type` args  |
-| `scripts/start_px4_sitl.sh`        | PX4 SITL launcher (airframe 51000)          |
-| `scripts/start_microxrce_agent.sh` | MicroXRCEAgent launcher (UDP port 8888)     |
-| `scripts/stop_all.sh`              | Process cleanup script                      |
+| File                               | Role                                          |
+| ---------------------------------- | --------------------------------------------- |
+| `docker/Dockerfile`                | PX4 build dependencies layer                  |
+| `docker/docker-compose.yml`        | PX4 volume mount (read-write)                 |
+| `docker/px4_requirements.txt`      | Python deps for PX4 build                     |
+| `cubepilot/cubepilot.urdf.xacro`   | Dual-mode sensors (`enable_px4_sitl`)         |
+| `ackermann_rover.urdf`             | Passes `enable_px4_sitl` to cubepilot macro   |
+| `worlds/warehouse.sdf`             | Spherical coordinates for GPS reference       |
+| `gazebo_bringup.launch.py`         | Conditional ros2_control skip                 |
+| `robot_bringup.launch.py`          | `enable_px4_sitl` and `px4_mode_type` args    |
+| `scripts/start_px4_sitl.sh`        | PX4 SITL launcher (airframe 51000)            |
+| `scripts/start_microxrce_agent.sh` | MicroXRCEAgent launcher (UDP port 8888)       |
+| `scripts/start_ros2_nodes.sh`      | Host-side launcher (Gazebo + optional bridge) |  | `scripts/test_actuators.sh` | Host-side actuator test wrapper |  | `scripts/stop_all.sh` | Process cleanup script |
 
 ## Software Architecture Diagram
 
