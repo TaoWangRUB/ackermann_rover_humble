@@ -24,9 +24,12 @@
 # RA_WHEEL_BASE: distance between front and rear axle [m]
 1	1	RA_WHEEL_BASE	0.174	9
 
-# RA_MAX_STR_ANG: maximum steering angle [deg] — URDF limit = ±0.6 rad = ±34.4°
+# RA_MAX_STR_ANG: maximum steering angle [rad] — URDF limit = ±0.6 rad = ±34.4°
 # VERIFY on physical rover that this is mechanically achievable!
-1	1	RA_MAX_STR_ANG	34.4	9
+1	1	RA_MAX_STR_ANG	0.6	9
+
+# RO_YAW_RATE_LIM: max yaw rate limit [deg/s] 90 × π/180 ≈ 1.571
+1	1	RO_YAW_RATE_LIM	90.0	9
 
 # RO_MAX_THR_SPEED: max speed at full throttle [m/s]
 # TODO: Measure on physical rover. 2.0 is a conservative placeholder.
@@ -41,18 +44,26 @@
 
 # ── EKF2: External Vision Fusion ─────────────────────────────────────────────
 # Bitmask: bit0=hpos(1) + bit1=vpos(2) + bit2=vel(4) + bit3=yaw(8) = 15
-1	1	EKF2_EV_CTRL	15	6
+1	1	EKF2_EV_CTRL	13	6
 
 # Height reference: 3 = Vision
-1	1	EKF2_HGT_REF	3	6
+1	1	EKF2_HGT_REF	0	6
 
 # EV measurement noise (real SLAM is noisier than sim — tune as needed)
-1	1	EKF2_EVP_NOISE	0.05	9
-1	1	EKF2_EVV_NOISE	0.05	9
-1	1	EKF2_EVA_NOISE	0.05	9
+1	1	EKF2_EVP_NOISE	0.1	9
+1	1	EKF2_EVV_NOISE	0.1	9
+1	1	EKF2_EVA_NOISE	0.1	9
 
-# EV data arrives in NED frame (our bridge converts ENU→NED)
-1	1	EKF2_EV_ODOM_FRM	0	6
+# EV delay in ms
+1	1	EKF2_EV_DELAY	50.0	9
+
+# RO_SPEED_LIM: max speed limit
+1   1   RO_SPEED_LIM    2.0 9
+
+# EV position relative to base_link
+1   1   EKF2_EV_POS_X   0.1    9
+1   1   EKF2_EV_POS_Y   0.0    9
+1   1   EKF2_EV_POS_Z   0.1    9
 
 # ── EKF2: Disable GPS (indoor / no GPS on rover) ────────────────────────────
 1	1	EKF2_GPS_CTRL	0	6
