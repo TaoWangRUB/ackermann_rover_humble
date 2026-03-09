@@ -1119,10 +1119,11 @@ PX4's EKF2 can fuse **external vision (EV)** data — odometry from Gazebo groun
 ┌──────────────────────────────────────────────────────────────────────┐
 │ PX4 Bridge Nodes (choose one)                                        │
 │                                                                      │
-│  Option A: px4_odometry_node.py                                      │
-│    /odom → ENU→NED + FLU→FRD → /fmu/in/vehicle_odometry             │
+│  px4_vision_odom.py (recommended)                                    │
+│    /odom → TF2 lookup → ENU→NED + FLU→FRD                           │
+│         → /fmu/in/vehicle_visual_odometry (at 50 Hz, quality=100)    │
 │                                                                      │
-│  Option B: px4_vision_odom.py                                        │
+│  (px4_odometry_node.py has been removed — see px4_vision_odom.py)    │
 │    /odom → TF2 lookup → ENU→NED + FLU→FRD                           │
 │         → /fmu/in/vehicle_visual_odometry (at 50 Hz, quality=100)    │
 └──────────────┬───────────────────────────────────────────────────────┘
@@ -1161,9 +1162,9 @@ The Gazebo `OdometryPublisher` plugin is already present in the main robot URDF:
 
 **For real hardware (SLAM instead of Gazebo):** Replace the Gazebo odometry source with RTAB-Map's `/odometry/filtered` output. The bridge node input topic must be remapped accordingly:
 
-```python
-# In px4_bridge.launch.py, remap the odom source:
-remappings=[('/odom', '/odometry/filtered')]
+```bash
+# In px4_bringup.launch.py, pass odom_topic argument:
+ros2 launch px4_bringup px4_bringup.launch.py enable_vo_bridge:=true odom_topic:=/odometry/filtered
 ```
 
 #### 2. PX4 Parameters — Enable EKF2 External Vision Fusion
@@ -1449,34 +1450,34 @@ param set EKF2_EV_QMIN 1        # 0 = accept all; 1–100 = minimum quality
 
 #### 3. Bridge Node Selection
 
-Two bridge nodes exist in `src/px4_bringup/scripts/`:
+The VO bridge node in `src/px4_bringup/scripts/`:
 
-| Node                   | Subscribes             | Publishes                         | Notes                                                           |
-| ---------------------- | ---------------------- | --------------------------------- | --------------------------------------------------------------- |
-| `px4_odometry_node.py` | `/odom`                | `/fmu/in/vehicle_odometry`        | Simple, no TF2, variances = NaN                                 |
-| `px4_vision_odom.py`   | `/odom` (configurable) | `/fmu/in/vehicle_visual_odometry` | TF2 lookup, 50 Hz output timer, `quality=100`, proper variances |
+| Node                 | Subscribes             | Publishes                         | Notes                                                           |
+| -------------------- | ---------------------- | --------------------------------- | --------------------------------------------------------------- |
+| `px4_vision_odom.py` | `/odom` (configurable) | `/fmu/in/vehicle_visual_odometry` | TF2 lookup, 50 Hz output timer, `quality=100`, proper variances |
 
-**Recommendation:** Use `px4_vision_odom.py` — it publishes to `vehicle_visual_odometry` (the standard EV input), uses TF2 for accurate transforms, publishes at a fixed 50 Hz rate, and sets proper variance values.
+> **Note:** `px4_odometry_node.py` has been removed. Use `px4_vision_odom.py` exclusively — it publishes to `vehicle_visual_odometry` (the standard EV input), uses TF2 for accurate transforms, publishes at a fixed 50 Hz rate, and sets proper variance values.
 
 #### 4. Launch Configuration
 
-Use `px4_bridge.launch.py` to launch the bridge:
+Use `px4_bringup.launch.py` to launch the mode node and optionally the VO bridge:
 
 ```bash
-ros2 launch px4_bringup px4_bridge.launch.py
+# Mode node only (no VO bridge)
+ros2 launch px4_bringup px4_bringup.launch.py
+
+# Mode node + VO bridge feeding /odometry/filtered into PX4 EKF2
+ros2 launch px4_bringup px4_bringup.launch.py enable_vo_bridge:=true odom_topic:=/odometry/filtered
 ```
 
-To use `/odometry/filtered` (from SLAM/EKF) instead of raw `/odom`, add a remap in the launch file:
+The VO bridge is configured via launch arguments:
 
-```python
-# src/px4_bringup/launch/px4_bridge.launch.py
-px4_odom_node = Node(
-    package='px4_bringup',
-    executable='px4_vision_odom.py',
-    name='px4_odometry',
-    output='screen',
-    remappings=[('/odom', '/odometry/filtered')]
-)
+```bash
+ros2 launch px4_bringup px4_bringup.launch.py \
+    enable_vo_bridge:=true \
+    odom_topic:=/odometry/filtered \
+    odom_frame:=odom \
+    base_frame:=ackermann/base_link
 ```
 
 #### 5. Verification
@@ -1628,7 +1629,7 @@ If any of these fail, see the **Troubleshooting** table below.
 | Joystick not in QGC                    | Windows doesn't see the controller             | Check `joy.cpl`, install driver, restart QGC                    |
 | Hidden modes in QGC                    | QGC filters unsupported modes per vehicle type | Normal behavior; modes entered programmatically still work      |
 | EKF2 not fusing EV data                | `EKF2_EV_CTRL` is `0` (default)                | Set `EKF2_EV_CTRL 15` and other EV params                       |
-| `vehicle_visual_odometry` not arriving | Bridge node not running or wrong topic         | Launch `px4_bridge.launch.py`, check remappings                 |
+| `vehicle_visual_odometry` not arriving | Bridge node not running or wrong topic         | Launch `px4_bringup.launch.py enable_vo_bridge:=true`, check remappings |
 
 ---
 

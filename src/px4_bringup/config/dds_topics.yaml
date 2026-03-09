@@ -1,0 +1,178 @@
+# ============================================================================
+# DDS Topics Configuration — Cube Black (FMUv3) Ackermann Rover
+# ============================================================================
+#
+# Trimmed topic list to reduce CPU load on Cube Black's STM32F427.
+# The default PX4 dds_topics.yaml publishes 60+ topics; this file keeps
+# only what the ROS 2 bridge actually needs.
+#
+# Usage:
+#   1. Copy this file into the PX4 source tree:
+#        cp dds_topics.yaml /px4/src/modules/uxrce_dds_client/dds_topics.yaml
+#   2. Rebuild firmware:
+#        cd /px4 && make px4_fmu-v3_rover
+#   3. Flash the resulting .px4 firmware via QGC.
+#
+# Or use the helper script:
+#   ./scripts/build_px4_rover_fw.sh
+#
+# Topic categories:
+#   - publications:        PX4 → ROS 2 (uORB → DDS)
+#   - subscriptions:       ROS 2 → PX4 (DDS → uORB), single-instance
+#   - subscriptions_multi: ROS 2 → PX4, multi-instance
+#
+# Commented-out topics (prefixed "# DISABLED:") are available in default PX4
+# but excluded here to save CPU. Re-enable by uncommenting if needed.
+#
+# ============================================================================
+
+publications:
+  # ── Vehicle state (needed by custom modes & GCS) ────────────────────────
+  - topic: /fmu/out/vehicle_status
+    type: px4_msgs::msg::VehicleStatus
+    rate_limit: 5 # Hz — was unlimited; 5 Hz sufficient for mode logic
+
+  - topic: /fmu/out/vehicle_control_mode
+    type: px4_msgs::msg::VehicleControlMode
+    rate_limit: 5
+
+  # ── Attitude & position (EKF output, needed for mode nodes) ─────────────
+  - topic: /fmu/out/vehicle_attitude
+    type: px4_msgs::msg::VehicleAttitude
+    rate_limit: 30 # Hz — modes read heading from this
+
+  - topic: /fmu/out/vehicle_local_position
+    type: px4_msgs::msg::VehicleLocalPosition
+    rate_limit: 30
+
+  - topic: /fmu/out/vehicle_global_position
+    type: px4_msgs::msg::VehicleGlobalPosition
+    rate_limit: 5
+
+  # ── Odometry (useful for diagnostics / comparing EKF vs VO) ────────────
+  - topic: /fmu/out/vehicle_odometry
+    type: px4_msgs::msg::VehicleOdometry
+    rate_limit: 10
+
+  # ── Failsafe & arming ──────────────────────────────────────────────────
+  - topic: /fmu/out/failsafe_flags
+    type: px4_msgs::msg::FailsafeFlags
+    rate_limit: 2
+
+  # ── Actuator feedback (verify commands are reaching outputs) ────────────
+  # DISABLED: - topic: /fmu/out/actuator_motors
+  # DISABLED:   type: px4_msgs::msg::ActuatorMotors
+
+  # DISABLED: - topic: /fmu/out/actuator_servos
+  # DISABLED:   type: px4_msgs::msg::ActuatorServos
+
+  # ── Battery (useful for GCS / safety logic) ────────────────────────────
+  - topic: /fmu/out/battery_status
+    type: px4_msgs::msg::BatteryStatus
+    rate_limit: 1
+
+  # ── Sensor diagnostics ─────────────────────────────────────────────────
+  # DISABLED: - topic: /fmu/out/sensor_combined
+  # DISABLED:   type: px4_msgs::msg::SensorCombined
+
+  # DISABLED: - topic: /fmu/out/estimator_status
+  # DISABLED:   type: px4_msgs::msg::EstimatorStatus
+
+  # DISABLED: - topic: /fmu/out/vehicle_angular_velocity
+  # DISABLED:   type: px4_msgs::msg::VehicleAngularVelocity
+
+  # DISABLED: - topic: /fmu/out/vehicle_acceleration
+  # DISABLED:   type: px4_msgs::msg::VehicleAcceleration
+
+  # DISABLED: - topic: /fmu/out/vehicle_imu
+  # DISABLED:   type: px4_msgs::msg::VehicleImu
+
+  # DISABLED: - topic: /fmu/out/vehicle_magnetometer
+  # DISABLED:   type: px4_msgs::msg::VehicleMagnetometer
+
+  # DISABLED: - topic: /fmu/out/vehicle_gps_position
+  # DISABLED:   type: px4_msgs::msg::SensorGps
+
+  # DISABLED: - topic: /fmu/out/vehicle_air_data
+  # DISABLED:   type: px4_msgs::msg::VehicleAirData
+
+  # DISABLED: - topic: /fmu/out/vehicle_command_ack
+  # DISABLED:   type: px4_msgs::msg::VehicleCommandAck
+
+  # DISABLED: - topic: /fmu/out/home_position
+  # DISABLED:   type: px4_msgs::msg::HomePosition
+
+  # DISABLED: - topic: /fmu/out/mission_result
+  # DISABLED:   type: px4_msgs::msg::MissionResult
+
+  # DISABLED: - topic: /fmu/out/timesync_status
+  # DISABLED:   type: px4_msgs::msg::TimesyncStatus
+
+  # DISABLED: - topic: /fmu/out/vehicle_land_detected
+  # DISABLED:   type: px4_msgs::msg::VehicleLandDetected
+
+subscriptions:
+  # ── Visual odometry (VO bridge → EKF2) ─────────────────────────────────
+  - topic: /fmu/in/vehicle_visual_odometry
+    type: px4_msgs::msg::VehicleOdometry
+
+  # ── Vehicle commands (arm/disarm/mode set from ROS 2) ──────────────────
+  - topic: /fmu/in/vehicle_command
+    type: px4_msgs::msg::VehicleCommand
+
+  # ── Offboard control (used by px4_ros2_interface_lib for heartbeat) ─────
+  - topic: /fmu/in/offboard_control_mode
+    type: px4_msgs::msg::OffboardControlMode
+
+  # ── Trajectory setpoint (offboard_trajectory_mode) ─────────────────────
+  - topic: /fmu/in/trajectory_setpoint
+    type: px4_msgs::msg::TrajectorySetpoint
+
+  # ── Rover setpoints (custom registered modes) ─────────────────────────
+  - topic: /fmu/in/rover_speed_setpoint
+    type: px4_msgs::msg::RoverSpeedSetpoint
+
+  - topic: /fmu/in/rover_steering_setpoint
+    type: px4_msgs::msg::RoverSteeringSetpoint
+
+  - topic: /fmu/in/rover_attitude_setpoint
+    type: px4_msgs::msg::RoverAttitudeSetpoint
+
+  # ── Mode registration (px4_ros2_interface_lib internal) ────────────────
+  - topic: /fmu/in/register_ext_component_request
+    type: px4_msgs::msg::RegisterExtComponentRequest
+
+  - topic: /fmu/in/unregister_ext_component
+    type: px4_msgs::msg::UnregisterExtComponent
+
+  - topic: /fmu/in/mode_completed
+    type: px4_msgs::msg::ModeCompleted
+
+  - topic: /fmu/in/config_overrides
+    type: px4_msgs::msg::ConfigOverrides
+
+  - topic: /fmu/in/arming_check_reply
+    type: px4_msgs::msg::ArmingCheckReply
+
+  # DISABLED: - topic: /fmu/in/vehicle_odometry
+  # DISABLED:   type: px4_msgs::msg::VehicleOdometry
+
+  # DISABLED: - topic: /fmu/in/sensor_optical_flow
+  # DISABLED:   type: px4_msgs::msg::SensorOpticalFlow
+
+  # DISABLED: - topic: /fmu/in/obstacle_distance
+  # DISABLED:   type: px4_msgs::msg::ObstacleDistance
+
+  # DISABLED: - topic: /fmu/in/manual_control_setpoint
+  # DISABLED:   type: px4_msgs::msg::ManualControlSetpoint
+
+  # DISABLED: - topic: /fmu/in/aux_global_position
+  # DISABLED:   type: px4_msgs::msg::VehicleGlobalPosition
+
+subscriptions_multi:
+  # ── Mode registration responses (px4_ros2_interface_lib internal) ──────
+  - topic: /fmu/out/register_ext_component_reply
+    type: px4_msgs::msg::RegisterExtComponentReply
+
+  - topic: /fmu/out/arming_check_request
+    type: px4_msgs::msg::ArmingCheckRequest

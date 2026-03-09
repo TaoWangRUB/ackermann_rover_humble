@@ -202,7 +202,7 @@ All modes subscribe to `/cmd_vel` (`geometry_msgs/Twist`) and are implemented as
 - **PX4 controller chain**: Velocity → Attitude → Rate → Control Allocation
 - **Use case**: Heading-hold driving; PX4 handles heading → steering conversion
 
-### Odometry Bridge (`px4_odometry_node.py`)
+### Odometry Bridge (`px4_vision_odom.py`)
 
 Converts `nav_msgs/Odometry` (ENU/FLU) → PX4 `VehicleOdometry` (NED/FRD):
 - Position: ENU `(y, x, -z)` → NED (`pose_frame = POSE_FRAME_NED`)
@@ -217,10 +217,10 @@ Still available via `use_legacy_bridge:=true`. Manually publishes `OffboardContr
 ### Launch
 
 ```bash
-ros2 launch px4_bringup px4_bridge.launch.py                              # speed_steering (default)
-ros2 launch px4_bringup px4_bridge.launch.py mode_type:=trajectory         # offboard trajectory
-ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_attitude     # heading-hold
-ros2 launch px4_bringup px4_bridge.launch.py use_legacy_bridge:=true       # Python fallback
+ros2 launch px4_bringup px4_bringup.launch.py                              # speed_steering (default)
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=trajectory         # offboard trajectory
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_attitude     # heading-hold
+ros2 launch px4_bringup px4_bringup.launch.py use_legacy_bridge:=true       # Python fallback
 ```
 
 ### File Structure
@@ -237,9 +237,9 @@ src/px4_bringup/
 │   └── rover_speed_attitude_main.cpp
 ├── scripts/
 │   ├── px4_bridge_node.py          # Legacy Python offboard bridge
-│   └── px4_odometry_node.py        # Odometry ENU/FLU → NED/FRD
+│   └── px4_vision_odom.py          # Odometry ENU/FLU → NED/FRD (TF2, 50 Hz)
 ├── launch/
-│   └── px4_bridge.launch.py
+│   └── px4_bringup.launch.py
 ├── config/
 │   └── px4_bridge.yaml
 ├── CMakeLists.txt
@@ -318,12 +318,12 @@ bash /workspace/scripts/start_px4_sitl.sh
 
 # In a fourth Docker shell: launch the ROS 2 ↔ PX4 bridge node
 source /opt/ros/$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash
-ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_steering
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
 ```
 
 > **Startup order matters:** MicroXRCEAgent must be running **before** PX4 starts.
 > PX4's `uxrce_dds_client` connects on startup and does not reliably reconnect.
-> The `px4_bridge` node must start **after** PX4 so it can register with the FMU.
+> The `px4_bringup` node must start **after** PX4 so it can register with the FMU.
 
 #### Full Stack (Gazebo + PX4 + RTAB-Map + Nav2)
 
@@ -334,7 +334,7 @@ bash /workspace/scripts/start_microxrce_agent.sh
 # In a third shell:
 bash /workspace/scripts/start_px4_sitl.sh
 # In a fourth shell:
-ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_steering
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
 ```
 
 ### How It Works
@@ -492,7 +492,7 @@ ros2 topic pub -r 1 /ackermann/cmd_vel geometry_msgs/msg/TwistStamped \
 
 ```bash
 # Shell 4: Launch the ROS 2 ↔ PX4 bridge node (AFTER PX4 is running)
-ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_steering
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
 ```
 
 Then arm and activate the external mode:
@@ -535,6 +535,155 @@ docker-compose -f docker/docker-compose.yml exec ackermann_slam bash -c "pkill -
 | `scripts/start_px4_sitl.sh`        | PX4 SITL launcher (airframe 51000)            |
 | `scripts/start_microxrce_agent.sh` | MicroXRCEAgent launcher (UDP port 8888)       |
 | `scripts/start_ros2_nodes.sh`      | Host-side launcher (Gazebo + optional bridge) |  | `scripts/test_actuators.sh` | Host-side actuator test wrapper |  | `scripts/stop_all.sh` | Process cleanup script |
+
+## Hardware Deployment (Cube Black)
+
+This section covers deploying the Ackermann rover stack on real hardware with a **Cube Black** (FMUv3) flight controller.
+
+### Target Hardware
+
+| Component        | Specification                                                |
+| ---------------- | ------------------------------------------------------------ |
+| Flight controller | Cube Black — STM32F427, **2 MB flash** (FMUv3)              |
+| PX4 firmware     | `px4_fmu-v3_rover` (v1.17+)                                 |
+| Airframe         | 51000 — Generic Rover Ackermann                              |
+| PWM outputs      | MAIN OUT 1 = throttle (Motor 1), MAIN OUT 2 = steering (Servo 1) |
+| DDS transport    | Serial via TELEM2 (921600 baud) → companion computer         |
+| Companion        | Runs ROS 2 (RTAB-Map, Nav2, px4_bringup)                     |
+
+### Key Differences from SITL
+
+| Aspect              | SITL Simulation                                | Real Hardware (Cube Black)                      |
+| ------------------- | ---------------------------------------------- | ----------------------------------------------- |
+| DDS transport       | UDP (`MicroXRCEAgent udp4 -p 8888`)            | Serial (`MicroXRCEAgent serial --dev /dev/ttyUSB0 -b 921600`) |
+| Odometry source     | Gazebo ground truth → `/ackermann/odom`        | RTAB-Map SLAM → EKF → `/odometry/filtered`      |
+| EV noise            | Low (`0.01`) — perfect ground truth            | Higher (`0.05`) — real sensor noise              |
+| GPS                 | Simulated (can be disabled)                    | Typically disabled for indoor rover (`EKF2_GPS_CTRL=0`) |
+| Magnetometer        | Simulated                                      | Disabled (`EKF2_MAG_TYPE=5`) — VIO heading only  |
+| Actuators           | `gz_bridge` → Gazebo joints                    | PWM → ESC + servo via Cube Black MAIN outputs    |
+| ros2_control        | `gz_ros2_control` active                       | Disabled — PX4 drives actuators directly         |
+
+### Parameter Loading Workflow
+
+1. **Load parameters via QGC:**
+   - Connect QGC to the Cube Black (USB or telemetry link).
+   - Go to **Vehicle Setup → Parameters → Tools → Load from file**.
+   - Select `src/px4_bringup/config/cube_black_ackermann.params`.
+   - Reboot the flight controller to apply changes.
+
+2. **Key parameters set by the file:**
+
+   | Parameter        | Value   | Purpose                                       |
+   | ---------------- | ------- | --------------------------------------------- |
+   | `SYS_AUTOSTART`  | 51000   | Generic Rover Ackermann airframe               |
+   | `RA_WHEEL_BASE`  | 0.174   | Wheelbase [m] — from URDF                      |
+   | `RA_MAX_STR_ANG` | 34.4    | Max steering angle [deg] — from URDF ±0.6 rad  |
+   | `PWM_MAIN_FUNC1` | 101     | MAIN OUT 1 = Motor 1 (throttle)                |
+   | `PWM_MAIN_FUNC2` | 201     | MAIN OUT 2 = Servo 1 (steering)                |
+   | `EKF2_EV_CTRL`   | 15      | Fuse EV: position + velocity + yaw             |
+   | `EKF2_HGT_REF`   | 3       | Height reference = vision                       |
+   | `EKF2_GPS_CTRL`  | 0       | Disable GPS (indoor rover)                      |
+   | `EKF2_MAG_TYPE`  | 5       | No magnetometer (VIO heading)                   |
+   | `UXRCE_DDS_CFG`  | 102     | Enable DDS on TELEM2                             |
+   | `SER_TEL2_BAUD`  | 921600  | TELEM2 baud rate for DDS throughput             |
+   | `COM_RC_IN_MODE`  | 4       | No RC required                                  |
+
+3. **Verify after reboot** (in PX4 console or QGC):
+   ```bash
+   param show RA_WHEEL_BASE     # → 0.174
+   param show RA_MAX_STR_ANG    # → 34.4
+   param show EKF2_EV_CTRL      # → 15
+   ```
+
+### DDS Topic Reduction
+
+The Cube Black's STM32F427 CPU can be overwhelmed by the default PX4 DDS configuration (60+ topics). A trimmed `dds_topics.yaml` is provided at `src/px4_bringup/config/dds_topics.yaml` that keeps only the topics needed by the ROS 2 bridge:
+
+**Kept publications (PX4 → ROS 2):**
+- `vehicle_status` (5 Hz), `vehicle_control_mode` (5 Hz) — mode logic
+- `vehicle_attitude` (30 Hz), `vehicle_local_position` (30 Hz) — mode nodes
+- `vehicle_global_position` (5 Hz), `vehicle_odometry` (10 Hz) — diagnostics
+- `failsafe_flags` (2 Hz), `battery_status` (1 Hz) — safety
+
+**Kept subscriptions (ROS 2 → PX4):**
+- `vehicle_visual_odometry` — VO bridge → EKF2
+- `vehicle_command`, `offboard_control_mode`, `trajectory_setpoint` — offboard/mode control
+- `rover_speed_setpoint`, `rover_steering_setpoint`, `rover_attitude_setpoint` — rover modes
+- Mode registration topics (`register_ext_component_request`, etc.) — px4_ros2_interface_lib
+
+All other topics are commented out with `# DISABLED:` prefix and can be re-enabled by uncommenting.
+
+### Firmware Build
+
+The trimmed DDS topic list must be compiled into the PX4 firmware:
+
+```bash
+# From host (builds inside Docker):
+./scripts/build_px4_rover_fw.sh
+
+# Or without DDS replacement (uses PX4 default topics):
+./scripts/build_px4_rover_fw.sh --no-dds
+```
+
+The script:
+1. Backs up PX4's default `dds_topics.yaml`
+2. Copies the workspace version into `src/modules/uxrce_dds_client/dds_topics.yaml`
+3. Runs `make px4_fmu-v3_rover`
+4. Reports binary size vs. 2 MB flash limit
+5. Restores the original `dds_topics.yaml` on exit
+
+Flash the resulting firmware via QGC: **Vehicle Setup → Firmware → Advanced → Custom firmware file** (`/px4/build/px4_fmu-v3_rover/px4_fmu-v3_rover.px4`).
+
+### VO Pipeline (Real Hardware)
+
+On real hardware, visual odometry comes from RTAB-Map instead of Gazebo ground truth:
+
+```
+RTAB-Map rgbd_odometry → /vo_odom
+           ↓
+robot_localization EKF → /odometry/filtered (fused VO + IMU)
+           ↓
+px4_vision_odom.py → ENU→NED + FLU→FRD conversion
+           ↓
+/fmu/in/vehicle_visual_odometry → PX4 EKF2
+```
+
+Launch with the VO bridge enabled:
+
+```bash
+ros2 launch px4_bringup px4_bringup.launch.py \
+    enable_vo_bridge:=true \
+    odom_topic:=/odometry/filtered \
+    odom_frame:=odom \
+    base_frame:=ackermann/base_link
+```
+
+### Serial DDS Agent
+
+For real hardware, the MicroXRCE-DDS Agent connects via serial instead of UDP:
+
+```bash
+# Serial mode (Cube Black TELEM2 → companion /dev/ttyUSB0)
+./scripts/start_microxrce_agent.sh --serial
+
+# Custom device/baud
+./scripts/start_microxrce_agent.sh --serial /dev/ttyACM0 115200
+```
+
+Ensure the serial device is passed through to Docker in `docker-compose.yml`:
+```yaml
+devices:
+  - "/dev/ttyUSB0:/dev/ttyUSB0"
+```
+
+### Startup Sequence (Real Hardware)
+
+1. Power on Cube Black (PX4 boots with stored parameters).
+2. Start companion computer and Docker container.
+3. Start serial DDS agent: `./scripts/start_microxrce_agent.sh --serial`
+4. Launch RTAB-Map + Nav2: `ros2 launch robot_bringup robot_bringup.launch.py rtabmap:=true nav2:=true`
+5. Launch PX4 bridge with VO: `ros2 launch px4_bringup px4_bringup.launch.py enable_vo_bridge:=true odom_topic:=/odometry/filtered`
+6. Arm and activate mode via QGC or ROS 2 command.
 
 ## Software Architecture Diagram
 
