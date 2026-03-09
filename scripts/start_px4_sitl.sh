@@ -88,7 +88,7 @@ exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
   #   ./px4-actuator_test set -s 1 -v 0.5 -t 3   # servo test
   #
   # To drive the rover via ROS 2 /cmd_vel, launch px4_bridge AFTER this script:
-  #   ros2 launch px4_bringup px4_bridge.launch.py mode_type:=speed_steering
+  #   ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
 
   wait \$PX4_PID
 "

@@ -78,7 +78,7 @@ if [[ "${BRIDGE}" == "true" ]]; then
     LAUNCH_CMD+=" BRINGUP_PID=\$!;"
     LAUNCH_CMD+=" echo 'Waiting 5s for Gazebo to start before launching px4_bridge...';"
     LAUNCH_CMD+=" sleep 5;"
-    LAUNCH_CMD+=" ros2 launch px4_bringup px4_bridge.launch.py mode_type:=${BRIDGE_MODE} &"
+    LAUNCH_CMD+=" ros2 launch px4_bringup px4_bringup.launch.py mode_type:=${BRIDGE_MODE} &"
     LAUNCH_CMD+=" BRIDGE_PID=\$!;"
     LAUNCH_CMD+=" trap 'kill \$BRINGUP_PID \$BRIDGE_PID 2>/dev/null; wait' EXIT INT TERM;"
     LAUNCH_CMD+=" wait"
