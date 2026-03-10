@@ -67,13 +67,13 @@ Launch arguments:
 
 ## PX4 DDS Bridge Interfaces
 
-The `px4_bringup` package provides three C++ custom flight modes (via `px4_ros2_interface_lib`) and two legacy Python bridge nodes. All communicate with PX4 over Micro-XRCE-DDS.
+The `px4_bringup` package provides four C++ custom flight modes (via `px4_ros2_interface_lib`) and a Python odometry bridge. All communicate with PX4 over Micro-XRCE-DDS.
 
 ### Input Topics (ROS 2 → PX4)
 
 | Topic | Type | Consumer | Description |
 |---|---|---|---|
-| `/cmd_vel` | `geometry_msgs/msg/Twist` | All 3 C++ mode nodes + legacy bridge | Velocity command from Nav2 (body FLU) |
+| `/cmd_vel` | `geometry_msgs/msg/Twist` | All 4 C++ mode nodes | Velocity command from Nav2 (body FLU) |
 | `/odom` | `nav_msgs/msg/Odometry` | `px4_vision_odom.py` | Fused odometry (ENU/FLU), converted to NED/FRD for PX4 EKF |
 
 ### Output Topics (to PX4 via DDS)
@@ -82,18 +82,25 @@ The `px4_bringup` package provides three C++ custom flight modes (via `px4_ros2_
 |---|---|---|---|
 | `/fmu/in/vehicle_visual_odometry` | `px4_msgs/msg/VehicleOdometry` | `px4_vision_odom.py` | Odometry in NED/FRD for PX4 EKF fusion |
 | `/fmu/in/trajectory_setpoint` | `px4_msgs/msg/TrajectorySetpoint` | `offboard_trajectory_mode` | NED velocity setpoint (offboard mode only) |
-| `/fmu/in/offboard_control_mode` | `px4_msgs/msg/OffboardControlMode` | `offboard_trajectory_mode` (auto) / legacy bridge (manual) | Offboard heartbeat — automatic for C++ modes |
+| `/fmu/in/offboard_control_mode` | `px4_msgs/msg/OffboardControlMode` | `offboard_trajectory_mode` (auto) | Offboard heartbeat — automatic for C++ modes |
 | `/fmu/in/rover_speed_setpoint` | `px4_msgs/msg/RoverSpeedSetpoint` | `rover_speed_steering_mode`, `rover_speed_attitude_mode` | Body-x speed [m/s] |
 | `/fmu/in/rover_steering_setpoint` | `px4_msgs/msg/RoverSteeringSetpoint` | `rover_speed_steering_mode` | Normalized steering [-1, 1] |
 | `/fmu/in/rover_attitude_setpoint` | `px4_msgs/msg/RoverAttitudeSetpoint` | `rover_speed_attitude_mode` | Yaw heading in NED [rad] |
-| `/fmu/in/vehicle_command` | `px4_msgs/msg/VehicleCommand` | Legacy bridge only | Arm/disarm/mode-set commands |
 
 ### PX4 Telemetry Topics (PX4 → ROS 2)
 
 | Topic | Type | Consumer | Description |
 |---|---|---|---|
-| `/fmu/out/vehicle_status` | `px4_msgs/msg/VehicleStatus` | Legacy bridge, mode nodes | Navigation state, arming state |
-| `/fmu/out/vehicle_local_position` | `px4_msgs/msg/VehicleLocalPosition` | `rover_speed_attitude_mode` | Current heading (for yaw seeding on activation) |
+| `/fmu/out/vehicle_status_v2` | `px4_msgs/msg/VehicleStatus` | Mode nodes | Navigation state, arming state, `valid_nav_states_mask` |
+| `/fmu/out/vehicle_odometry` | `px4_msgs/msg/VehicleOdometry` | Diagnostics | EKF2 fused odometry output |
+| `/fmu/out/register_ext_component_reply_v1` | `px4_msgs/msg/RegisterExtComponentReply` | Mode nodes | External mode registration handshake |
+| `/fmu/out/arming_check_request_v1` | `px4_msgs/msg/ArmingCheckRequest` | Mode nodes | Arming check callbacks |
+| `/fmu/out/failsafe_flags` | `px4_msgs/msg/FailsafeFlags` | Mode nodes | Failsafe state |
+| `/fmu/out/battery_status_v1` | `px4_msgs/msg/BatteryStatus` | Diagnostics | Battery voltage/current |
+
+> **Note:** On hardware with PX4 main branch (MESSAGE_VERSION=2), topic names
+> include version suffixes (e.g. `vehicle_status_v2`, `register_ext_component_reply_v1`).
+> The `px4_ros2_interface_lib` handles this automatically.
 
 ### Mode-Specific Parameters
 
@@ -102,19 +109,12 @@ The `px4_bringup` package provides three C++ custom flight modes (via `px4_ros2_
 | `base_frame` | `ackermann/base_link` | `offboard_trajectory_mode` | TF body frame for velocity rotation |
 | `odom_frame` | `odom` | `offboard_trajectory_mode` | TF world frame for velocity rotation |
 | `max_steering_rate` | `1.0` | `rover_speed_steering_mode` | Max yaw rate [rad/s] for normalizing steering to [-1, 1] |
-| `command_rate_hz` | `50.0` | Legacy bridge | Heartbeat + setpoint publishing rate |
+| `skip_message_compatibility_check` | `true` | All modes | Skip DDS message format check (required when PX4 firmware lacks `/fmu/out/message_format_response`) |
 
-### Legacy Services (Python bridge only)
-
-| Service | Type | Description |
-|---|---|---|
-| `/px4/arm` | `std_srvs/srv/SetBool` | Arm (`true`) or disarm (`false`) |
-| `/px4/set_offboard` | `std_srvs/srv/Trigger` | Switch PX4 to offboard mode |
-
-Bridge parameters: `command_rate_hz`. Defaults target PX4 SITL; switching to hardware updates host/ports only.
+Bridge parameters are in `config/px4_bridge.yaml`.
 
 ## Simulation ↔ Hardware Switches
 
 - `use_sim_time` parameter toggled globally by `robot_bringup`.
 - Sensor interfaces remain identical between Gazebo and hardware; replace Gazebo plugins with hardware drivers that publish on the same `/ackermann/*`, `/l515/imu/raw`, `/scan` topics.
-- DDS bridge selects SITL vs hardware endpoints via the upcoming `config/px4_bridge.yaml` parameter file.
+- DDS bridge selects SITL vs hardware endpoints via `config/px4_bridge.yaml` parameter file.

@@ -49,7 +49,7 @@ class VIOPublisher(Node):
 
         # Timers
         self.timer        = self.create_timer(1.0,  self.check_odom_status)
-        self.timer_output = self.create_timer(0.02, self.pub_px4_odom)
+        self.timer_output = self.create_timer(0.05, self.pub_px4_odom)
 
         self.get_logger().info(
             f'VIOPublisher ready — topic: {odom_topic} | '

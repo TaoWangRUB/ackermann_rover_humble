@@ -48,6 +48,13 @@ public:
       std::make_shared<px4_ros2::RoverSpeedSteeringSetpointType>(*this);
 
     // ── Parameters ────────────────────────────────────────────────
+    if (!node_.has_parameter("skip_message_compatibility_check")) {
+      node_.declare_parameter("skip_message_compatibility_check", false);
+    }
+    if (node_.get_parameter("skip_message_compatibility_check").as_bool()) {
+      setSkipMessageCompatibilityCheck();
+    }
+
     if (!node_.has_parameter("cmd_vel_topic")) {
       node_.declare_parameter("cmd_vel_topic", std::string("/cmd_vel"));
     }

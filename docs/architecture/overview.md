@@ -182,7 +182,7 @@ All modes subscribe to `/cmd_vel` (`geometry_msgs/Twist`) and are implemented as
 - **Setpoint type**: `TrajectorySetpointType` (velocity in NED)
 - **Conversion**: `/cmd_vel` body FLU → TF2 rotate to odom ENU → swap to NED `(y, x, -z)` + negate yaw rate
 - **Parameters**: `base_frame` (default: `ackermann/base_link`), `odom_frame` (default: `odom`)
-- **Use case**: Generic offboard velocity control; equivalent to the legacy Python bridge
+- **Use case**: Generic offboard velocity control
 
 #### 2. Rover Speed Steering Mode (`rover_speed_steering_mode`) — Recommended
 
@@ -204,23 +204,28 @@ All modes subscribe to `/cmd_vel` (`geometry_msgs/Twist`) and are implemented as
 
 ### Odometry Bridge (`px4_vision_odom.py`)
 
-Converts `nav_msgs/Odometry` (ENU/FLU) → PX4 `VehicleOdometry` (NED/FRD):
+Converts `nav_msgs/Odometry` (ENU/FLU) → PX4 `VehicleOdometry` (NED/FRD) at a fixed **20 Hz** output rate (hardcoded `0.05 s` timer period):
 - Position: ENU `(y, x, -z)` → NED (`pose_frame = POSE_FRAME_NED`)
 - Quaternion: `q_ENU→NED · q_FLU→ENU · inv(q_FLU→FRD)` (Hamilton product, not a component swap)
 - Velocity: body FLU `(x, -y, -z)` → body FRD (`velocity_frame = VELOCITY_FRAME_BODY_FRD`)
 - Angular velocity: body FLU `(x, -y, -z)` → body FRD
 
-### Legacy Python Bridge (`px4_bridge_node.py`)
-
-Still available via `use_legacy_bridge:=true`. Manually publishes `OffboardControlMode` heartbeat + `TrajectorySetpoint` + `VehicleCommand` for arm/disarm/offboard. Provides ROS services `/px4/arm` and `/px4/set_offboard`.
+The odom subscriber callback updates internal state; the timer publishes the latest converted message at the fixed rate regardless of input frequency.
 
 ### Launch
 
 ```bash
+# Inside Docker:
 ros2 launch px4_bringup px4_bringup.launch.py                              # speed_steering (default)
 ros2 launch px4_bringup px4_bringup.launch.py mode_type:=trajectory         # offboard trajectory
 ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_attitude     # heading-hold
-ros2 launch px4_bringup px4_bringup.launch.py use_legacy_bridge:=true       # Python fallback
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=manual             # open-loop throttle + steering
+
+# From host (parameterized helper):
+./scripts/start_px4_bringup_vo.sh                                           # mode only, no VO
+./scripts/start_px4_bringup_vo.sh --vo-bridge                               # mode + VO bridge
+./scripts/start_px4_bringup_vo.sh --vo-bridge --odom-topic /rtabmap/odom    # custom odom source
+./scripts/start_px4_bringup_vo.sh --mode-type trajectory --vo-bridge        # trajectory mode + VO
 ```
 
 ### File Structure
@@ -236,8 +241,8 @@ src/px4_bringup/
 │   ├── rover_speed_steering_main.cpp
 │   └── rover_speed_attitude_main.cpp
 ├── scripts/
-│   ├── px4_bridge_node.py          # Legacy Python offboard bridge
-│   └── px4_vision_odom.py          # Odometry ENU/FLU → NED/FRD (TF2, 50 Hz)
+│   ├── px4_offboard_control.py     # Standalone offboard velocity controller
+│   └── px4_vision_odom.py          # Odometry ENU/FLU → NED/FRD (TF2, 20 Hz)
 ├── launch/
 │   └── px4_bringup.launch.py
 ├── config/
@@ -534,7 +539,11 @@ docker-compose -f docker/docker-compose.yml exec ackermann_slam bash -c "pkill -
 | `robot_bringup.launch.py`          | `enable_px4_sitl` and `px4_mode_type` args    |
 | `scripts/start_px4_sitl.sh`        | PX4 SITL launcher (airframe 51000)            |
 | `scripts/start_microxrce_agent.sh` | MicroXRCEAgent launcher (UDP port 8888)       |
-| `scripts/start_ros2_nodes.sh`      | Host-side launcher (Gazebo + optional bridge) |  | `scripts/test_actuators.sh` | Host-side actuator test wrapper |  | `scripts/stop_all.sh` | Process cleanup script |
+| `scripts/start_ros2_nodes.sh`      | Host-side launcher (Gazebo + optional bridge) |
+| `scripts/test_actuators.sh`        | Host-side actuator test wrapper                |
+| `scripts/stop_all.sh`              | Process cleanup script                         |
+| `scripts/start_px4_bringup_vo.sh`  | Host-side PX4 bridge launcher (parameterized)  |
+| `scripts/upload_params.sh`         | MAVLink parameter upload/verify script         |
 
 ## Hardware Deployment (Cube Black)
 
@@ -565,34 +574,113 @@ This section covers deploying the Ackermann rover stack on real hardware with a 
 
 ### Parameter Loading Workflow
 
-1. **Load parameters via QGC:**
-   - Connect QGC to the Cube Black (USB or telemetry link).
-   - Go to **Vehicle Setup → Parameters → Tools → Load from file**.
-   - Select `src/px4_bringup/config/cube_black_ackermann.params`.
-   - Reboot the flight controller to apply changes.
+All parameters are defined in a single source of truth:
+`src/px4_bringup/config/cube_black_ackermann.params`.
 
-2. **Key parameters set by the file:**
+Both the MAVLink upload script and QGC file loading read from this file.
 
-   | Parameter        | Value   | Purpose                                       |
-   | ---------------- | ------- | --------------------------------------------- |
-   | `SYS_AUTOSTART`  | 51000   | Generic Rover Ackermann airframe               |
-   | `RA_WHEEL_BASE`  | 0.174   | Wheelbase [m] — from URDF                      |
-   | `RA_MAX_STR_ANG` | 34.4    | Max steering angle [deg] — from URDF ±0.6 rad  |
-   | `PWM_MAIN_FUNC1` | 101     | MAIN OUT 1 = Motor 1 (throttle)                |
-   | `PWM_MAIN_FUNC2` | 201     | MAIN OUT 2 = Servo 1 (steering)                |
-   | `EKF2_EV_CTRL`   | 15      | Fuse EV: position + velocity + yaw             |
-   | `EKF2_HGT_REF`   | 3       | Height reference = vision                       |
-   | `EKF2_GPS_CTRL`  | 0       | Disable GPS (indoor rover)                      |
-   | `EKF2_MAG_TYPE`  | 5       | No magnetometer (VIO heading)                   |
-   | `UXRCE_DDS_CFG`  | 102     | Enable DDS on TELEM2                             |
-   | `SER_TEL2_BAUD`  | 921600  | TELEM2 baud rate for DDS throughput             |
-   | `COM_RC_IN_MODE`  | 4       | No RC required                                  |
+#### Method 1: MAVLink Upload Script (Recommended)
 
-3. **Verify after reboot** (in PX4 console or QGC):
+The script parses the `.params` file, handles the `SYS_AUTOSTART` reboot ordering,
+and verifies every parameter after upload.
+
+**Prerequisites:**
+- Docker container running (`docker-compose up -d`)
+- Cube Black connected via USB (`/dev/ttyACM0`)
+- `px4_cmd.sh` working (test with `./scripts/px4_cmd.sh 'ver hwcmp'`)
+
+**Full upload sequence:**
+
+```bash
+# 1. Upload all parameters (two-pass: airframe → reboot → remaining → verify)
+./scripts/upload_params.sh
+
+# 2. After the script finishes, power cycle the Cube Black:
+#    - Disconnect USB
+#    - Wait 5 seconds
+#    - Reconnect USB
+#    - Wait for /dev/ttyACM0 to appear
+
+# 3. Verify all parameters are correct after reboot
+./scripts/upload_params.sh --verify-only
+```
+
+> ⚠ After PX4 reboots, the USB CDC endpoint may not recover automatically.
+> A **USB replug** (or full power cycle) is often needed before `px4_cmd.sh`
+> can reconnect.
+
+**Verify-only mode** (read-only, does not change anything):
+
+```bash
+./scripts/upload_params.sh --verify-only
+```
+
+#### Method 2: QGC Fallback
+
+Two-pass procedure — required because `SYS_AUTOSTART` changes trigger a full
+parameter reset on reboot, overwriting other params loaded in the same batch.
+
+1. Connect QGC to the Cube Black (USB or telemetry link).
+2. **Pass 1:** Go to **Vehicle Setup → Parameters → Tools → Load from file**.
+   Select `src/px4_bringup/config/cube_black_ackermann.params`.
+   Reboot the flight controller. (This applies `SYS_AUTOSTART` and resets defaults.)
+3. **Pass 2:** Load the same file again. Reboot once more
+   (`UXRCE_DDS_CFG`, `SER_TEL2_BAUD`, `GPS_1_CONFIG`, `MAV_1_CONFIG` require reboot).
+4. **Verify:** Run `./scripts/upload_params.sh --verify-only` to confirm all values.
+
+> ⚠ The `.params` file must use **tab-separated** fields. Spaces cause QGC to
+> silently skip lines.
+
+#### Fresh Board (Cold Start)
+
+On a **brand-new or factory-reset** Cube Black the default firmware leaves only
+~12.7 KB of free RAM at boot. This is too little for reliable USB MAVLink — the
+CDC TX buffers fail to allocate, causing `px4_cmd.sh` and `upload_params.sh` to
+hang or return garbage.
+
+**You must use QGC for the first parameter load:**
+
+1. Connect QGC to the Cube Black via USB.
+2. **Pass 1:** Load `cube_black_ackermann.params` → Reboot.
+   This sets `SYS_AUTOSTART=51000` (resets all params to airframe defaults).
+3. **Pass 2:** Load the same file again → Reboot.
+   This applies the RAM-saving params (`GPS_1_CONFIG=0`, `MAV_1_CONFIG=0`,
+   `SDLOG_BACKEND=0`) plus all other settings.
+4. **USB replug:** Disconnect and reconnect the USB cable.
+   Wait for `/dev/ttyACM0` to reappear.
+5. **Verify:** `./scripts/upload_params.sh --verify-only` — all params must pass.
+6. **Confirm free RAM:** `./scripts/px4_cmd.sh 'free' 8` — expect ≥ 28 KB.
+
+After this one-time bootstrap, subsequent updates can use Method 1
+(`upload_params.sh`) since the board will have enough free RAM for MAVLink.
+
+**Key parameters set by the file:**
+
+   | Parameter         | Value   | Purpose                                         |
+   | ----------------- | ------- | ----------------------------------------------- |
+   | `SYS_AUTOSTART`   | 51000   | Generic Rover Ackermann airframe                |
+   | `RA_WHEEL_BASE`   | 0.174   | Wheelbase [m] — from URDF                       |
+   | `RA_MAX_STR_ANG`  | 0.6     | Max steering angle [rad] — from URDF ±0.6 rad   |
+   | `PWM_MAIN_FUNC1`  | 101     | MAIN OUT 1 = Motor 1 (throttle)                 |
+   | `PWM_MAIN_FUNC2`  | 201     | MAIN OUT 2 = Servo 1 (steering)                 |
+   | `EKF2_EV_CTRL`    | 13      | Fuse EV: hpos + vpos + yaw (bits 0+2+3)         |
+   | `EKF2_HGT_REF`    | 0       | Height reference = barometer default             |
+   | `EKF2_GPS_CTRL`   | 0       | Disable GPS (indoor rover)                       |
+   | `EKF2_MAG_TYPE`   | 5       | No magnetometer (VIO heading)                    |
+   | `UXRCE_DDS_CFG`   | 102     | Enable DDS on TELEM2                             |
+   | `SER_TEL2_BAUD`   | 921600  | TELEM2 baud rate for DDS throughput              |
+   | `COM_RC_IN_MODE`  | 3       | RC + MAVLink joystick (companion + RC)           |
+   | `GPS_1_CONFIG`    | 0       | Disable GPS module at boot (frees ~6 KB RAM)     |
+   | `MAV_1_CONFIG`    | 0       | Disable TELEM1 MAVLink at boot (frees ~17 KB RAM)|
+   | `SDLOG_BACKEND`   | 0       | Disable SD logger at boot (no SD card, saves RAM) |
+
+**Verify after loading:**
+
    ```bash
-   param show RA_WHEEL_BASE     # → 0.174
-   param show RA_MAX_STR_ANG    # → 34.4
-   param show EKF2_EV_CTRL      # → 15
+   ./scripts/upload_params.sh --verify-only
+   # or manually:
+   ./scripts/px4_cmd.sh 'param show RA_WHEEL_BASE'   # → 0.1740
+   ./scripts/px4_cmd.sh 'param show EKF2_EV_CTRL'    # → 13
    ```
 
 ### DDS Topic Reduction
@@ -682,8 +770,44 @@ devices:
 2. Start companion computer and Docker container.
 3. Start serial DDS agent: `./scripts/start_microxrce_agent.sh --serial`
 4. Launch RTAB-Map + Nav2: `ros2 launch robot_bringup robot_bringup.launch.py rtabmap:=true nav2:=true`
-5. Launch PX4 bridge with VO: `ros2 launch px4_bringup px4_bringup.launch.py enable_vo_bridge:=true odom_topic:=/odometry/filtered`
+5. Launch PX4 bridge with VO:
+   ```bash
+   # Using the helper script (from host):
+   ./scripts/start_px4_bringup_vo.sh --vo-bridge --odom-topic /odometry/filtered
+
+   # Or manually (inside Docker):
+   ros2 launch px4_bringup px4_bringup.launch.py \
+       enable_vo_bridge:=true odom_topic:=/odometry/filtered
+   ```
 6. Arm and activate mode via QGC or ROS 2 command.
+
+> **QGC Version Requirement:** Custom modes (e.g. "Rover Speed Steering") only
+> appear in the QGC flight mode selector with **QGC 4.5+**. Earlier versions
+> (including 4.4.x) do not support the MAVLink **Standard Modes** protocol
+> (`AVAILABLE_MODES` / `AVAILABLE_MODES_MONITOR`). The mode still registers in
+> PX4 and can be activated programmatically via ROS 2 regardless of QGC version.
+
+### Hardware-Verified RAM Budget
+
+Measured on Cube Black (STM32F427, 231 KB total RAM) with RAM-saving parameters
+(`GPS_1_CONFIG=0`, `MAV_1_CONFIG=0`, `SDLOG_BACKEND=0`):
+
+| State                              | Free RAM  | Largest Block | Notes                       |
+| ---------------------------------- | --------- | ------------- | --------------------------- |
+| Boot (idle)                        | ~28.7 KB  | ~15 KB        | Best case, no DDS/MAVLink   |
+| DDS agent connected                | ~22 KB    | ~12 KB        | `uxrce_dds_client` running  |
+| DDS + QGC connected (USB)          | ~20 KB    | ~10.7 KB      | QGC spawns `mavlink_if1`    |
+| DDS + QGC + mode node              | ~18 KB    | ~9 KB         | Mode registration overhead  |
+| DDS + QGC + mode + VO bridge       | ~16 KB    | ~8 KB         | Tight but functional        |
+
+> External mode registration requires PX4 to allocate internal buffers. If free
+> RAM drops below ~15 KB, registrations may fail with "Registration id 0 is
+> flagged as invalid". A PX4 reboot clears stale registrations.
+
+> **Note:** The VO bridge must be enabled for PX4 to allow switching to the
+> external mode (`can_set_nav_states_mask`). Without a position estimate (from
+> VO or GPS), PX4's failsafe framework blocks mode activation even though the
+> mode is registered (`valid_nav_states_mask`).
 
 ## Software Architecture Diagram
 
@@ -820,3 +944,276 @@ SLAM -->|"TF map->odom"| LocalCostmap
 %% End of Diagram
 
 ```
+
+## Hardware Integration Test — CubePilot Black (2026-03-10)
+
+### Hardware Under Test
+
+| Item | Detail |
+|------|--------|
+| FCU | CubePilot Black (STM32F427 FMUv3) |
+| Firmware | PX4 v1.16.0, rover build, NuttX 11.0.0 |
+| RAM | 231 KB total |
+| Flash | 2 MB |
+| Serial — DDS | `/dev/ttyUSB0` (TELEM2 via FTDI, 921600 baud) |
+| Serial — MAVLink | `/dev/ttyACM0` (native USB CDC, 57600 baud) |
+| Companion | Docker container `jazzy_slam` (ROS 2 Jazzy, Micro-XRCE-DDS v2.4.3) |
+
+### PX4 Parameters
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `SYS_AUTOSTART` | 51000 | Ackermann rover airframe |
+| `EKF2_EV_CTRL` | 13 | Fuse external vision hpos + vpos + yaw |
+| `EKF2_GPS_CTRL` | 0 | Disable GPS fusion |
+| `EKF2_MAG_TYPE` | 5 | No magnetometer |
+| `COM_RC_IN_MODE` | 3 | RC + MAVLink joystick (companion + RC) |
+| `UXRCE_DDS_CFG` | 102 | DDS on TELEM2 |
+| `GPS_1_CONFIG` | 0 | Disable GPS module at boot (frees ~6 KB RAM) |
+| `MAV_1_CONFIG` | 0 | Disable TELEM1 MAVLink at boot (frees ~17 KB RAM) |
+| `SDLOG_BACKEND` | 0 | Disable SD logger at boot (no SD card, saves RAM) |
+| `CBRK_SUPPLY_CHK` | 894281 | Bypass battery check (USB power only) |
+
+### Test Procedure
+
+#### Phase 1 — Hardware Check
+
+```bash
+# On host: verify USB devices
+ls -la /dev/ttyACM* /dev/ttyUSB*
+# Expected: /dev/ttyACM0 (MAVLink) and /dev/ttyUSB0 (DDS)
+```
+
+#### Phase 2 — Verify RAM Headroom
+
+The Cube Black has only 231 KB RAM. With default PX4 modules all running, only ~12 KB
+is free — not enough for DDS + VO. The parameter file disables unused modules at boot
+via `GPS_1_CONFIG=0`, `MAV_1_CONFIG=0`, and `SDLOG_BACKEND=0`, which frees ~23 KB at startup.
+
+Verify after boot:
+
+```bash
+# Check free RAM — should be ~28 KB or more
+./scripts/px4_cmd.sh 'free' 8
+
+# Confirm logger is off (SDLOG_BACKEND=0 prevents startup)
+./scripts/px4_cmd.sh 'logger status' 8
+# Expected: "not running"
+```
+
+If free RAM is below 20 KB, the USB MAVLink port may become unresponsive under DDS load.
+Check that the RAM-saving params are active:
+
+```bash
+./scripts/px4_cmd.sh 'param show GPS_1_CONFIG' 8   # Expected: 0
+./scripts/px4_cmd.sh 'param show MAV_1_CONFIG' 8   # Expected: 0
+./scripts/px4_cmd.sh 'param show SDLOG_BACKEND' 8  # Expected: 0
+```
+
+**RAM comparison:**
+
+| State | Free RAM | Largest Block |
+|-------|----------|---------------|
+| Default (all modules) | 12.7 KB | 8.3 KB |
+| With GPS_1_CONFIG=0 + MAV_1_CONFIG=0 + SDLOG_BACKEND=0 | 28.7 KB | 25.9 KB |
+| With DDS + VO running | ~22 KB | ~11 KB |
+
+#### Phase 3 — Start Companion Infrastructure
+
+Each step below uses a dedicated wrapper script from `scripts/`.
+Run each in a **separate terminal** from the host (project root):
+
+```bash
+# 1. Start DDS agent on TELEM2 (serial mode)
+./scripts/start_microxrce_agent.sh --serial
+
+# 2. Publish fake odometry at 30 Hz on /odom
+./scripts/pub_odom.sh
+
+# 3. Publish static TF: odom → ackermann/base_link
+./scripts/pub_tf.sh
+
+# 4. Launch px4_bringup with VO bridge (speed_steering mode)
+./scripts/start_px4_bringup_vo.sh
+```
+
+| Script | Location | Purpose |
+|--------|----------|---------|
+| `start_microxrce_agent.sh` | `scripts/start_microxrce_agent.sh` | DDS agent on `/dev/ttyUSB0` @ 921600 |
+| `pub_odom.sh` | `scripts/pub_odom.sh` | 30 Hz mock Odometry to `/odom` |
+| `pub_tf.sh` | `scripts/pub_tf.sh` | Static TF odom → ackermann/base\_link |
+| `start_px4_bringup_vo.sh` | `scripts/start_px4_bringup_vo.sh` | px4\_bringup with VO bridge |
+
+#### Phase 4 — Verify VO Pipeline
+
+```bash
+# Check VO rate at PX4 input (~50 Hz expected)
+docker-compose -f docker/docker-compose.yml exec ackermann_slam bash -c "
+  source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash
+  timeout 3 ros2 topic hz /fmu/in/vehicle_visual_odometry
+"
+
+# Check odom source rate (30 Hz expected)
+# ... same pattern with /odom
+
+# Via MAVLink: verify VO arrives at PX4
+./scripts/px4_cmd.sh 'listener vehicle_visual_odometry -n 1' 10
+# Expected: quality=100, valid position/velocity values
+```
+
+#### Phase 5 — MAVLink Diagnostics (with DDS running)
+
+```bash
+# DDS client status — must show "connected", timesync converged
+./scripts/px4_cmd.sh 'uxrce_dds_client status' 8
+
+# EKF2 status — attitude=1, local_position=1
+./scripts/px4_cmd.sh 'ekf2 status' 10
+
+# Estimator flags — cs_ev_pos/yaw/vel must be True, zero faults
+./scripts/px4_cmd.sh 'listener estimator_status_flags -n 1' 10
+
+# Local position — xy_valid=True, z_valid=True
+./scripts/px4_cmd.sh 'listener vehicle_local_position -n 1' 10
+
+# Free RAM — should remain >30 KB
+./scripts/px4_cmd.sh 'free' 8
+
+# Process list
+./scripts/px4_cmd.sh 'ps' 10
+```
+
+#### Phase 6 — Mode Switch & Arm Tests
+
+```bash
+# Switch to Manual — verify via ROS2
+./scripts/px4_cmd.sh 'commander mode manual' 8
+ros2 topic echo /fmu/out/vehicle_status_v2 --once | grep nav_state
+# Expected: nav_state: 17 (Manual), failsafe: false
+
+# Arm in Manual mode
+./scripts/px4_cmd.sh 'commander arm' 8
+ros2 topic echo /fmu/out/vehicle_status_v2 --once | grep arming_state
+# Expected: arming_state: 2 (Armed), pre_flight_checks_pass: true
+
+# Disarm
+./scripts/px4_cmd.sh 'commander disarm' 8
+
+# Switch to Hold
+./scripts/px4_cmd.sh 'commander mode auto:loiter' 8
+# Expected: nav_state: 4 (Hold), failsafe: false
+
+# Arm in Hold mode
+./scripts/px4_cmd.sh 'commander arm' 8
+# Expected: FAILS — home_position_invalid (no GPS)
+
+# --- Set global origin & home (required for Hold without GPS) ---
+
+# 1. Set EKF global origin (SET_GPS_GLOBAL_ORIGIN)
+#    Provides a global position reference so EKF2 can report a global position.
+./scripts/px4_cmd.sh 'commander set_ekf_origin 51.4934 7.4120 100.0' 8
+
+# 2. Set home position to current location (MAV_CMD_DO_SET_HOME)
+#    Clears home_position_invalid once a global reference exists.
+./scripts/px4_cmd.sh 'commander set_home' 8
+
+# Verify home is now valid
+ros2 topic echo /fmu/out/failsafe_flags --once | grep home_position_invalid
+# Expected: home_position_invalid: false
+
+# Arm in Hold mode (should succeed now)
+./scripts/px4_cmd.sh 'commander arm' 8
+# Expected: arming_state: 2 (Armed)
+
+# Disarm
+./scripts/px4_cmd.sh 'commander disarm' 8
+```
+
+#### Phase 8 — Cleanup
+
+```bash
+# Stop all ROS2 nodes
+docker-compose -f docker/docker-compose.yml exec ackermann_slam bash -c \
+  "pkill -9 -f 'ros2|gz|ruby|MicroXRCE|px4_offboard|px4_vision'"
+```
+
+### Test Results
+
+#### DDS & VO Pipeline
+
+| Metric | Result | Pass |
+|--------|--------|------|
+| DDS client status | Connected, timesync converged | PASS |
+| DDS payload | TX=1.6 KB/s, RX=6.7 KB/s | PASS |
+| VO input rate (`/fmu/in/vehicle_visual_odometry`) | ~50 Hz | PASS |
+| VO quality | 100 | PASS |
+| Odom source rate (`/odom`) | ~30 Hz | PASS |
+
+#### EKF2 Fusion
+
+| Metric | Result | Pass |
+|--------|--------|------|
+| EKF2 attitude | 1 (valid) | PASS |
+| EKF2 local position | 1 (valid) | PASS |
+| EKF2 global position | 0 (expected — no GPS) | PASS |
+| cs_ev_pos | True | PASS |
+| cs_ev_yaw | True | PASS |
+| cs_ev_vel | True | PASS |
+| Fault status changes | 0 | PASS |
+| xy_valid / z_valid | True / True | PASS |
+| EPH / EPV | 0.02 / 0.11 | PASS |
+
+#### Mode Switching
+
+| Test | nav_state | failsafe | arming | Pass |
+|------|-----------|----------|--------|------|
+| Hold mode | 4 | false | — | PASS |
+| Manual mode | 17 | false | — | PASS |
+| Arm in Manual | 0 | false | 2 (Armed) | PASS |
+| Arm in Hold (no origin) | 4 | false | 1 (Blocked) | EXPECTED |
+| Set GPS origin | — | — | — | PASS |
+| Arm in Hold (with origin) | 4 | false | 2 (Armed) | PASS |
+
+Hold mode requires `home_position_invalid=false`, which needs a global position reference.
+Without GPS, set the origin manually via MAVLink `SET_GPS_GLOBAL_ORIGIN` +
+`MAV_CMD_DO_SET_HOME` (see Phase 6). After setting the origin, Hold mode arms successfully.
+
+#### Memory
+
+| Metric | Value | Pass |
+|--------|-------|------|
+| Free RAM with DDS+VO running | 38.9 KB / 231 KB | PASS |
+| Largest free block | 11.2 KB | PASS |
+
+### Key Findings
+
+1. **RAM is the critical constraint.** The Cube Black has only 231 KB. Default PX4 modules
+   leave ~12 KB free — not enough for DDS traffic. Stopping GPS + TELEM1 MAVLink frees
+   ~28 KB, bringing free RAM to ~40 KB which allows DDS and USB MAVLink to coexist.
+
+2. **Logger is already off** on this build variant, so no additional savings there.
+
+3. **USB CDC is flaky.** The PX4 USB ACM port occasionally fails to respond after
+   rapid open/close cycles. The `px4_cmd.sh` wrapper (and underlying `px4_cmd.py`) includes
+   retry logic (3 attempts with 2s delay) to handle this.
+
+4. **`commander status` output doesn't route through SERIAL_CONTROL.** Use ROS2
+   `vehicle_status_v2` topic (via DDS) instead for status verification.
+
+5. **DDS topic naming:** PX4 publishes with `_v2` suffix (e.g., `/fmu/out/vehicle_status_v2`)
+   and uses BEST_EFFORT + TRANSIENT_LOCAL QoS.
+
+6. **CBRK_SUPPLY_CHK=894281** is required for bench testing without a battery —
+   otherwise `pre_flight_checks_pass` stays false due to 0.03V supply voltage.
+
+### Tools
+
+| Tool | Location | Purpose |
+|------|----------|---------|
+| `px4_cmd.sh` | `scripts/px4_cmd.sh` | Host-side wrapper: run PX4 NSH commands via MAVLink SERIAL_CONTROL |
+| `px4_cmd.py` | `scripts/px4_cmd.py` | Python implementation of MAVLink SERIAL_CONTROL (device ID 10) |
+| `check_hw_connected.sh` | `scripts/check_hw_connected.sh` | Poll `/dev/ttyUSB0` until CubePilot appears |
+| `pub_odom.sh` | `scripts/pub_odom.sh` | Publish fake 30 Hz odometry to `/odom` |
+| `pub_tf.sh` | `scripts/pub_tf.sh` | Static TF: odom → ackermann/base_link |
+| `start_microxrce_agent.sh` | `scripts/start_microxrce_agent.sh` | Start DDS agent on TELEM2 |
+| `start_px4_bringup_vo.sh` | `scripts/start_px4_bringup_vo.sh` | Launch px4_bringup with VO bridge |
