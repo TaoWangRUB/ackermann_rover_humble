@@ -2,15 +2,13 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction
-from launch.conditions import IfCondition, UnlessCondition
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
 def _launch_nodes(context, *args, **kwargs):
     """Launch the PX4 mode node and optionally the VO bridge."""
     mode_type = LaunchConfiguration('mode_type').perform(context)
-    use_legacy = LaunchConfiguration('use_legacy_bridge').perform(context)
     enable_vo = LaunchConfiguration('enable_vo_bridge').perform(context)
     odom_topic = LaunchConfiguration('odom_topic').perform(context)
     odom_frame = LaunchConfiguration('odom_frame').perform(context)
@@ -36,43 +34,30 @@ def _launch_nodes(context, *args, **kwargs):
             )
         )
 
-    # ── Mode node ─────────────────────────────────────────────────────────
-    if use_legacy.lower() == 'true':
-        # Legacy Python offboard bridge
-        nodes.append(
-            Node(
-                package='px4_bringup',
-                executable='px4_bridge_node.py',
-                name='px4_dds_bridge',
-                output='screen',
-                parameters=[config_file],
-            )
-        )
-    else:
-        # C++ custom mode via px4_ros2_interface_lib
-        mode_executables = {
-            'trajectory': 'offboard_trajectory_mode',
-            'speed_steering': 'rover_speed_steering_mode',
-            'speed_attitude': 'rover_speed_attitude_mode',
-            'manual': 'rover_manual_mode',
-        }
+    # ── Mode node (C++ custom mode via px4_ros2_interface_lib) ────────────
+    mode_executables = {
+        'trajectory': 'offboard_trajectory_mode',
+        'speed_steering': 'rover_speed_steering_mode',
+        'speed_attitude': 'rover_speed_attitude_mode',
+        'manual': 'rover_manual_mode',
+    }
 
-        executable = mode_executables.get(mode_type)
-        if executable is None:
-            raise ValueError(
-                f"Unknown mode_type '{mode_type}'. "
-                f"Valid options: {list(mode_executables.keys())}"
-            )
-
-        nodes.append(
-            Node(
-                package='px4_bringup',
-                executable=executable,
-                name=executable,
-                output='screen',
-                parameters=[config_file],
-            )
+    executable = mode_executables.get(mode_type)
+    if executable is None:
+        raise ValueError(
+            f"Unknown mode_type '{mode_type}'. "
+            f"Valid options: {list(mode_executables.keys())}"
         )
+
+    nodes.append(
+        Node(
+            package='px4_bringup',
+            executable=executable,
+            name=executable,
+            output='screen',
+            parameters=[config_file],
+        )
+    )
 
     return nodes
 
@@ -83,12 +68,6 @@ def generate_launch_description():
         'mode_type',
         default_value='speed_steering',
         description='PX4 mode type: trajectory, speed_steering, speed_attitude, or manual'
-    )
-
-    use_legacy_arg = DeclareLaunchArgument(
-        'use_legacy_bridge',
-        default_value='false',
-        description='Use legacy Python offboard bridge instead of C++ custom modes'
     )
 
     # ── VO bridge ─────────────────────────────────────────────────────────
@@ -118,7 +97,6 @@ def generate_launch_description():
 
     return LaunchDescription([
         mode_type_arg,
-        use_legacy_arg,
         enable_vo_arg,
         odom_topic_arg,
         odom_frame_arg,

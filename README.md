@@ -92,7 +92,7 @@ Always run this before starting a new simulation session to avoid stale processe
 
 ## PX4 Bridge (`px4_bringup`)
 
-The `px4_bringup` package provides both Python and C++ bridges between the ROS 2 navigation stack and PX4 autopilot. Three C++ custom flight modes are implemented using the [`px4_ros2_interface_lib`](https://github.com/Auterion/px4-ros2-interface-lib) (added as a git submodule), plus two legacy Python bridge nodes.
+The `px4_bringup` package provides C++ bridges between the ROS 2 navigation stack and PX4 autopilot. Four C++ custom flight modes are implemented using the [`px4_ros2_interface_lib`](https://github.com/Auterion/px4-ros2-interface-lib) (added as a git submodule), plus a Python odometry bridge.
 
 ### Modes
 
@@ -114,8 +114,8 @@ ros2 launch px4_bringup px4_bringup.launch.py mode_type:=trajectory
 # Heading-hold mode
 ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_attitude
 
-# Legacy Python offboard bridge (fallback/debug)
-ros2 launch px4_bringup px4_bringup.launch.py use_legacy_bridge:=true
+# Open-loop manual mode
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=manual
 ```
 
 ### Odometry Bridge

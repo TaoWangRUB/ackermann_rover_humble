@@ -77,6 +77,14 @@ exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
   # Switch to Hold mode so preflight check passes (Manual mode requires RC).
   ${PX4_BUILD_DIR}/bin/px4-commander mode auto:loiter
 
+  # Set EKF global origin (SET_GPS_GLOBAL_ORIGIN) — required for Hold without GPS.
+  # Without a global position reference, home_position_invalid stays true and
+  # arming in Hold is blocked.
+  ${PX4_BUILD_DIR}/bin/px4-commander set_ekf_origin 51.4934 7.4120 100.0
+
+  # Set home position to current location (MAV_CMD_DO_SET_HOME).
+  ${PX4_BUILD_DIR}/bin/px4-commander set_home
+
   # === Actuator Test Notes ===
   # To test motors/servos via actuator_test, the rover MUST be DISARMED.
   # When armed (even in Hold mode), PX4's rover controller sends zero-velocity

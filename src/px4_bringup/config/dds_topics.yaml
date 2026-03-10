@@ -40,7 +40,7 @@ publications:
 
   - topic: /fmu/out/mode_completed
     type: px4_msgs::msg::ModeCompleted
-    rate_limit: 50.
+    rate_limit: 10.
 
   - topic: /fmu/out/battery_status
     type: px4_msgs::msg::BatteryStatus
@@ -62,8 +62,8 @@ publications:
   # DISABLED:   type: px4_msgs::msg::ManualControlSetpoint
   # DISABLED:   rate_limit: 25.
 
-  # DISABLED: - topic: /fmu/out/message_format_response
-  # DISABLED:   type: px4_msgs::msg::MessageFormatResponse
+  - topic: /fmu/out/message_format_response
+    type: px4_msgs::msg::MessageFormatResponse
 
   # DISABLED: - topic: /fmu/out/position_setpoint_triplet
   # DISABLED:   type: px4_msgs::msg::PositionSetpointTriplet

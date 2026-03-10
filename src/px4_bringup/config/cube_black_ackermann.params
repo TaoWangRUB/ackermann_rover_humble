@@ -2,7 +2,18 @@
 # PX4 Parameter File — Cube Black (FMUv3) Ackermann Rover
 # ============================================================================
 #
-# Load via QGroundControl:  Vehicle Setup → Parameters → Tools → Load from file
+# RECOMMENDED: Use the MAVLink upload script instead of QGC file loading.
+# It handles airframe reboot ordering and verifies every parameter.
+#
+#   ./scripts/upload_params.sh              # upload all params
+#   ./scripts/upload_params.sh --verify-only  # verify current values
+#
+# QGC fallback (two-pass procedure):
+#   1. Vehicle Setup → Parameters → Tools → Load from file
+#      Load ONLY SYS_AUTOSTART=51000, then reboot the vehicle.
+#   2. After reboot, load this full file again (remaining params).
+#   3. Reboot once more (UXRCE_DDS_CFG, SER_TEL2_BAUD require reboot).
+#   ⚠ All fields MUST be tab-separated — spaces cause silent skips.
 #
 # Target hardware:  Cube Black (STM32F427, 2 MB flash, FMUv3)
 # Airframe:         51000 — Generic Rover Ackermann
@@ -58,12 +69,12 @@
 1	1	EKF2_EV_DELAY	50.0	9
 
 # RO_SPEED_LIM: max speed limit
-1   1   RO_SPEED_LIM    2.0 9
+1	1	RO_SPEED_LIM	2.0	9
 
 # EV position relative to base_link
-1   1   EKF2_EV_POS_X   0.1    9
-1   1   EKF2_EV_POS_Y   0.0    9
-1   1   EKF2_EV_POS_Z   0.1    9
+1	1	EKF2_EV_POS_X	0.1	9
+1	1	EKF2_EV_POS_Y	0.0	9
+1	1	EKF2_EV_POS_Z	0.1	9
 
 # ── EKF2: Disable GPS (indoor / no GPS on rover) ────────────────────────────
 1	1	EKF2_GPS_CTRL	0	6
@@ -80,15 +91,22 @@
 # TELEM2 baud rate: 921600 for DDS throughput
 1	1	SER_TEL2_BAUD	921600	6
 
+# ── RAM Saving (Cube Black has only 231 KB) ─────────────────────────────────
+# Disable GPS serial port — module never starts, frees ~6 KB
+1	1	GPS_1_CONFIG	0	6
+
+# Disable TELEM1 MAVLink — only USB MAVLink needed, frees ~17 KB
+1	1	MAV_1_CONFIG	0	6
+
+# Disable SD logger at boot — no SD card, saves RAM + CPU
+1	1	SDLOG_BACKEND	0	6
+
 # ── Safety ───────────────────────────────────────────────────────────────────
-# Disable RC requirement (companion computer control only)
-1	1	COM_RC_IN_MODE	4	6
+# RC + MAVLink joystick (companion computer + RC transmitter)
+1	1	COM_RC_IN_MODE	3	6
 
 # Disable manual RC loss failsafe (no RC transmitter on rover)
 1	1	COM_RCL_EXCEPT	4	6
-
-# Geofence action: 0 = None (indoor rover, no geofence needed)
-1	1	GF_ACTION	0	6
 
 # ── Speed Controller Tuning (defaults — tune on real HW) ────────────────────
 # These are PX4 firmware defaults for the rover; listed here for reference.
