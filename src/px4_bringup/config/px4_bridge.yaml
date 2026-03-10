@@ -3,3 +3,7 @@ px4_dds_bridge:
     dds_domain_id: 0
     px4_uav_id: 0
     command_rate_hz: 50.0
+
+rover_speed_steering_mode:
+  ros__parameters:
+    skip_message_compatibility_check: true
