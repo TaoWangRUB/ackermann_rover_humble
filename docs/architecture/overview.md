@@ -266,43 +266,82 @@ PX4 Software-In-The-Loop (SITL) runs alongside Gazebo Harmonic inside the same D
 #### Quick Start (from host)
 
 The helper script `scripts/start_ros2_nodes.sh` wraps `robot_bringup` (and
-optionally `px4_bridge`) so you don't need to source workspaces or type long
-commands:
+optionally `px4_bridge` / VO bridge) so you don't need to source workspaces or
+type long commands:
 
 ```bash
-# Gazebo only (no PX4, no SLAM, no Nav2)
+# ── Gazebo only (ros2_control) ──
 ./scripts/start_ros2_nodes.sh
 
-# Gazebo + PX4 sensors
-./scripts/start_ros2_nodes.sh --px4
+# ── Gazebo + RTAB-Map ──
+./scripts/start_ros2_nodes.sh --rtabmap
 
-# Gazebo + PX4 + px4_bridge (speed_steering)
-./scripts/start_ros2_nodes.sh --px4 --bridge
-
-# Gazebo + PX4 + px4_bridge (trajectory mode)
-./scripts/start_ros2_nodes.sh --px4 --bridge=trajectory
-
-# Gazebo + RTAB-Map + Nav2
+# ── Gazebo + RTAB-Map + Nav2 ──
 ./scripts/start_ros2_nodes.sh --rtabmap --nav2
 
-# Full stack (PX4 + SLAM + Nav2 + bridge)
-./scripts/start_ros2_nodes.sh --px4 --rtabmap --nav2 --bridge
+# ── Gazebo + VO bridge only (ros2_control active, no PX4 mode node) ──
+./scripts/start_ros2_nodes.sh --vo-bridge
 
-# Any combo without RViz
-./scripts/start_ros2_nodes.sh --px4 --no-rviz
+# ── Gazebo + VO bridge + custom odom topic ──
+./scripts/start_ros2_nodes.sh --vo-bridge --odom-topic=/rtabmap/odom
 
-# Build a specific package, then launch
-./scripts/start_ros2_nodes.sh --build=description_robot --px4
+# ── Gazebo + PX4 mode node only (ros2_control active, no VO bridge) ──
+./scripts/start_ros2_nodes.sh --bridge
 
-# Build multiple packages, then launch
-./scripts/start_ros2_nodes.sh --build=description_robot,robot_bringup --px4
+# ── Gazebo + PX4 mode node + VO bridge (ros2_control active) ──
+./scripts/start_ros2_nodes.sh --bridge --vo-bridge
 
-# Build all packages, then launch
-./scripts/start_ros2_nodes.sh --build --px4
+# ── Gazebo + RTAB-Map + Nav2 + VO bridge (ros2_control active) ──
+./scripts/start_ros2_nodes.sh --rtabmap --nav2 --vo-bridge
 
-# Build only (no launch)
-./scripts/start_ros2_nodes.sh --build-only=description_robot
+# ── Gazebo + RTAB-Map + Nav2 + PX4 mode + VO bridge (ros2_control active) ──
+./scripts/start_ros2_nodes.sh --rtabmap --nav2 --bridge --vo-bridge
+
+# ── PX4 SITL (no ros2_control, auto-enables mode + VO) ──
+./scripts/start_ros2_nodes.sh --px4
+
+# ── PX4 SITL + RTAB-Map + Nav2 ──
+./scripts/start_ros2_nodes.sh --px4 --rtabmap --nav2
+
+# ── PX4 SITL + trajectory mode ──
+./scripts/start_ros2_nodes.sh --px4 --bridge=trajectory
+
+# ── Build all, then launch Gazebo ──
+./scripts/start_ros2_nodes.sh --build
+
+# ── Build one package, then launch ──
+./scripts/start_ros2_nodes.sh --build=description_robot
+
+# ── Build only (no launch) ──
+./scripts/start_ros2_nodes.sh --build-only
+./scripts/start_ros2_nodes.sh --build-only=pkg1,pkg2
+
+# ── Any combination + disable RViz ──
+./scripts/start_ros2_nodes.sh --rtabmap --nav2 --vo-bridge --no-rviz
 ```
+
+**Flag reference:**
+
+| Flag               | Effect                                                                 |
+| ------------------- | ---------------------------------------------------------------------- |
+| `--px4`             | PX4 SITL mode (disables ros2_control, auto-enables `--bridge` + `--vo-bridge`) |
+| `--rtabmap`         | Launch RTAB-Map SLAM                                                   |
+| `--nav2`            | Launch Nav2 navigation stack                                           |
+| `--bridge[=MODE]`   | Launch PX4 mode node (default: `speed_steering`; options: `trajectory`, `speed_attitude`, `manual`) |
+| `--vo-bridge`       | Launch VO bridge only (`px4_vision_odom` → `/fmu/in/vehicle_visual_odometry`) |
+| `--odom-topic=TOPIC` | Odometry source for VO bridge (default: `/odometry/filtered`)          |
+| `--no-rviz`         | Disable RViz2                                                          |
+| `--build[=PKG]`     | Build workspace (or specific package) before launching                 |
+| `--build-only[=PKG]` | Build only, do not launch                                             |
+
+**Flag implications:**
+
+| Input              | `enable_px4_sitl` | ros2_control | Mode node | VO bridge |
+| ------------------- | ----------------- | ------------ | --------- | --------- |
+| `--vo-bridge`       | false             | active       | no        | yes       |
+| `--bridge`          | false             | active       | yes       | no        |
+| `--bridge --vo-bridge` | false          | active       | yes       | yes       |
+| `--px4`             | true              | disabled     | yes (auto) | yes (auto) |
 
 For PX4 co-simulation you still need to start MicroXRCEAgent and PX4 SITL in
 separate terminals **before** `--bridge` can register with the FMU:
