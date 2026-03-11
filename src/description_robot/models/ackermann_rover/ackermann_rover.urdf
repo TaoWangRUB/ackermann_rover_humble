@@ -12,6 +12,12 @@
   <xacro:property name="wheel_thickness" value="0.024"/>
   <xacro:property name="base_elevation" value="0.01"/>
 
+  <!-- Reference dimensions from the donkey SDF mesh (model.sdf) -->
+  <xacro:property name="mesh_wheelbase" value="0.2255"/>
+  <xacro:property name="mesh_separation" value="0.200"/>
+  <xacro:property name="mesh_wheel_diameter" value="0.073"/>
+  <xacro:property name="mesh_base_rear_y" value="0.2506"/>
+
   <xacro:property name="d435i_x_offset" value="${10*cm2m + wheel_base/2}"/>
   <xacro:property name="d435i_z_offset" value="${17*cm2m}"/>
 
@@ -75,9 +81,9 @@
 
   <link name="$(arg ns)/base_link">
     <visual>
-      <origin xyz="${0.1371 + wheel_base/2} 0 -.0115" rpy="0 0 ${PI/2}"/>
+      <origin xyz="${mesh_base_rear_y * wheel_base / mesh_wheelbase} 0 -.0115" rpy="0 0 ${PI/2}"/>
       <geometry>
-        <mesh filename="package://description_robot/models/donkey/meshes/BaseReduced.dae" scale="1 1 1"/>
+        <mesh filename="package://description_robot/models/donkey/meshes/BaseReduced.dae" scale="${wheel_separation/mesh_separation} ${wheel_base/mesh_wheelbase} 1"/>
       </geometry>
       <material name="base_color"> <!-- Color in IGN and Rviz2 (inside visual tag) -->
         <color rgba="$(arg base_color)"/>
@@ -137,13 +143,13 @@
       <visual name="donkey_front_left_wheel_visual">
         <origin xyz="0 0 0" rpy="0 0 ${PI}"/>
         <geometry>
-          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae"/>
+          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae" scale="${wheel_diameter/mesh_wheel_diameter} 1 ${wheel_diameter/mesh_wheel_diameter}"/>
         </geometry>
       </visual>
       <collision name="front_left_wheel_collision">
         <origin xyz="0 -0.015 0" rpy="${-PI/2} 0 0"/>
         <geometry>
-          <cylinder radius="0.0365" length="0.03"/>
+          <cylinder radius="${wheel_diameter/2}" length="0.03"/>
         </geometry>
         <surface>
           <friction>
@@ -194,13 +200,13 @@
       <visual name="donkey_front_right_wheel_visual">
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae"/>
+          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae" scale="${wheel_diameter/mesh_wheel_diameter} 1 ${wheel_diameter/mesh_wheel_diameter}"/>
         </geometry>
       </visual>
       <collision name="front_right_wheel_collision">
         <origin xyz="0 0.015 0" rpy="${-PI/2} 0 0"/>
         <geometry>
-          <cylinder radius="0.0365" length="0.03"/>
+          <cylinder radius="${wheel_diameter/2}" length="0.03"/>
         </geometry>
         <surface>
           <friction>
@@ -234,13 +240,13 @@
       <visual name="donkey_rear_left_wheel_visual">
         <origin xyz="0 0 0" rpy="0 0 ${PI}"/>
         <geometry>
-          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae"/>
+          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae" scale="${wheel_diameter/mesh_wheel_diameter} 1 ${wheel_diameter/mesh_wheel_diameter}"/>
         </geometry>
       </visual>
       <collision name="rear_left_wheel_collision">
         <origin xyz="0 -0.015 0" rpy="${-PI/2} 0 0"/>
         <geometry>
-          <cylinder radius="0.0365" length="0.03"/>
+          <cylinder radius="${wheel_diameter/2}" length="0.03"/>
         </geometry>
         <surface>
           <friction>
@@ -274,13 +280,13 @@
       <visual name="donkey_rear_right_wheel_visual">
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae"/>
+          <mesh filename="package://description_robot/models/donkey/meshes/Wheel.dae" scale="${wheel_diameter/mesh_wheel_diameter} 1 ${wheel_diameter/mesh_wheel_diameter}"/>
         </geometry>
       </visual>
       <collision name="rear_right_wheel_collision">
         <origin xyz="0 0.015 0" rpy="${-PI/2} 0 0"/>
         <geometry>
-          <cylinder radius="0.0365" length="0.03"/>
+          <cylinder radius="${wheel_diameter/2}" length="0.03"/>
         </geometry>
         <surface>
           <friction>
@@ -425,9 +431,6 @@
     <plugin 
       filename="gz-sim-joint-state-publisher-system" 
       name="gz::sim::systems::JointStatePublisher">
-      <ros>
-        <namespace>$(arg ns)</namespace>
-      </ros>
       <topic>joint_states</topic>
     </plugin>
 

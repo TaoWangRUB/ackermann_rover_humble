@@ -290,6 +290,18 @@ commands:
 
 # Any combo without RViz
 ./scripts/start_ros2_nodes.sh --px4 --no-rviz
+
+# Build a specific package, then launch
+./scripts/start_ros2_nodes.sh --build=description_robot --px4
+
+# Build multiple packages, then launch
+./scripts/start_ros2_nodes.sh --build=description_robot,robot_bringup --px4
+
+# Build all packages, then launch
+./scripts/start_ros2_nodes.sh --build --px4
+
+# Build only (no launch)
+./scripts/start_ros2_nodes.sh --build-only=description_robot
 ```
 
 For PX4 co-simulation you still need to start MicroXRCEAgent and PX4 SITL in

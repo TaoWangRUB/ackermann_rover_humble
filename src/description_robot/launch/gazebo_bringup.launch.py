@@ -12,7 +12,7 @@ from launch.actions import (
     SetEnvironmentVariable,
     RegisterEventHandler,
 )
-from launch.conditions import UnlessCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, TextSubstitution, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -176,7 +176,21 @@ def generate_launch_description() -> LaunchDescription:
         ),
         condition=UnlessCondition(LaunchConfiguration('enable_px4_sitl')),
     )
-    
+
+    # When PX4 SITL drives the joints (no ros2_control / joint_state_broadcaster),
+    # bridge the Gazebo JointStatePublisher output so robot_state_publisher can
+    # compute wheel TFs.
+    joint_state_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=[
+            '/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model',
+        ],
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+        condition=IfCondition(LaunchConfiguration('enable_px4_sitl')),
+    )
+
     return LaunchDescription(
         [
             declare_use_sim_time,
@@ -201,5 +215,6 @@ def generate_launch_description() -> LaunchDescription:
             #joint_state_publisher,
             robot_state_publisher,
             ros2_controller_callback,
+            joint_state_bridge,
         ]
     )
