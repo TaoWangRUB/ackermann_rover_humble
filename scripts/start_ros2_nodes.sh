@@ -12,6 +12,10 @@
 #   ./scripts/start_ros2_nodes.sh --rtabmap --nav2          # Gazebo + RTAB-Map + Nav2
 #   ./scripts/start_ros2_nodes.sh --px4 --rtabmap --nav2   # Full stack (PX4 + SLAM + Nav2)
 #   ./scripts/start_ros2_nodes.sh --no-rviz                # Disable RViz
+#   ./scripts/start_ros2_nodes.sh --build                   # Build all pkgs, then launch
+#   ./scripts/start_ros2_nodes.sh --build=description_robot # Build one pkg, then launch
+#   ./scripts/start_ros2_nodes.sh --build-only              # Build all pkgs, no launch
+#   ./scripts/start_ros2_nodes.sh --build-only=pkg1,pkg2    # Build selected pkgs, no launch
 #
 # Prerequisites:
 #   1. Docker container must be running (docker-compose up -d)
@@ -30,6 +34,9 @@ NAV2="false"
 RVIZ="true"
 BRIDGE=""
 BRIDGE_MODE="speed_steering"
+BUILD="false"
+BUILD_ONLY="false"
+BUILD_PKGS=""
 
 # Parse arguments
 for arg in "$@"; do
@@ -40,9 +47,13 @@ for arg in "$@"; do
         --no-rviz)      RVIZ="false" ;;
         --bridge)       BRIDGE="true" ;;
         --bridge=*)     BRIDGE="true"; BRIDGE_MODE="${arg#--bridge=}" ;;
+        --build)        BUILD="true" ;;
+        --build=*)      BUILD="true"; BUILD_PKGS="${arg#--build=}" ;;
+        --build-only)   BUILD="true"; BUILD_ONLY="true" ;;
+        --build-only=*) BUILD="true"; BUILD_ONLY="true"; BUILD_PKGS="${arg#--build-only=}" ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: $0 [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]]"
+            echo "Usage: $0 [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--build[=pkg]] [--build-only[=pkg,pkg]]"
             exit 1
             ;;
     esac
@@ -51,6 +62,24 @@ done
 # If --bridge is set without --px4, enable PX4 implicitly
 if [[ "${BRIDGE}" == "true" && "${PX4}" == "false" ]]; then
     PX4="true"
+fi
+
+# ── Build step (if requested) ──
+if [[ "${BUILD}" == "true" ]]; then
+    BUILD_CMD="source /opt/ros/\$ROS_DISTRO/setup.bash && cd /workspace && colcon build --symlink-install"
+    if [[ -n "${BUILD_PKGS}" ]]; then
+        # Replace commas with spaces for --packages-select
+        BUILD_CMD+=" --packages-select ${BUILD_PKGS//,/ }"
+        echo "Building packages: ${BUILD_PKGS}..."
+    else
+        echo "Building all packages..."
+    fi
+    docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "${BUILD_CMD}"
+    echo ""
+    if [[ "${BUILD_ONLY}" == "true" ]]; then
+        echo "Build complete. Skipping launch (--build-only)."
+        exit 0
+    fi
 fi
 
 echo "Launching ROS 2 nodes inside Docker container..."
