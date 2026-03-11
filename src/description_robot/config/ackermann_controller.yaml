@@ -37,8 +37,8 @@ ackermann_steering_controller:
     wheelbase: 0.174
     front_wheel_track: 0.174
     rear_wheel_track: 0.174
-    front_wheels_radius: 0.038
-    rear_wheels_radius: 0.038
+    front_wheels_radius: 0.0385
+    rear_wheels_radius: 0.0385
     front_steering: true
     reference_timeout: 0.0
     use_stamped_vel: true
