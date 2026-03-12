@@ -7,3 +7,8 @@ px4_dds_bridge:
 rover_speed_steering_mode:
   ros__parameters:
     skip_message_compatibility_check: true
+
+rover_manual_mode:
+  ros__parameters:
+    skip_message_compatibility_check: true
+    use_stamped: true
