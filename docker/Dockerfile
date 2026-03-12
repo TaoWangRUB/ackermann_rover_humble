@@ -107,6 +107,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     gdb \
     dmidecode \
     gcc-arm-none-eabi \
+    libnewlib-arm-none-eabi \
+    libstdc++-arm-none-eabi-newlib \
     && rm -rf /var/lib/apt/lists/*
 
 # PX4 Python dependencies

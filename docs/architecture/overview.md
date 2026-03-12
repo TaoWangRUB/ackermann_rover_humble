@@ -771,6 +771,10 @@ The script:
 4. Reports binary size vs. 2 MB flash limit
 5. Restores the original `dds_topics.yaml` on exit
 
+> **Custom patch in PX4-Autopilot:** `src/modules/commander/HealthAndArmingChecks/checks/externalChecks.cpp`
+> has a one-line change to tolerate XRCE-DDS stalls (see Key Finding 7 in the HW test section).
+> This patch must be present in the PX4 source tree before running the build script.
+
 Flash the resulting firmware via QGC: **Vehicle Setup → Firmware → Advanced → Custom firmware file** (`/px4/build/px4_fmu-v3_rover/px4_fmu-v3_rover.px4`).
 
 ### VO Pipeline (Real Hardware)
@@ -1256,6 +1260,41 @@ Without GPS, set the origin manually via MAVLink `SET_GPS_GLOBAL_ORIGIN` +
 
 6. **CBRK_SUPPLY_CHK=894281** is required for bench testing without a battery —
    otherwise `pre_flight_checks_pass` stays false due to 0.03V supply voltage.
+
+7. **XRCE-DDS stall causes custom mode unregistration when VO bridge is active.**
+   When `px4_vision_odom.py` publishes `vehicle_visual_odometry` at ≥10 Hz, the
+   `uxrce_dds_client` on the STM32F427 occasionally stalls for up to ~1 second
+   (measured: `cycle max 1012245us`). During the stall, `arming_check_reply`
+   messages sit in the UART RX buffer. When XRCE finally processes them,
+   `_current_request_id` in `externalChecks.cpp` has advanced by 3+ cycles
+   (one per 300ms `UPDATE_INTERVAL`). The original code required an exact ID
+   match; stale replies were silently discarded. After 10 consecutive missed
+   cycles (3 seconds), PX4 marks the mode `unresponsive=true` and stops sending
+   check requests to it. The ROS 2 library's 4-second watchdog then fires and
+   calls `rclcpp::shutdown()` — visible in logs as "Unregistering".
+
+   **Root cause chain:**
+   `VO at 10 Hz → XRCE stall ~1s → arming_check_reply arrives 3+ cycles late
+   → request_id mismatch → num_no_response++ → unresponsive → ROS 2 watchdog`
+
+   **Fix applied (`PX4-Autopilot/src/modules/commander/HealthAndArmingChecks/checks/externalChecks.cpp`):**
+   Accept replies within a 5-cycle window instead of requiring exact ID match:
+   ```cpp
+   // Old: exact match only
+   if (!timed_out && valid && _current_request_id == reply.request_id)
+   // New: accept replies up to 5 cycles (1.5 s) stale
+   if (!timed_out && valid && (uint8_t)(_current_request_id - reply.request_id) <= 5)
+   ```
+   With a 1s max stall and 300ms cycle, replies arrive at most 3-4 cycles late —
+   within the 5-cycle window. `num_no_response` is reset on acceptance, so
+   isolated stalls no longer accumulate toward the unresponsive threshold.
+   Rebuild and flash firmware after this change: `./scripts/build_px4_rover_fw.sh`.
+
+   **Additional contributor:** MAVLink USB link saturation (`mavlink_if1` at
+   57600 baud with 21 KB/s TX demand → `tx_overflows: 6114`). The overflowing
+   TX buffer causes `mavlink_if1` to spin at ~15% CPU, preempting
+   `uxrce_dds_client` (same priority 100) and worsening stall duration.
+   Mitigate by reducing MAVLink telemetry rates: `param set MAV_0_RATE 4800`.
 
 ### Tools
 
