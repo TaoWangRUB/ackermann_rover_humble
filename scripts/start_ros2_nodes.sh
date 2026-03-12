@@ -10,6 +10,10 @@
 #   --bridge[=MODE]    Launch PX4 mode node (default: speed_steering; options: trajectory, speed_attitude, manual)
 #   --vo-bridge        Launch VO bridge (px4_vision_odom → /fmu/in/vehicle_visual_odometry)
 #   --odom-topic=TOPIC Odometry source for VO bridge (default: /odometry/filtered)
+#   --odom-transport   Odometry transport for VO: 'xrce' (default) or 'mavlink'
+#   --mav-device       MAVLink device for MAVLink transport (default: /dev/ttyACM0)
+#   --mav-baud         MAVLink baud (default: 57600)
+#   --mav-rate         MAVLink publish rate (default: 20)
 #   --no-rviz          Disable RViz2
 #   --build[=PKG]      Build workspace (or specific pkg) before launching
 #   --build-only[=PKG] Build only, do not launch
@@ -70,6 +74,8 @@
 #
 #   ── Any combination + disable RViz ──
 #   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --vo-bridge --no-rviz
+#   # Use MAVLink transport for VO (uses px4_mavlink_vpe defaults):
+#   ./scripts/start_ros2_nodes.sh --vo-bridge --odom-transport=mavlink
 #
 # Prerequisites:
 #   1. Docker container must be running (docker-compose up -d)
@@ -90,6 +96,7 @@ BRIDGE=""
 BRIDGE_MODE="speed_steering"
 VO_BRIDGE="false"
 ODOM_TOPIC="/odometry/filtered"
+ODOM_TRANSPORT="xrce"
 BUILD="false"
 BUILD_ONLY="false"
 BUILD_PKGS=""
@@ -105,6 +112,7 @@ for arg in "$@"; do
         --bridge=*)     BRIDGE="true"; BRIDGE_MODE="${arg#--bridge=}" ;;
         --vo-bridge)    VO_BRIDGE="true" ;;
         --odom-topic=*) ODOM_TOPIC="${arg#--odom-topic=}" ;;
+        --odom-transport=*) ODOM_TRANSPORT="${arg#--odom-transport=}" ;;
         --build)        BUILD="true" ;;
         --build=*)      BUILD="true"; BUILD_PKGS="${arg#--build=}" ;;
         --build-only)   BUILD="true"; BUILD_ONLY="true" ;;
@@ -154,6 +162,9 @@ if [[ "${VO_BRIDGE}" == "true" ]]; then
     echo "  VO bridge:    ${VO_BRIDGE}"
     echo "  Odom topic:   ${ODOM_TOPIC}"
 fi
+if [[ "${VO_BRIDGE}" == "true" ]]; then
+    echo "  Odom transport:${ODOM_TRANSPORT}"
+fi
 echo ""
 
 # Build the launch command
@@ -174,12 +185,17 @@ if [[ "${BRIDGE}" == "true" || "${VO_BRIDGE}" == "true" ]]; then
 
     if [[ "${BRIDGE}" == "true" ]]; then
         # Launch mode node + optionally VO bridge via px4_bringup.launch.py
-        LAUNCH_CMD+=" ros2 launch px4_bringup px4_bringup.launch.py mode_type:=${BRIDGE_MODE} enable_vo_bridge:=${VO_BRIDGE} odom_topic:=${ODOM_TOPIC} &"
+        LAUNCH_CMD+=" ros2 launch px4_bringup px4_bringup.launch.py mode_type:=${BRIDGE_MODE} enable_vo_bridge:=${VO_BRIDGE} odom_topic:=${ODOM_TOPIC} odometry_transport:=${ODOM_TRANSPORT} &"
         LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
     else
-        # VO bridge only — launch the node directly (no mode node)
-        LAUNCH_CMD+=" ros2 run px4_bringup px4_vision_odom.py --ros-args -p odom_topic:=${ODOM_TOPIC} -p odom_frame:=odom -p base_frame:=ackermann/base_link &"
-        LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
+        # VO bridge only — launch either XRCE node or MAVLink bridge directly
+        if [[ "${ODOM_TRANSPORT}" == "xrce" ]]; then
+            LAUNCH_CMD+=" ros2 run px4_bringup px4_vision_odom.py --ros-args -p odom_topic:=${ODOM_TOPIC} -p odom_frame:=odom -p base_frame:=ackermann/base_link &"
+            LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
+        else
+            LAUNCH_CMD+=" /workspace/scripts/px4_mavlink_vpe.sh --topic ${ODOM_TOPIC} &"
+            LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
+        fi
     fi
 
     LAUNCH_CMD+=" trap 'kill \$PIDS 2>/dev/null; wait' EXIT INT TERM;"

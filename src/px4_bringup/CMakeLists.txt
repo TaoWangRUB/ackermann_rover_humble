@@ -85,6 +85,7 @@ install(DIRECTORY
 install(PROGRAMS
   scripts/px4_offboard_control.py
   scripts/px4_vision_odom.py
+  scripts/px4_mavlink_vpe.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
