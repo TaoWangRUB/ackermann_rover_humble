@@ -88,7 +88,7 @@ def enu_flu_to_ned_frd(pos_enu, q_enu_xyzw, vel_flu):
 # ── ROS 2 node ───────────────────────────────────────────────────────────────
 
 class MavlinkVPENode(Node):
-    def __init__(self, device: str, baud: int, rate_hz: float, odom_topic: str):
+    def __init__(self, conn_target: str, baud: int, rate_hz: float, odom_topic: str):
         super().__init__('mavlink_vpe')
 
         self._lock       = threading.Lock()
@@ -99,11 +99,17 @@ class MavlinkVPENode(Node):
         self._last_odom  = time.time()
         self._odom_timeout = 5.0
 
-        # MAVLink connection
-        self.get_logger().info(f'Connecting MAVLink: {device} @ {baud} baud …')
-        self._mav = mavutil.mavlink_connection(device, baud=baud,
-                                               source_system=1,
-                                               source_component=mavutil.mavlink.MAV_COMP_ID_PERIPHERAL)
+        # MAVLink connection (serial or UDP depending on conn_target)
+        self.get_logger().info(f'Connecting MAVLink: {conn_target} @ {baud} baud …')
+        if isinstance(conn_target, str) and (conn_target.startswith('udpout:') or conn_target.startswith('udp:') or conn_target.startswith('udpin:')):
+            # UDP connection string (no baud)
+            self._mav = mavutil.mavlink_connection(conn_target, source_system=1,
+                                                   source_component=mavutil.mavlink.MAV_COMP_ID_PERIPHERAL)
+        else:
+            # Serial device
+            self._mav = mavutil.mavlink_connection(conn_target, baud=baud,
+                                                   source_system=1,
+                                                   source_component=mavutil.mavlink.MAV_COMP_ID_PERIPHERAL)
         self.get_logger().info('MAVLink connection open')
 
         # ROS subscriber
@@ -197,6 +203,10 @@ def main():
                         help='MAVLink serial device (default: /dev/ttyACM0)')
     parser.add_argument('--baud',   type=int, default=57600,
                         help='Baud rate (default: 57600)')
+    parser.add_argument('--udp-host', default=None,
+                        help='Optional UDP host to send MAVLink to (e.g. 127.0.0.1)')
+    parser.add_argument('--udp-port', type=int, default=None,
+                        help='Optional UDP port to send MAVLink to (e.g. 14550)')
     parser.add_argument('--rate',   type=float, default=20.0,
                         help='Publish rate in Hz (default: 20)')
     parser.add_argument('--topic',  default='/odometry/filtered',
@@ -206,8 +216,14 @@ def main():
     args, _ = parser.parse_known_args(
         [a for a in sys.argv[1:] if not a.startswith('__')])
 
+    # Determine connection target: UDP if udp-host/udp-port provided, else serial device
+    if args.udp_host and args.udp_port:
+        conn = f'udpout:{args.udp_host}:{args.udp_port}'
+    else:
+        conn = args.device
+
     rclpy.init()
-    node = MavlinkVPENode(args.device, args.baud, args.rate, args.topic)
+    node = MavlinkVPENode(conn, args.baud, args.rate, args.topic)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
