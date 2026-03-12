@@ -90,12 +90,12 @@ publications:
   # DISABLED:   type: px4_msgs::msg::VehicleAttitude
   # DISABLED:   rate_limit: 50.
 
-  # DISABLED: - topic: /fmu/out/vehicle_control_mode
-  # DISABLED:   type: px4_msgs::msg::VehicleControlMode
-  # DISABLED:   rate_limit: 50.
+  - topic: /fmu/out/vehicle_control_mode
+    type: px4_msgs::msg::VehicleControlMode
+    rate_limit: 10.
 
-  # DISABLED: - topic: /fmu/out/vehicle_command_ack
-  # DISABLED:   type: px4_msgs::msg::VehicleCommandAck
+  - topic: /fmu/out/vehicle_command_ack
+    type: px4_msgs::msg::VehicleCommandAck
 
   # DISABLED: - topic: /fmu/out/vehicle_global_position
   # DISABLED:   type: px4_msgs::msg::VehicleGlobalPosition
@@ -159,11 +159,11 @@ subscriptions:
   - topic: /fmu/in/config_control_setpoints
     type: px4_msgs::msg::VehicleControlMode
 
-  - topic: /fmu/in/distance_sensor
-    type: px4_msgs::msg::DistanceSensor
+  # DISABLED: - topic: /fmu/in/distance_sensor
+  # DISABLED:   type: px4_msgs::msg::DistanceSensor
 
-  - topic: /fmu/in/manual_control_input
-    type: px4_msgs::msg::ManualControlSetpoint
+  # DISABLED: - topic: /fmu/in/manual_control_input
+  # DISABLED:   type: px4_msgs::msg::ManualControlSetpoint
 
   - topic: /fmu/in/offboard_control_mode
     type: px4_msgs::msg::OffboardControlMode
@@ -171,29 +171,29 @@ subscriptions:
   - topic: /fmu/in/onboard_computer_status
     type: px4_msgs::msg::OnboardComputerStatus
 
-  - topic: /fmu/in/obstacle_distance
-    type: px4_msgs::msg::ObstacleDistance
+  # DISABLED: - topic: /fmu/in/obstacle_distance
+  # DISABLED:   type: px4_msgs::msg::ObstacleDistance
 
-  - topic: /fmu/in/sensor_optical_flow
-    type: px4_msgs::msg::SensorOpticalFlow
+  # DISABLED: - topic: /fmu/in/sensor_optical_flow
+  # DISABLED:   type: px4_msgs::msg::SensorOpticalFlow
 
-  - topic: /fmu/in/goto_setpoint
-    type: px4_msgs::msg::GotoSetpoint
+  # DISABLED: - topic: /fmu/in/goto_setpoint
+  # DISABLED:   type: px4_msgs::msg::GotoSetpoint
 
-  - topic: /fmu/in/telemetry_status
-    type: px4_msgs::msg::TelemetryStatus
+  # DISABLED: - topic: /fmu/in/telemetry_status
+  # DISABLED:   type: px4_msgs::msg::TelemetryStatus
 
-  - topic: /fmu/in/trajectory_setpoint
-    type: px4_msgs::msg::TrajectorySetpoint
+  # DISABLED: - topic: /fmu/in/trajectory_setpoint
+  # DISABLED:   type: px4_msgs::msg::TrajectorySetpoint
 
-  - topic: /fmu/in/vehicle_attitude_setpoint
-    type: px4_msgs::msg::VehicleAttitudeSetpoint
+  # DISABLED: - topic: /fmu/in/vehicle_attitude_setpoint
+  # DISABLED:   type: px4_msgs::msg::VehicleAttitudeSetpoint
 
   # DISABLED: - topic: /fmu/in/vehicle_mocap_odometry
   # DISABLED:   type: px4_msgs::msg::VehicleOdometry
 
-  - topic: /fmu/in/vehicle_rates_setpoint
-    type: px4_msgs::msg::VehicleRatesSetpoint
+  # DISABLED: - topic: /fmu/in/vehicle_rates_setpoint
+  # DISABLED:   type: px4_msgs::msg::VehicleRatesSetpoint
 
   - topic: /fmu/in/vehicle_visual_odometry
     type: px4_msgs::msg::VehicleOdometry
@@ -204,17 +204,17 @@ subscriptions:
   - topic: /fmu/in/vehicle_command_mode_executor
     type: px4_msgs::msg::VehicleCommand
 
-  - topic: /fmu/in/vehicle_thrust_setpoint
-    type: px4_msgs::msg::VehicleThrustSetpoint
+  # DISABLED: - topic: /fmu/in/vehicle_thrust_setpoint
+  # DISABLED:   type: px4_msgs::msg::VehicleThrustSetpoint
 
-  - topic: /fmu/in/vehicle_torque_setpoint
-    type: px4_msgs::msg::VehicleTorqueSetpoint
+  # DISABLED: - topic: /fmu/in/vehicle_torque_setpoint
+  # DISABLED:   type: px4_msgs::msg::VehicleTorqueSetpoint
 
-  - topic: /fmu/in/actuator_motors
-    type: px4_msgs::msg::ActuatorMotors
+  # DISABLED: - topic: /fmu/in/actuator_motors
+  # DISABLED:   type: px4_msgs::msg::ActuatorMotors
 
-  - topic: /fmu/in/actuator_servos
-    type: px4_msgs::msg::ActuatorServos
+  # DISABLED: - topic: /fmu/in/actuator_servos
+  # DISABLED:   type: px4_msgs::msg::ActuatorServos
 
   # DISABLED: - topic: /fmu/in/aux_global_position
   # DISABLED:   type: px4_msgs::msg::AuxGlobalPosition
