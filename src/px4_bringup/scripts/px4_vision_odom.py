@@ -48,8 +48,11 @@ class VIOPublisher(Node):
         self.lock           = threading.Lock()
 
         # Timers
-        self.timer        = self.create_timer(1.0,  self.check_odom_status)
-        self.timer_output = self.create_timer(0.05, self.pub_px4_odom)
+        # 5 Hz avoids XRCE-DDS cycle stalls on STM32F427 (Cube Black).
+        # At 20 Hz, back-pressure causes ~1s cycle stalls which push
+        # arming_check_reply request_ids out of sync → watchdog unregisters mode.
+        self.timer        = self.create_timer(1.0, self.check_odom_status)
+        self.timer_output = self.create_timer(0.1, self.pub_px4_odom)
 
         self.get_logger().info(
             f'VIOPublisher ready — topic: {odom_topic} | '
@@ -177,6 +180,8 @@ class VIOPublisher(Node):
 
     def pub_px4_odom(self) -> None:
         with self.lock:
+            if not self.is_publishing:
+                return  # Don't send zero-valued garbage to EKF2 before first odom message
             self.px4_odom.timestamp = int(self.get_clock().now().nanoseconds / 1000)
             self.px4_pub.publish(self.px4_odom)
 
