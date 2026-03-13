@@ -10,7 +10,11 @@ Stage 1 — /fmu/out/vehicle_odometry (NED/FRD) → /px4_vehicle_odom (ENU/FLU)
   Parameters:
     frame_id        (str, 'vehicle_odom')   world frame for the output
     child_frame_id  (str, 'cubepilot_link') body frame for the output
-    publish_tf      (bool, True)            also broadcast TF frame_id → child_frame_id
+
+  Velocity handling (linear):
+    VELOCITY_FRAME_BODY_FRD : negate y and z → body FLU
+    VELOCITY_FRAME_NED      : NED→ENU then rotate world→body via conj(q_enu_flu)
+  Angular velocity is always body FRD per the .msg spec → negate y and z.
 
 Stage 2 — /px4_vehicle_odom → /px4_vehicle_odom_base
   Re-expresses the cubepilot-frame odometry in the rover base frame so it can
@@ -145,8 +149,7 @@ class PX4VehicleOdometry(Node):
         """Convert PX4 VehicleOdometry (NED/FRD) → ROS Odometry (ENU/FLU)."""
 
         # ── Frame sanity checks ───────────────────────────────────────────
-        # Conversion assumes pose_frame = NED and velocity_frame = BODY_FRD.
-        # Drop the message and warn (throttled) if PX4 reports something else.
+        # pose_frame must be NED — drop if not.
         if msg.pose_frame != VehicleOdometry.POSE_FRAME_NED:
             self.get_logger().warn(
                 f'Unexpected pose_frame={msg.pose_frame} '
@@ -156,11 +159,17 @@ class PX4VehicleOdometry(Node):
             )
             return
 
-        if msg.velocity_frame != VehicleOdometry.VELOCITY_FRAME_BODY_FRD:
+        # velocity_frame: PX4 EKF2 publishes VELOCITY_FRAME_NED (1) or
+        # VELOCITY_FRAME_BODY_FRD (3) depending on version/config. Both are
+        # handled below. Any other value is dropped with a warning.
+        vf = msg.velocity_frame
+        if vf not in (VehicleOdometry.VELOCITY_FRAME_NED,
+                      VehicleOdometry.VELOCITY_FRAME_BODY_FRD):
             self.get_logger().warn(
-                f'Unexpected velocity_frame={msg.velocity_frame} '
-                f'(expected VELOCITY_FRAME_BODY_FRD={VehicleOdometry.VELOCITY_FRAME_BODY_FRD}). '
-                'Message dropped — conversion assumes body FRD.',
+                f'Unexpected velocity_frame={vf} '
+                f'(expected VELOCITY_FRAME_NED={VehicleOdometry.VELOCITY_FRAME_NED} '
+                f'or VELOCITY_FRAME_BODY_FRD={VehicleOdometry.VELOCITY_FRAME_BODY_FRD}). '
+                'Message dropped.',
                 throttle_duration_sec=5.0,
             )
             return
@@ -190,11 +199,21 @@ class PX4VehicleOdometry(Node):
         q_enu_flu = self._quat_mul(q_tmp, self._quat_conj(q_flu_to_frd))
         # q_enu_flu is in [x, y, z, w]
 
-        # ── Velocity: body FRD → body FLU ────────────────────────────────
-        # FRD→FLU: forward(x) unchanged, right(y)→left(−y), down(z)→up(−z)
-        vel = msg.velocity           # float[3] in body FRD
-        v_flu = [vel[0], -vel[1], -vel[2]]
+        # ── Linear velocity → body FLU ───────────────────────────────────
+        vel = msg.velocity   # float[3]
+        if vf == VehicleOdometry.VELOCITY_FRAME_BODY_FRD:
+            # Body FRD → body FLU: negate y and z
+            v_flu = [vel[0], -vel[1], -vel[2]]
+        else:
+            # VELOCITY_FRAME_NED: world NED → world ENU → body FLU
+            # NED→ENU: [E, N, U] = [ned[1], ned[0], -ned[2]]
+            v_enu = np.array([vel[1], vel[0], -vel[2]])
+            # Rotate world ENU → body FLU using conj(q_enu_flu)
+            # (q_enu_flu maps body→world; conj maps world→body)
+            v_flu = self._rotate_vec(self._quat_conj(q_enu_flu), v_enu).tolist()
 
+        # Angular velocity is always body FRD per the .msg spec (@VELOCITY_FRAME_BODY_FRD).
+        # FRD→FLU: negate y and z.
         avel = msg.angular_velocity  # float[3] in body FRD
         w_flu = [avel[0], -avel[1], -avel[2]]
 
