@@ -40,7 +40,7 @@ ackermann_steering_controller:
     front_wheels_radius: 0.0385
     rear_wheels_radius: 0.0385
     front_steering: true
-    reference_timeout: 0.0
+    reference_timeout: 2.0
     use_stamped_vel: true
 
     # Rear wheels are the drive wheels
