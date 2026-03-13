@@ -168,6 +168,8 @@ if [[ "${BRIDGE}" == "true" || "${VO_BRIDGE}" == "true" ]]; then
     LAUNCH_CMD+=" PIDS=\$BRINGUP_PID;"
     LAUNCH_CMD+=" echo 'Waiting 5s for Gazebo to start before launching px4 nodes...';"
     LAUNCH_CMD+=" sleep 5;"
+    LAUNCH_CMD+=" source /opt/ros/\$ROS_DISTRO/setup.bash;"
+    LAUNCH_CMD+=" source /workspace/install/setup.bash;"
     LAUNCH_CMD+=" ros2 launch px4_bringup px4_bringup.launch.py"
     LAUNCH_CMD+=" enable_mode_node:=${BRIDGE}"
     LAUNCH_CMD+=" mode_type:=${BRIDGE_MODE}"
