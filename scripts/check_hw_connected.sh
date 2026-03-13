@@ -5,6 +5,11 @@
 #   ./scripts/check_hw_connected.sh /dev/ttyACM0 30  # custom device, 30s timeout
 set -euo pipefail
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
+    exit 0
+fi
+
 DEVICE="${1:-/dev/ttyUSB0}"
 TIMEOUT="${2:-60}"
 INTERVAL=2

@@ -173,7 +173,7 @@ Custom registered modes (`px4_ros2::ModeBase`) differ from traditional offboard 
 | Failsafe       | Basic offboard timeout                            | Full failsafe state machine integration   |
 | Coexistence    | One controller                                    | Multiple modes selectable via RC/QGC      |
 
-### Three Implemented Modes
+### Four Implemented Modes
 
 All modes subscribe to `/cmd_vel` (`geometry_msgs/Twist`) and are implemented as header-only C++ classes under `src/px4_bringup/include/px4_bringup/`.
 
@@ -202,53 +202,45 @@ All modes subscribe to `/cmd_vel` (`geometry_msgs/Twist`) and are implemented as
 - **PX4 controller chain**: Velocity → Attitude → Rate → Control Allocation
 - **Use case**: Heading-hold driving; PX4 handles heading → steering conversion
 
-### Odometry Bridge (`px4_vision_odom.py`)
+#### 4. Rover Manual Mode (`rover_manual_mode`)
 
-Converts `nav_msgs/Odometry` (ENU/FLU) → PX4 `VehicleOdometry` (NED/FRD) at a fixed **20 Hz** output rate (hardcoded `0.05 s` timer period):
-- Position: ENU `(y, x, -z)` → NED (`pose_frame = POSE_FRAME_NED`)
-- Quaternion: `q_ENU→NED · q_FLU→ENU · inv(q_FLU→FRD)` (Hamilton product, not a component swap)
-- Velocity: body FLU `(x, -y, -z)` → body FRD (`velocity_frame = VELOCITY_FRAME_BODY_FRD`)
-- Angular velocity: body FLU `(x, -y, -z)` → body FRD
+- **Setpoint type**: `RoverManualSetpointType`
+- **Behavior**: Pass-through open-loop throttle and steering commands from `/cmd_vel` directly to PX4 without higher-level heading integration. Useful for manual teleoperation or baseline hardware testing where the autopilot should not perform trajectory or heading control.
+- **Conversion**: `linear.x` → throttle command (mapped to forward/backward RPM or velocity proxy), `angular.z` → steering command (mapped to steering angle or normalized steering input). Values are clamped to safety limits defined in PX4 parameters.
+- **Use case**: Direct teleoperation and low-level hardware characterization; not recommended for autonomous planning loops where heading stabilization is desired.
 
-The odom subscriber callback updates internal state; the timer publishes the latest converted message at the fixed rate regardless of input frequency.
+### Odometry Bridge (XRCE)
+
+Two Python bridge nodes are launched together by `--vo-bridge`:
+
+- **`px4_vision_odom.py`** — converts `nav_msgs/Odometry` (ENU/FLU) from `odom_topic` to `VehicleOdometry` (NED/FRD) and publishes to `/fmu/in/vehicle_visual_odometry` via Micro-XRCE-DDS. Coordinate conversion:
+  - Position: ENU `(y, x, -z)` → NED (`pose_frame = POSE_FRAME_NED`)
+  - Quaternion: `q_ENU→NED · q_FLU→ENU · inv(q_FLU→FRD)` (Hamilton product)
+  - Velocity: body FLU `(x, -y, -z)` → body FRD (`velocity_frame = VELOCITY_FRAME_BODY_FRD`)
+  - Angular velocity: body FLU `(x, -y, -z)` → body FRD
+
+- **`px4_vehicle_odometry.py`** — subscribes to `/fmu/out/vehicle_odometry` (NED/FRD from PX4 EKF2) and converts back to ENU/FLU for ROS 2, publishing on `/px4_vehicle_odom` (`frame_id: vehicle_odom`, `child_frame_id: cubepilot_link`) and `/px4_vehicle_odom_base` (re-expressed to `odom → ackermann/base_link` for direct comparison with the EKF odometry).
+
+The `odom_topic` argument applies only to `px4_vision_odom.py` (the input source for the visual odometry feed). `px4_vehicle_odometry.py` always reads from `/fmu/out/vehicle_odometry`.
 
 ### Launch
 
 ```bash
 # Inside Docker:
-ros2 launch px4_bringup px4_bringup.launch.py                              # speed_steering (default)
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=trajectory         # offboard trajectory
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_attitude     # heading-hold
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=manual             # open-loop throttle + steering
+ros2 launch px4_bringup px4_bringup.launch.py                                                     # manual mode only (default)
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=trajectory                              # offboard trajectory
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_attitude                          # heading-hold
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering                          # speed + steering
+ros2 launch px4_bringup px4_bringup.launch.py enable_mode_node:=false enable_vo_bridge:=true     # VO bridge only (no mode node)
+ros2 launch px4_bringup px4_bringup.launch.py enable_vo_bridge:=true odom_topic:=/odometry/filtered  # mode + VO bridge
 
 # From host (parameterized helper):
-./scripts/start_px4_bringup_vo.sh                                           # mode only, no VO
-./scripts/start_px4_bringup_vo.sh --vo-bridge                               # mode + VO bridge
-./scripts/start_px4_bringup_vo.sh --vo-bridge --odom-topic /rtabmap/odom    # custom odom source
-./scripts/start_px4_bringup_vo.sh --mode-type trajectory --vo-bridge        # trajectory mode + VO
-```
-
-### File Structure
-
-```
-src/px4_bringup/
-├── include/px4_bringup/
-│   ├── offboard_trajectory_mode.hpp
-│   ├── rover_speed_steering_mode.hpp
-│   └── rover_speed_attitude_mode.hpp
-├── src/
-│   ├── offboard_trajectory_main.cpp
-│   ├── rover_speed_steering_main.cpp
-│   └── rover_speed_attitude_main.cpp
-├── scripts/
-│   ├── px4_offboard_control.py     # Standalone offboard velocity controller
-│   └── px4_vision_odom.py          # Odometry ENU/FLU → NED/FRD (TF2, 20 Hz)
-├── launch/
-│   └── px4_bringup.launch.py
-├── config/
-│   └── px4_bridge.yaml
-├── CMakeLists.txt
-└── package.xml
+./scripts/start_px4_bringup_vo.sh --bridge                                                        # mode node only (manual)
+./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_steering                             # speed_steering mode only
+./scripts/start_px4_bringup_vo.sh --vo-bridge                                                     # VO bridge only (vision odom + vehicle odom)
+./scripts/start_px4_bringup_vo.sh --bridge --vo-bridge                                            # mode + VO bridge (manual mode)
+./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_steering --vo-bridge                 # speed_steering mode + VO
+./scripts/start_px4_bringup_vo.sh --bridge --vo-bridge --odom-topic /rtabmap/odom                 # mode + VO, custom odom topic
 ```
 
 ## PX4 SITL Co-Simulation
@@ -266,8 +258,8 @@ PX4 Software-In-The-Loop (SITL) runs alongside Gazebo Harmonic inside the same D
 #### Quick Start (from host)
 
 The helper script `scripts/start_ros2_nodes.sh` wraps `robot_bringup` (and
-optionally `px4_bridge` / VO bridge) so you don't need to source workspaces or
-type long commands:
+optionally the px4 VO/mode bridge) so you don't need to source workspaces or
+type long commands.
 
 ```bash
 # ── Gazebo only (ros2_control) ──
@@ -279,25 +271,19 @@ type long commands:
 # ── Gazebo + RTAB-Map + Nav2 ──
 ./scripts/start_ros2_nodes.sh --rtabmap --nav2
 
-# ── Gazebo + VO bridge only (ros2_control active, no PX4 mode node) ──
-./scripts/start_ros2_nodes.sh --vo-bridge
+# ── Gazebo + RTAB-Map + VO bridge (ros2_control active, no PX4 mode node) ──
+./scripts/start_ros2_nodes.sh --rtabmap --vo-bridge
 
-# ── Gazebo + VO bridge + custom odom topic ──
-./scripts/start_ros2_nodes.sh --vo-bridge --odom-topic=/rtabmap/odom
-
-# ── Gazebo + PX4 mode node only (ros2_control active, no VO bridge) ──
-./scripts/start_ros2_nodes.sh --bridge
-
-# ── Gazebo + PX4 mode node + VO bridge (ros2_control active) ──
-./scripts/start_ros2_nodes.sh --bridge --vo-bridge
+# ── Gazebo + RTAB-Map + VO bridge using rtabmap/odom directly (bypass EKF) ──
+./scripts/start_ros2_nodes.sh --rtabmap --vo-bridge --odom-topic=/rtabmap/odom
 
 # ── Gazebo + RTAB-Map + Nav2 + VO bridge (ros2_control active) ──
 ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --vo-bridge
 
 # ── Gazebo + RTAB-Map + Nav2 + PX4 mode + VO bridge (ros2_control active) ──
-./scripts/start_ros2_nodes.sh --rtabmap --nav2 --bridge --vo-bridge
+./scripts/start_ros2_nodes.sh --rtabmap --nav2 --bridge=manual --vo-bridge
 
-# ── PX4 SITL (no ros2_control, auto-enables mode + VO) ──
+# ── PX4 SITL (no ros2_control, auto mode + VO) ──
 ./scripts/start_ros2_nodes.sh --px4
 
 # ── PX4 SITL + RTAB-Map + Nav2 ──
@@ -327,14 +313,9 @@ type long commands:
 | `--px4`             | PX4 SITL mode (disables ros2_control, auto-enables `--bridge` + `--vo-bridge`) |
 | `--rtabmap`         | Launch RTAB-Map SLAM                                                   |
 | `--nav2`            | Launch Nav2 navigation stack                                           |
-| `--bridge[=MODE]`   | Launch PX4 mode node (default: `speed_steering`; options: `trajectory`, `speed_attitude`, `manual`) |
-| `--vo-bridge`       | Launch VO bridge only (`px4_vision_odom` → `/fmu/in/vehicle_visual_odometry`) |
-| `--odom-topic=TOPIC` | Odometry source for VO bridge (default: `/odometry/filtered`)          |
-| `--no-rviz`         | Disable RViz2                                                          |
-| `--build[=PKG]`     | Build workspace (or specific package) before launching                 |
-| `--build-only[=PKG]` | Build only, do not launch                                             |
-
-**Flag implications:**
+| `--bridge[=MODE]`   | Launch PX4 mode node only (default: `speed_steering`; options: `trajectory`, `speed_attitude`, `manual`) |
+| `--vo-bridge`       | Launch VO bridge: `px4_vision_odom.py` (vision odom → PX4) + `px4_vehicle_odometry.py` (PX4 odom → ROS 2) |
+| `--odom-topic=TOPIC` | Odometry topic for `px4_vision_odom.py` only (default: `/odometry/filtered`) |
 
 | Input              | `enable_px4_sitl` | ros2_control | Mode node | VO bridge |
 | ------------------- | ----------------- | ------------ | --------- | --------- |
