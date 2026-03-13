@@ -22,6 +22,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
+    exit 0
+fi
+
 if [[ "${1:-}" == "--serial" ]]; then
     # ── Serial mode (real hardware) ──────────────────────────────────────
     SERIAL_DEV="${2:-/dev/ttyUSB0}"

@@ -6,6 +6,11 @@
 #   ./scripts/stop_all.sh
 set -euo pipefail
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
+    exit 0
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WORKSPACE_DIR="$(dirname "$SCRIPT_DIR")"
 COMPOSE_FILE="${WORKSPACE_DIR}/docker/docker-compose.yml"

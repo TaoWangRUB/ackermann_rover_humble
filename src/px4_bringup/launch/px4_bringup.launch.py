@@ -1,108 +1,23 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction, ExecuteProcess
-from launch.substitutions import LaunchConfiguration
+from launch.actions import DeclareLaunchArgument, LogInfo
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 
-def _launch_nodes(context, *args, **kwargs):
-    """Launch the PX4 mode node and optionally the VO bridge."""
-    mode_type = LaunchConfiguration('mode_type').perform(context)
-    enable_vo = LaunchConfiguration('enable_vo_bridge').perform(context)
-    odom_topic = LaunchConfiguration('odom_topic').perform(context)
-    odom_frame = LaunchConfiguration('odom_frame').perform(context)
-    base_frame = LaunchConfiguration('base_frame').perform(context)
-    odom_transport = LaunchConfiguration('odometry_transport').perform(context)
-    mav_device = LaunchConfiguration('mavlink_device').perform(context)
-    mav_baud = LaunchConfiguration('mavlink_baud').perform(context)
-    mav_rate = LaunchConfiguration('mavlink_rate').perform(context)
-    enable_veh_odom = LaunchConfiguration('enable_vehicle_odometry').perform(context)
-    veh_odom_frame = LaunchConfiguration('vehicle_odom_frame').perform(context)
-    veh_odom_child_frame = LaunchConfiguration('vehicle_odom_child_frame').perform(context)
-
-    nodes = []
+def generate_launch_description():
     pkg_px4_bringup = get_package_share_directory('px4_bringup')
     config_file = os.path.join(pkg_px4_bringup, 'config', 'px4_bridge.yaml')
 
-    # ── VO Bridge: choose XRCE (px4_vision_odom.py) or MAVLink (px4_mavlink_vpe.py)
-    if enable_vo.lower() == 'true':
-        if odom_transport.lower() == 'xrce':
-            nodes.append(
-                Node(
-                    package='px4_bringup',
-                    executable='px4_vision_odom.py',
-                    name='px4_vision_odom',
-                    output='screen',
-                    parameters=[{
-                        'odom_topic': odom_topic,
-                        'odom_frame': odom_frame,
-                        'base_frame': base_frame,
-                    }],
-                )
-            )
-        elif odom_transport.lower() == 'mavlink':
-                # Launch the MAVLink bridge as a package-installed python executable
-                # (installed via CMakeLists install(PROGRAMS ...)). Use Node so
-                # ros2 launch/ros2 run resolution works in both dev and installed trees.
-                nodes.append(
-                    Node(
-                        package='px4_bringup',
-                        executable='px4_mavlink_vpe.py',
-                        name='px4_mavlink_vpe',
-                        output='screen',
-                        # The bridge has sensible defaults; pass topic explicitly.
-                        arguments=['--topic', odom_topic],
-                    )
-                )
-        else:
-            raise ValueError("odometry_transport must be 'xrce' or 'mavlink'")
-
-    # ── Vehicle odometry bridge: /fmu/out/vehicle_odometry → /px4_vehicle_odom
-    if enable_veh_odom.lower() == 'true':
-        nodes.append(
-            Node(
-                package='px4_bringup',
-                executable='px4_vehicle_odometry.py',
-                name='px4_vehicle_odometry',
-                output='screen',
-                parameters=[{
-                    'frame_id':       veh_odom_frame,
-                    'child_frame_id': veh_odom_child_frame,
-                }],
-            )
-        )
-
-    # ── Mode node (C++ custom mode via px4_ros2_interface_lib) ────────────
-    mode_executables = {
-        'trajectory': 'offboard_trajectory_mode',
-        'speed_steering': 'rover_speed_steering_mode',
-        'speed_attitude': 'rover_speed_attitude_mode',
-        'manual': 'rover_manual_mode',
-    }
-
-    executable = mode_executables.get(mode_type)
-    if executable is None:
-        raise ValueError(
-            f"Unknown mode_type '{mode_type}'. "
-            f"Valid options: {list(mode_executables.keys())}"
-        )
-
-    nodes.append(
-        Node(
-            package='px4_bringup',
-            executable=executable,
-            name=executable,
-            output='screen',
-            parameters=[config_file],
-        )
+    # ── Mode selection ────────────────────────────────────────────────────
+    enable_mode_node_arg = DeclareLaunchArgument(
+        'enable_mode_node',
+        default_value='true',
+        description='Launch the PX4 custom mode node (set false for VO-bridge-only use)'
     )
 
-    return nodes
-
-
-def generate_launch_description():
-    # ── Mode selection ────────────────────────────────────────────────────
     mode_type_arg = DeclareLaunchArgument(
         'mode_type',
         default_value='manual',
@@ -178,7 +93,100 @@ def generate_launch_description():
         description='child_frame_id for the published vehicle odometry (matches URDF cubepilot_link)'
     )
 
+    # ── VO bridge: XRCE transport ─────────────────────────────────────────
+    vo_xrce_node = Node(
+        package='px4_bringup',
+        executable='px4_vision_odom.py',
+        name='px4_vision_odom',
+        output='screen',
+        parameters=[{
+            'odom_topic': LaunchConfiguration('odom_topic'),
+            'odom_frame': LaunchConfiguration('odom_frame'),
+            'base_frame': LaunchConfiguration('base_frame'),
+        }],
+        condition=IfCondition(PythonExpression([
+            "'", LaunchConfiguration('enable_vo_bridge'), "' == 'true'",
+            " and '", LaunchConfiguration('odometry_transport'), "' == 'xrce'",
+        ])),
+    )
+
+    # ── VO bridge: MAVLink transport ──────────────────────────────────────
+    vo_mavlink_node = Node(
+        package='px4_bringup',
+        executable='px4_mavlink_vpe.py',
+        name='px4_mavlink_vpe',
+        output='screen',
+        arguments=['--topic', LaunchConfiguration('odom_topic')],
+        condition=IfCondition(PythonExpression([
+            "'", LaunchConfiguration('enable_vo_bridge'), "' == 'true'",
+            " and '", LaunchConfiguration('odometry_transport'), "' == 'mavlink'",
+        ])),
+    )
+
+    # ── Vehicle odometry bridge ───────────────────────────────────────────
+    vehicle_odom_node = Node(
+        package='px4_bringup',
+        executable='px4_vehicle_odometry.py',
+        name='px4_vehicle_odometry',
+        output='screen',
+        parameters=[{
+            'frame_id':       LaunchConfiguration('vehicle_odom_frame'),
+            'child_frame_id': LaunchConfiguration('vehicle_odom_child_frame'),
+        }],
+        condition=IfCondition(LaunchConfiguration('enable_vehicle_odometry')),
+    )
+
+    # ── Mode nodes (C++ custom modes via px4_ros2_interface_lib) ─────────
+    trajectory_node = Node(
+        package='px4_bringup',
+        executable='offboard_trajectory_mode',
+        name='offboard_trajectory_mode',
+        output='screen',
+        parameters=[config_file],
+        condition=IfCondition(PythonExpression([
+            "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
+            " and '", LaunchConfiguration('mode_type'), "' == 'trajectory'",
+        ])),
+    )
+
+    speed_steering_node = Node(
+        package='px4_bringup',
+        executable='rover_speed_steering_mode',
+        name='rover_speed_steering_mode',
+        output='screen',
+        parameters=[config_file],
+        condition=IfCondition(PythonExpression([
+            "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
+            " and '", LaunchConfiguration('mode_type'), "' == 'speed_steering'",
+        ])),
+    )
+
+    speed_attitude_node = Node(
+        package='px4_bringup',
+        executable='rover_speed_attitude_mode',
+        name='rover_speed_attitude_mode',
+        output='screen',
+        parameters=[config_file],
+        condition=IfCondition(PythonExpression([
+            "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
+            " and '", LaunchConfiguration('mode_type'), "' == 'speed_attitude'",
+        ])),
+    )
+
+    manual_node = Node(
+        package='px4_bringup',
+        executable='rover_manual_mode',
+        name='rover_manual_mode',
+        output='screen',
+        parameters=[config_file],
+        condition=IfCondition(PythonExpression([
+            "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
+            " and '", LaunchConfiguration('mode_type'), "' == 'manual'",
+        ])),
+    )
+
     return LaunchDescription([
+        enable_mode_node_arg,
         mode_type_arg,
         enable_vo_arg,
         odom_topic_arg,
@@ -192,5 +200,11 @@ def generate_launch_description():
         vehicle_odom_frame_arg,
         vehicle_odom_child_frame_arg,
         LogInfo(msg="Launching PX4 bringup (mode + VO bridge)..."),
-        OpaqueFunction(function=_launch_nodes),
+        vo_xrce_node,
+        vo_mavlink_node,
+        vehicle_odom_node,
+        trajectory_node,
+        speed_steering_node,
+        speed_attitude_node,
+        manual_node,
     ])

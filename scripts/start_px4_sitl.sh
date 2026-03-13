@@ -29,6 +29,11 @@ PX4_GZ_WORLD="${PX4_GZ_WORLD:-warehouse}"
 PX4_BUILD_DIR="/px4/build/px4_sitl_default"
 
 # --- Build subcommand ---
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
+    exit 0
+fi
+
 if [[ "${1:-}" == "build" ]]; then
     echo "Building PX4 SITL inside Docker container..."
     exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "

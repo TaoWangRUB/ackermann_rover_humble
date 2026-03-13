@@ -67,7 +67,7 @@ Launch arguments:
 
 ## PX4 DDS Bridge Interfaces
 
-The `px4_bringup` package provides four C++ custom flight modes (via `px4_ros2_interface_lib`) and a Python odometry bridge. All communicate with PX4 over Micro-XRCE-DDS.
+The `px4_bringup` package provides four C++ custom flight modes (via `px4_ros2_interface_lib`) and Python odometry bridges. Two bridge options are supported: an XRCE-based `px4_vision_odom.py` or a MAVLink-based `px4_mavlink_vpe.py`. All C++ modes communicate with PX4 over Micro-XRCE-DDS; the MAVLink bridge uses a separate MAVLink link.
 
 ### Input Topics (ROS 2 → PX4)
 

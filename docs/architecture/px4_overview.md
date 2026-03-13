@@ -1119,11 +1119,15 @@ PX4's EKF2 can fuse **external vision (EV)** data — odometry from Gazebo groun
 ┌──────────────────────────────────────────────────────────────────────┐
 │ PX4 Bridge Nodes (choose one)                                        │
 │                                                                      │
-│  px4_vision_odom.py (recommended)                                    │
+│  px4_vision_odom.py (recommended XRCE bridge)                        │
 │    /odom → TF2 lookup → ENU→NED + FLU→FRD                           │
-│         → /fmu/in/vehicle_visual_odometry (at 50 Hz, quality=100)    │
+│         → /fmu/in/vehicle_visual_odometry (via XRCE-DDS)            │
 │                                                                      │
-│  (px4_odometry_node.py has been removed — see px4_vision_odom.py)    │
+│  px4_mavlink_vpe.py (MAVLink bridge alternative)                     │
+│    /odom → MAVLink VISION_POSITION_ESTIMATE / ATT_POS_MOCAP          │
+│         → sent over serial or UDP (avoids XRCE-DDS contention)      │
+│                                                                      │
+│  (px4_odometry_node.py has been removed — prefer `px4_vision_odom.py` or `px4_mavlink_vpe.py`)
 │    /odom → TF2 lookup → ENU→NED + FLU→FRD                           │
 │         → /fmu/in/vehicle_visual_odometry (at 50 Hz, quality=100)    │
 └──────────────┬───────────────────────────────────────────────────────┘
