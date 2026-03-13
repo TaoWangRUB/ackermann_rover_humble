@@ -14,7 +14,7 @@ fi
 
 LINEAR_X="${1:-1.0}"
 ANGULAR_Z="${2:-0.0}"
-RATE="${3:-10}"
+RATE="${3:-1}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="${SCRIPT_DIR}/../docker/docker-compose.yml"
