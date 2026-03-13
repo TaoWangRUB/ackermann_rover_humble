@@ -17,6 +17,9 @@ def _launch_nodes(context, *args, **kwargs):
     mav_device = LaunchConfiguration('mavlink_device').perform(context)
     mav_baud = LaunchConfiguration('mavlink_baud').perform(context)
     mav_rate = LaunchConfiguration('mavlink_rate').perform(context)
+    enable_veh_odom = LaunchConfiguration('enable_vehicle_odometry').perform(context)
+    veh_odom_frame = LaunchConfiguration('vehicle_odom_frame').perform(context)
+    veh_odom_child_frame = LaunchConfiguration('vehicle_odom_child_frame').perform(context)
 
     nodes = []
     pkg_px4_bringup = get_package_share_directory('px4_bringup')
@@ -54,6 +57,21 @@ def _launch_nodes(context, *args, **kwargs):
                 )
         else:
             raise ValueError("odometry_transport must be 'xrce' or 'mavlink'")
+
+    # ── Vehicle odometry bridge: /fmu/out/vehicle_odometry → /px4_vehicle_odom
+    if enable_veh_odom.lower() == 'true':
+        nodes.append(
+            Node(
+                package='px4_bringup',
+                executable='px4_vehicle_odometry.py',
+                name='px4_vehicle_odometry',
+                output='screen',
+                parameters=[{
+                    'frame_id':       veh_odom_frame,
+                    'child_frame_id': veh_odom_child_frame,
+                }],
+            )
+        )
 
     # ── Mode node (C++ custom mode via px4_ros2_interface_lib) ────────────
     mode_executables = {
@@ -141,6 +159,25 @@ def generate_launch_description():
         description='Publish rate (Hz) for MAVLink bridge'
     )
 
+    # ── Vehicle odometry bridge ───────────────────────────────────────────
+    enable_vehicle_odometry_arg = DeclareLaunchArgument(
+        'enable_vehicle_odometry',
+        default_value='true',
+        description='Launch px4_vehicle_odometry.py to convert /fmu/out/vehicle_odometry → /px4_vehicle_odom'
+    )
+
+    vehicle_odom_frame_arg = DeclareLaunchArgument(
+        'vehicle_odom_frame',
+        default_value='vehicle_odom',
+        description='frame_id for the published vehicle odometry (ENU world-fixed)'
+    )
+
+    vehicle_odom_child_frame_arg = DeclareLaunchArgument(
+        'vehicle_odom_child_frame',
+        default_value='cubepilot_link',
+        description='child_frame_id for the published vehicle odometry (matches URDF cubepilot_link)'
+    )
+
     return LaunchDescription([
         mode_type_arg,
         enable_vo_arg,
@@ -151,6 +188,9 @@ def generate_launch_description():
         mav_device_arg,
         mav_baud_arg,
         mav_rate_arg,
+        enable_vehicle_odometry_arg,
+        vehicle_odom_frame_arg,
+        vehicle_odom_child_frame_arg,
         LogInfo(msg="Launching PX4 bringup (mode + VO bridge)..."),
         OpaqueFunction(function=_launch_nodes),
     ])
