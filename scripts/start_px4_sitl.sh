@@ -4,6 +4,8 @@
 # Usage (from host):
 #   ./scripts/start_px4_sitl.sh               # custom ackermann model (standalone, needs Gazebo)
 #   ./scripts/start_px4_sitl.sh --official    # official gz_rover_ackermann (PX4 spawns Gazebo itself)
+#   ./scripts/start_px4_sitl.sh --vio         # custom model + VIO-only EKF2 (no GPS)
+#   ./scripts/start_px4_sitl.sh --official --vio  # official model + VIO-only EKF2
 #   ./scripts/start_px4_sitl.sh build         # rebuild PX4 inside Docker first
 #
 # --- Default mode (custom model, standalone) ---
@@ -27,6 +29,15 @@
 #
 # Environment overrides:
 #   PX4_GZ_WORLD    Gazebo world name        (default: rover)
+#
+# --- VIO mode (--vio) ---
+# Disables GPS fusion, enables External Vision (EV) for position + velocity + yaw.
+# After PX4 boots, run from pxh>:
+#   commander set_ekf_origin 51.4934 7.4120 100.0
+#   commander mode auto:loiter
+# Verify with:
+#   listener vehicle_local_position     (xy_valid and z_valid should be true)
+#   ekf2 status                         (should show "Using EV position / EV velocity")
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,10 +48,12 @@ PX4_BUILD_DIR="/px4/build/px4_sitl_default"
 
 # --- Parse flags ---
 OFFICIAL_MODEL=0
+VIO_MODE=0
 POSITIONAL=()
 for arg in "$@"; do
   case "$arg" in
     --official) OFFICIAL_MODEL=1 ;;
+    --vio)      VIO_MODE=1 ;;
     *) POSITIONAL+=("$arg") ;;
   esac
 done
@@ -69,10 +82,17 @@ if [[ "${OFFICIAL_MODEL}" == "1" ]]; then
     PX4_GZ_WORLD="${PX4_GZ_WORLD:-rover}"
     MODE_LABEL="official gz_rover_ackermann (PX4-managed Gazebo, world: ${PX4_GZ_WORLD})"
 
+    [[ "${VIO_MODE}" == "1" ]] && MODE_LABEL="${MODE_LABEL} [VIO]"
     echo "Starting PX4 SITL (official mode) inside Docker container..."
     echo "  Mode:          ${MODE_LABEL}"
     echo "  PX4 build dir: ${PX4_BUILD_DIR} (inside container)"
     echo ""
+    if [[ "${VIO_MODE}" == "1" ]]; then
+        echo "  [VIO] After boot, run from pxh>:"
+        echo "    commander set_ekf_origin 51.4934 7.4120 100.0"
+        echo "    commander mode auto:loiter"
+        echo ""
+    fi
 
     exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
       git config --global --add safe.directory '*'
@@ -87,14 +107,31 @@ if [[ "${OFFICIAL_MODEL}" == "1" ]]; then
       export GZ_IP=127.0.0.1
       export GZ_DISTRO=harmonic
 
-      # Run px4 in foreground with a real TTY — matches `make px4_sitl gz_rover_ackermann`
+      $([ "${VIO_MODE}" == "1" ] && cat <<'INJECT'
+      # --vio: write EKF2 VIO params to PX4's user startup script.
+      # rcS auto-sources fs/microsd/etc/rc.txt at the end of boot, after airframe defaults.
+      mkdir -p fs/microsd/etc
+      cat > fs/microsd/etc/rc.txt <<'NSH'
+param set EKF2_GPS_CTRL 0
+param set EKF2_EV_CTRL 15
+param set EKF2_HGT_REF 3
+param set EKF2_MAG_TYPE 5
+param set EKF2_EVP_NOISE 0.1
+param set EKF2_EVV_NOISE 0.1
+param set EKF2_EVA_NOISE 0.1
+param set EKF2_EV_DELAY 50.0
+param set COM_RC_IN_MODE 4
+param save
+NSH
+INJECT
+)
+
+      # Run px4 in foreground with a real TTY — matches \`make px4_sitl gz_rover_ackermann\`
       # (CMake USES_TERMINAL). This gives you an interactive pxh> shell.
       #
-      # Once initialized, apply rover overrides from the pxh> prompt:
-      #   param set COM_RC_IN_MODE 4
-      #   commander mode auto:loiter
+      # Once initialized, run from the pxh> prompt:
       #   commander set_ekf_origin 51.4934 7.4120 100.0
-      #   commander set_home
+      #   commander mode auto:loiter
       ${PX4_BUILD_DIR}/bin/px4
     "
 else
@@ -104,12 +141,19 @@ else
     PX4_GZ_WORLD="${PX4_GZ_WORLD:-warehouse}"
     MODE_LABEL="custom (model: ${PX4_MODEL_NAME}, standalone)"
 
+    [[ "${VIO_MODE}" == "1" ]] && MODE_LABEL="${MODE_LABEL} [VIO]"
     echo "Starting PX4 SITL (custom model mode) inside Docker container..."
     echo "  Mode:          ${MODE_LABEL}"
     echo "  Airframe:      ${PX4_AUTOSTART}"
     echo "  World:         ${PX4_GZ_WORLD}"
     echo "  PX4 build dir: ${PX4_BUILD_DIR} (inside container)"
     echo ""
+    if [[ "${VIO_MODE}" == "1" ]]; then
+        echo "  [VIO] After boot, run from pxh>:"
+        echo "    commander set_ekf_origin 51.4934 7.4120 100.0"
+        echo "    commander mode auto:loiter"
+        echo ""
+    fi
 
     exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
       git config --global --add safe.directory '*'
@@ -123,13 +167,30 @@ else
       export PX4_SIMULATOR=gz
       export GZ_DISTRO=harmonic
 
+      $([ "${VIO_MODE}" == "1" ] && cat <<'INJECT'
+      # --vio: write EKF2 VIO params to PX4's user startup script.
+      # rcS auto-sources fs/microsd/etc/rc.txt at the end of boot, after airframe defaults.
+      mkdir -p fs/microsd/etc
+      cat > fs/microsd/etc/rc.txt <<'NSH'
+param set EKF2_GPS_CTRL 0
+param set EKF2_EV_CTRL 15
+param set EKF2_HGT_REF 3
+param set EKF2_MAG_TYPE 5
+param set EKF2_EVP_NOISE 0.1
+param set EKF2_EVV_NOISE 0.1
+param set EKF2_EVA_NOISE 0.1
+param set EKF2_EV_DELAY 50.0
+param set COM_RC_IN_MODE 4
+param save
+NSH
+INJECT
+)
+
       # Run px4 in foreground so pxh> shell is fully interactive.
       #
-      # Once initialized, apply rover overrides from the pxh> prompt:
-      #   param set COM_RC_IN_MODE 4
-      #   commander mode auto:loiter
+      # Once initialized, run from the pxh> prompt:
       #   commander set_ekf_origin 51.4934 7.4120 100.0
-      #   commander set_home
+      #   commander mode auto:loiter
       #
       # === Actuator Test Notes ===
       # Rover must be DISARMED before actuator_test — armed Hold mode sends
