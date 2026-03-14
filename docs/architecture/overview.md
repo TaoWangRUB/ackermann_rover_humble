@@ -3,7 +3,7 @@ title: Architecture Overview
 status: Draft
 owner: architecture_team
 agent: Copilot
-last_updated: 2026-02-18
+last_updated: 2026-03-14
 doc_type: architecture
 ros_distro: humble
 ---
@@ -251,7 +251,7 @@ PX4 Software-In-The-Loop (SITL) runs alongside Gazebo Harmonic inside the same D
 
 - PX4 v1.16+ compiled **inside Docker** with `GZ_DISTRO=harmonic` so the `gz_bridge` module links against the container's gz-harmonic libraries.
 - Airframe **51000** (`gz_rover_ackermann`).
-- `warehouse.sdf` must contain `<spherical_coordinates>` for GPS/magnetometer reference.
+- `warehouse.sdf` must contain `<spherical_coordinates>` for GPS/magnetometer reference (GPS mode only; not required for VIO-only mode with `--vio`).
 
 ### Launch
 
@@ -291,6 +291,12 @@ type long commands.
 
 # ── PX4 SITL + trajectory mode ──
 ./scripts/start_ros2_nodes.sh --px4 --bridge=trajectory
+
+# ── PX4 SITL with VIO-only EKF2 (no GPS) ──
+./scripts/start_px4_sitl.sh --vio
+
+# ── PX4 SITL official model + VIO-only EKF2 ──
+./scripts/start_px4_sitl.sh --official --vio
 
 # ── Build all, then launch Gazebo ──
 ./scripts/start_ros2_nodes.sh --build
@@ -417,9 +423,12 @@ cd /px4/build/px4_sitl_default/bin && timeout 5 ./px4-listener vehicle_local_pos
 
 #### Preflight & Arming
 
-> **Note:** The `start_px4_sitl.sh` helper script already sets `COM_RC_IN_MODE=4`
-> (disable manual RC requirement) and switches to Hold mode (`auto:loiter`) on
-> startup. These are required for SITL without a joystick/RC transmitter.
+> **Note:** When using `--vio`, `start_px4_sitl.sh` automatically sets
+> `COM_RC_IN_MODE=4` (disables manual RC requirement) via PX4's user startup
+> script (`fs/microsd/etc/rc.txt`). Without `--vio`, set it manually at `pxh>`:
+> `param set COM_RC_IN_MODE 4`. Switching to Hold mode (`commander mode auto:loiter`)
+> and setting the EKF origin (`commander set_ekf_origin`) must always be done
+> manually from `pxh>` after the VIO bridge is publishing.
 
 ```bash
 cd /px4/build/px4_sitl_default/bin
@@ -550,6 +559,45 @@ ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist \
   '{linear: {x: 1.0}, angular: {z: 0.0}}'
 ```
 
+### VIO-Only Mode (No GPS)
+
+Use `--vio` to run SITL with External Vision (EV) as the sole navigation source — matching the real-hardware Cube Black configuration.
+
+```bash
+# Terminal 2:
+./scripts/start_microxrce_agent.sh
+# Terminal 3 — VIO mode (sets EKF2 params automatically):
+./scripts/start_px4_sitl.sh --vio
+```
+
+The script writes `fs/microsd/etc/rc.txt` inside the PX4 rootfs before launch.
+PX4's rcS sources this file at the end of boot (after airframe defaults), setting:
+
+| Parameter | Value | Effect |
+|---|---|---|
+| `EKF2_GPS_CTRL` | 0 | Disable GPS fusion |
+| `EKF2_EV_CTRL` | 15 | Fuse EV hpos + vpos + vel + yaw |
+| `EKF2_HGT_REF` | 3 | Vision height reference |
+| `EKF2_MAG_TYPE` | 5 | No magnetometer (VIO heading) |
+| `EKF2_EVP/V/A_NOISE` | 0.1 | Vision measurement noise |
+| `EKF2_EV_DELAY` | 50 ms | Vision pipeline latency compensation |
+| `COM_RC_IN_MODE` | 4 | Stick input disabled (autonomous) |
+
+After boot, once the VIO bridge (`px4_bringup.launch.py`) is publishing, run from `pxh>`:
+
+```
+commander set_ekf_origin 51.4934 7.4120 100.0
+commander mode auto:loiter
+```
+
+Verify EKF2 is fusing vision:
+
+```bash
+cd /px4/build/px4_sitl_default/bin
+./px4-listener vehicle_local_position -n 1   # xy_valid=True, z_valid=True
+./px4-listener estimator_status_flags -n 1   # cs_ev_pos=True, cs_ev_vel=True, cs_ev_yaw=True
+```
+
 ### Shutdown
 
 ```bash
@@ -569,7 +617,7 @@ docker-compose -f docker/docker-compose.yml exec ackermann_slam bash -c "pkill -
 | `worlds/warehouse.sdf`             | Spherical coordinates for GPS reference       |
 | `gazebo_bringup.launch.py`         | Conditional ros2_control skip                 |
 | `robot_bringup.launch.py`          | `enable_px4_sitl` and `px4_mode_type` args    |
-| `scripts/start_px4_sitl.sh`        | PX4 SITL launcher (airframe 51000)            |
+| `scripts/start_px4_sitl.sh`        | PX4 SITL launcher (airframe 51000); `--official` for stock model, `--vio` for VIO-only EKF2 (no GPS) |
 | `scripts/start_microxrce_agent.sh` | MicroXRCEAgent launcher (UDP port 8888)       |
 | `scripts/start_ros2_nodes.sh`      | Host-side launcher (Gazebo + optional bridge) |
 | `scripts/test_actuators.sh`        | Host-side actuator test wrapper                |
