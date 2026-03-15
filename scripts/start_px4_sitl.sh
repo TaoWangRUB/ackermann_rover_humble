@@ -107,24 +107,19 @@ if [[ "${OFFICIAL_MODEL}" == "1" ]]; then
       export GZ_IP=127.0.0.1
       export GZ_DISTRO=harmonic
 
-      $([ "${VIO_MODE}" == "1" ] && cat <<'INJECT'
-      # --vio: write EKF2 VIO params to PX4's user startup script.
-      # rcS auto-sources fs/microsd/etc/rc.txt at the end of boot, after airframe defaults.
-      mkdir -p fs/microsd/etc
-      cat > fs/microsd/etc/rc.txt <<'NSH'
-param set EKF2_GPS_CTRL 0
-param set EKF2_EV_CTRL 15
-param set EKF2_HGT_REF 3
-param set EKF2_MAG_TYPE 5
-param set EKF2_EVP_NOISE 0.1
-param set EKF2_EVV_NOISE 0.1
-param set EKF2_EVA_NOISE 0.1
-param set EKF2_EV_DELAY 50.0
-param set COM_RC_IN_MODE 4
-param save
-NSH
-INJECT
-)
+      $([ "${VIO_MODE}" == "1" ] && echo '
+      # --vio: PX4_PARAM_* env vars are applied by init.d-posix/rcS after param import
+      # and airframe defaults — this is the correct SITL override mechanism.
+      export PX4_PARAM_EKF2_GPS_CTRL=0
+      export PX4_PARAM_EKF2_EV_CTRL=15
+      export PX4_PARAM_EKF2_HGT_REF=3
+      export PX4_PARAM_EKF2_MAG_TYPE=5
+      export PX4_PARAM_EKF2_EVP_NOISE=0.1
+      export PX4_PARAM_EKF2_EVV_NOISE=0.1
+      export PX4_PARAM_EKF2_EVA_NOISE=0.1
+      export PX4_PARAM_EKF2_EV_DELAY=50.0
+      export PX4_PARAM_COM_RC_IN_MODE=4
+      ')
 
       # Run px4 in foreground with a real TTY — matches \`make px4_sitl gz_rover_ackermann\`
       # (CMake USES_TERMINAL). This gives you an interactive pxh> shell.
@@ -167,24 +162,19 @@ else
       export PX4_SIMULATOR=gz
       export GZ_DISTRO=harmonic
 
-      $([ "${VIO_MODE}" == "1" ] && cat <<'INJECT'
-      # --vio: write EKF2 VIO params to PX4's user startup script.
-      # rcS auto-sources fs/microsd/etc/rc.txt at the end of boot, after airframe defaults.
-      mkdir -p fs/microsd/etc
-      cat > fs/microsd/etc/rc.txt <<'NSH'
-param set EKF2_GPS_CTRL 0
-param set EKF2_EV_CTRL 15
-param set EKF2_HGT_REF 3
-param set EKF2_MAG_TYPE 5
-param set EKF2_EVP_NOISE 0.1
-param set EKF2_EVV_NOISE 0.1
-param set EKF2_EVA_NOISE 0.1
-param set EKF2_EV_DELAY 50.0
-param set COM_RC_IN_MODE 4
-param save
-NSH
-INJECT
-)
+      $([ "${VIO_MODE}" == "1" ] && echo '
+      # --vio: PX4_PARAM_* env vars are applied by init.d-posix/rcS after param import
+      # and airframe defaults — this is the correct SITL override mechanism.
+      export PX4_PARAM_EKF2_GPS_CTRL=0
+      export PX4_PARAM_EKF2_EV_CTRL=15
+      export PX4_PARAM_EKF2_HGT_REF=3
+      export PX4_PARAM_EKF2_MAG_TYPE=5
+      export PX4_PARAM_EKF2_EVP_NOISE=0.1
+      export PX4_PARAM_EKF2_EVV_NOISE=0.1
+      export PX4_PARAM_EKF2_EVA_NOISE=0.1
+      export PX4_PARAM_EKF2_EV_DELAY=50.0
+      export PX4_PARAM_COM_RC_IN_MODE=4
+      ')
 
       # Run px4 in foreground so pxh> shell is fully interactive.
       #
