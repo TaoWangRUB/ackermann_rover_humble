@@ -13,7 +13,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 LINEAR_X="${1:-1.0}"
-ANGULAR_Z="${2:-0.0}"
+ANGULAR_Z="${2:-0.5}"
 RATE="${3:-1}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
