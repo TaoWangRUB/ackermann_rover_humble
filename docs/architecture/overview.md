@@ -424,11 +424,12 @@ cd /px4/build/px4_sitl_default/bin && timeout 5 ./px4-listener vehicle_local_pos
 #### Preflight & Arming
 
 > **Note:** When using `--vio`, `start_px4_sitl.sh` automatically sets
-> `COM_RC_IN_MODE=4` (disables manual RC requirement) via PX4's user startup
-> script (`fs/microsd/etc/rc.txt`). Without `--vio`, set it manually at `pxh>`:
-> `param set COM_RC_IN_MODE 4`. Switching to Hold mode (`commander mode auto:loiter`)
-> and setting the EKF origin (`commander set_ekf_origin`) must always be done
-> manually from `pxh>` after the VIO bridge is publishing.
+> `COM_RC_IN_MODE=4` (disables manual RC requirement) via `PX4_PARAM_*` environment
+> variables, which `init.d-posix/rcS` applies after param import and airframe defaults.
+> Without `--vio`, set it manually at `pxh>`: `param set COM_RC_IN_MODE 4`.
+> Switching to Hold mode (`commander mode auto:loiter`) and setting the EKF origin
+> (`commander set_ekf_origin`) must always be done manually from `pxh>` after the
+> VIO bridge is publishing.
 
 ```bash
 cd /px4/build/px4_sitl_default/bin
@@ -559,6 +560,23 @@ ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist \
   '{linear: {x: 1.0}, angular: {z: 0.0}}'
 ```
 
+The registration-and-activation flow above can be checked with the PX4
+registration reply and then activated from the host using ROS 2 and the
+PX4 `px4-commander` helper. Example (these work in this repo's setup):
+
+```bash
+# 1) watch registration replies from PX4 (shows name, mode_id)
+pxh> listener register_ext_component_reply
+
+# 2) request the registered external mode (mode id 23 in this repo)
+ros2 topic pub --once /fmu/in/vehicle_command px4_msgs/msg/VehicleCommand \\
+   "{command: 100001, param1: 23.0, target_system: 1, target_component: 1, source_system: 255, source_component: 0, from_external: true}"
+```
+
+I also added a helper script at `scripts/activate_rover_manual.sh` that
+publishes the vehicle command inside the `ackermann_slam` container and
+then runs `px4-commander arm` from the PX4 build directory.
+
 ### VIO-Only Mode (No GPS)
 
 Use `--vio` to run SITL with External Vision (EV) as the sole navigation source — matching the real-hardware Cube Black configuration.
@@ -570,8 +588,8 @@ Use `--vio` to run SITL with External Vision (EV) as the sole navigation source 
 ./scripts/start_px4_sitl.sh --vio
 ```
 
-The script writes `fs/microsd/etc/rc.txt` inside the PX4 rootfs before launch.
-PX4's rcS sources this file at the end of boot (after airframe defaults), setting:
+The script exports `PX4_PARAM_*` environment variables before launching PX4.
+`init.d-posix/rcS` processes these after param import and airframe defaults, setting:
 
 | Parameter | Value | Effect |
 |---|---|---|
