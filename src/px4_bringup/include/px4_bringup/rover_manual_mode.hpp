@@ -47,7 +47,7 @@ class RoverManualMode : public px4_ros2::ModeBase
 {
 public:
   explicit RoverManualMode(rclcpp::Node & node)
-  : ModeBase(node, Settings{"Rover Manual"}.preventArming(false)),
+  : ModeBase(node, Settings{"RoverManual"}.preventArming(false)),
     node_(node)
   {
     throttle_steering_setpoint_ =
