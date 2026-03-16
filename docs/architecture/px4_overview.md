@@ -1689,4 +1689,159 @@ base_link
 | **Wheel drive**             | All 4 wheels driven (JointController on all)              | Rear 2 only (velocity command); front wheels passive    |
 | **Control**                 | Gz plugins (`JointController`, `JointPositionController`) | ros2_control (`gz_ros2_control/GazeboSimSystem`)        |
 | **Namespace**               | `rover_ackermann/`                                        | `ackermann/` (via `$(arg ns)`)                          |
+
+---
+
+# px4-ros2-interface-lib — Call Sequence: RoverManualMode
+
+This section traces the full initialization and runtime call sequence for the
+`rover_manual_mode` node, from `main()` through to the PX4 FMU handshake and
+setpoint loop.
+
+## 1. Process Entry
+
+**File:** [`src/px4_bringup/src/rover_manual_main.cpp`](../../src/px4_bringup/src/rover_manual_main.cpp)
+
+```
+main()
+  rclcpp::init()
+  rclcpp::spin( NodeWithMode<RoverManualMode>("rover_manual_mode") )
+  rclcpp::shutdown()
+```
+
+`NodeWithMode` is a thin RAII wrapper from px4-ros2-interface-lib that owns the
+mode object and runs `doRegister()` before handing control to the spin loop.
+
+---
+
+## 2. NodeWithMode Constructor
+
+**File:** [`src/px4-ros2-interface-lib/px4_ros2_cpp/include/px4_ros2/components/node_with_mode.hpp:38-55`](../../src/px4-ros2-interface-lib/px4_ros2_cpp/include/px4_ros2/components/node_with_mode.hpp)
+
+```
+NodeWithMode::NodeWithMode()
+  ├─ rclcpp::Node::Node("rover_manual_mode")      // ROS 2 node created
+  ├─ _mode = make_unique<RoverManualMode>(*this)  // mode object constructed
+  └─ _mode->doRegister()
+       └─ throws Exception("Registration failed") if it returns false
+```
+
+---
+
+## 3. RoverManualMode Constructor
+
+**File:** [`src/px4_bringup/include/px4_bringup/rover_manual_mode.hpp:49-109`](../../src/px4_bringup/include/px4_bringup/rover_manual_mode.hpp)
+
+```
+RoverManualMode::RoverManualMode(node)
+  ├─ ModeBase::ModeBase(node, Settings{"RoverManual"}.preventArming(false))
+  ├─ RoverThrottleSteeringSetpointType created
+  ├─ ROS 2 parameters declared & read
+  │     cmd_vel_topic, max_speed, max_steering_rate, cmd_vel_timeout, use_stamped
+  └─ Subscription created: /cmd_vel → handleTwist()
+```
+
+---
+
+## 4. ModeBase::doRegister — FMU Handshake
+
+**File:** [`src/px4-ros2-interface-lib/px4_ros2_cpp/src/components/mode.cpp:74-96`](../../src/px4-ros2-interface-lib/px4_ros2_cpp/src/components/mode.cpp)
+
+```
+ModeBase::doRegister()
+  ├─ if NOT skip_message_compatibility_check:
+  │     ├─ waitForFMU(node, 60s, topic_namespace_prefix)    ← blocking
+  │     └─ defaultMessageCompatibilityCheck()
+  ├─ onAboutToRegister()
+  ├─ _registration->doRegister()    ← uORB service call to PX4
+  └─ returns bool (false → NodeWithMode throws)
+```
+
+### waitForFMU detail
+
+**File:** [`src/px4-ros2-interface-lib/px4_ros2_cpp/src/components/wait_for_fmu.cpp`](../../src/px4-ros2-interface-lib/px4_ros2_cpp/src/components/wait_for_fmu.cpp)
+
+```
+waitForFMU(node, timeout=60s, prefix)
+  ├─ subscribe to: {prefix}fmu/out/vehicle_status
+  ├─ WaitSet::wait(remaining)    ← blocks up to 60 s total
+  ├─ on message received → return true   (FMU alive)
+  └─ on timeout         → return false  (doRegister fails → node throws)
+```
+
+**Key point:** this is a one-shot blocking call. There is no retry inside the
+library. If PX4 / the XRCE bridge is not yet running, the node crashes after 60 s.
+See [Retry Workaround](#6-retry-workaround-fmu-not-yet-available) below.
+
+---
+
+## 5. Runtime Setpoint Loop
+
+Once registered, PX4 calls `updateSetpoint()` at the flight-controller rate
+whenever `RoverManualMode` is the active mode.
+
+```
+updateSetpoint(dt_s)   [called by PX4 at FMU rate]
+  ├─ read last_cmd_vel_ under mutex
+  ├─ if no cmd_vel received yet  → throttle=0, steering=0 (safe default)
+  ├─ if cmd_vel age > timeout    → throttle=0, steering=0 (watchdog)
+  └─ else:
+       ├─ throttle  = clamp(linear.x  / max_speed,         -1, 1)
+       ├─ steering  = clamp(-angular.z / max_steering_rate, -1, 1)
+       └─ RoverThrottleSteeringSetpointType::update(throttle, steering)
+
+/cmd_vel callback  [any time, independent thread]
+  └─ handleTwist() → store twist + timestamp under mutex
+```
+
+Lifecycle callbacks:
+
+```
+onActivate()    → reset cmd_vel state (received=false, timed_out=false)
+onDeactivate()  → send zero setpoint immediately
+```
+
+---
+
+## 6. Retry Workaround — FMU Not Yet Available
+
+Because `waitForFMU` is one-shot, the node must be restarted if PX4 is not
+ready within 60 s. The recommended fix is a retry loop in `main()`:
+
+```cpp
+// rover_manual_main.cpp
+while (rclcpp::ok()) {
+  try {
+    rclcpp::spin(
+      std::make_shared<px4_ros2::NodeWithMode<RoverManualMode>>(
+        "rover_manual_mode", true));
+    break;                          // clean shutdown
+  } catch (const px4_ros2::Exception & e) {
+    RCLCPP_WARN(rclcpp::get_logger("rover_manual_main"),
+      "FMU not available (%s) — retrying in 5 s...", e.what());
+    rclcpp::sleep_for(std::chrono::seconds(5));
+  }
+}
+```
+
+This keeps the 60 s FMU check (safety), but loops until PX4 comes online rather
+than exiting the process.
+
+---
+
+## Summary Diagram
+
+```
+main()
+ └─ NodeWithMode<RoverManualMode>
+      ├─ RoverManualMode()           [ctor: params, /cmd_vel sub]
+      └─ doRegister()
+           ├─ waitForFMU()           [blocks ≤60 s on /fmu/out/vehicle_status]
+           ├─ compatibility check
+           └─ registration service → PX4
+                └─ ── registered ──
+                      ├─ onActivate()
+                      ├─ updateSetpoint()  [loop at FMU rate]
+                      └─ onDeactivate()
+```
 | **Sensors**                 | IMU, barometer, magnetometer, NavSat (on `base_link`)     | d435i, l515, t265, rplidar, cubepilot (separate links)  |
