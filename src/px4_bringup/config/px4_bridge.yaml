@@ -12,3 +12,4 @@ rover_manual_mode:
   ros__parameters:
     skip_message_compatibility_check: true
     use_stamped: true
+    bidirectional_esc: false

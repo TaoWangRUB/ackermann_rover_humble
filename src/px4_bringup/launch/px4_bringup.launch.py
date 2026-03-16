@@ -5,11 +5,22 @@ from launch.actions import DeclareLaunchArgument, LogInfo
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
     pkg_px4_bringup = get_package_share_directory('px4_bringup')
     config_file = os.path.join(pkg_px4_bringup, 'config', 'px4_bridge.yaml')
+
+    # ── ESC type ──────────────────────────────────────────────────────────
+    reversible_drive_arg = DeclareLaunchArgument(
+        'reversible_drive',
+        default_value='false',
+        choices=['true', 'false'],
+        description=(
+            'Bidirectional ESC: true = throttle [-1,1], false = throttle [0,1]'
+        ),
+    )
 
     # ── Mode selection ────────────────────────────────────────────────────
     enable_mode_node_arg = DeclareLaunchArgument(
@@ -178,7 +189,11 @@ def generate_launch_description():
         executable='rover_manual_mode',
         name='rover_manual_mode',
         output='screen',
-        parameters=[config_file],
+        parameters=[
+            config_file,
+            {'bidirectional_esc': ParameterValue(
+                LaunchConfiguration('reversible_drive'), value_type=bool)},
+        ],
         condition=IfCondition(PythonExpression([
             "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
             " and '", LaunchConfiguration('mode_type'), "' == 'manual'",
@@ -186,6 +201,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        reversible_drive_arg,
         enable_mode_node_arg,
         mode_type_arg,
         enable_vo_arg,
