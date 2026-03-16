@@ -319,7 +319,7 @@ type long commands.
 | `--px4`             | PX4 SITL mode (disables ros2_control, auto-enables `--bridge` + `--vo-bridge`) |
 | `--rtabmap`         | Launch RTAB-Map SLAM                                                   |
 | `--nav2`            | Launch Nav2 navigation stack                                           |
-| `--bridge[=MODE]`   | Launch PX4 mode node only (default: `speed_steering`; options: `trajectory`, `speed_attitude`, `manual`) |
+| `--bridge[=MODE]`   | Launch PX4 mode node only (default: `manual`; options: `speed_steering`, `trajectory`, `speed_attitude`) |
 | `--vo-bridge`       | Launch VO bridge: `px4_vision_odom.py` (vision odom → PX4) + `px4_vehicle_odometry.py` (PX4 odom → ROS 2) |
 | `--odom-topic=TOPIC` | Odometry topic for `px4_vision_odom.py` only (default: `/odometry/filtered`) |
 

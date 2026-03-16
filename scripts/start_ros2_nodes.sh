@@ -7,7 +7,7 @@
 #   --px4              Enable PX4 SITL (disables ros2_control, implies --bridge --vo-bridge)
 #   --rtabmap          Launch RTAB-Map SLAM
 #   --nav2             Launch Nav2 navigation stack
-#   --bridge[=MODE]    Launch PX4 mode node (default: speed_steering; options: trajectory, speed_attitude, manual)
+#   --bridge[=MODE]    Launch PX4 mode node (default: manual; options: speed_steering, trajectory, speed_attitude)
 #   --vo-bridge        Launch VO bridge: px4_vision_odom + px4_vehicle_odometry
 #   --odom-topic=TOPIC Odometry source for vision odom node (default: /odometry/filtered)
 #   --no-rviz          Disable RViz2
@@ -81,7 +81,7 @@ RTABMAP="false"
 NAV2="false"
 RVIZ="true"
 BRIDGE="false"
-BRIDGE_MODE="speed_steering"
+BRIDGE_MODE="manual"
 VO_BRIDGE="false"
 ODOM_TOPIC="/odometry/filtered"
 BUILD="false"
