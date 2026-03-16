@@ -74,7 +74,7 @@ def generate_launch_description() -> LaunchDescription:
         'subscribe_scan':subscribe_scan,
         'subscribe_odom':True,
         'use_action_for_goal':True,
-        'odom_sensor_sync': True,   
+        'odom_sensor_sync': False,   
         # RTAB-Map's parameters should be strings:
         'Mem/NotLinkedNodesKept':'false',
         'Grid/MaxGroundHeight': '0.1',
