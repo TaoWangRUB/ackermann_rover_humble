@@ -25,11 +25,12 @@ registering custom modes with the PX4 FMU over DDS/XRCE.
 Implement `RoverManualMode` as a `px4_ros2::ModeBase` subclass that:
 
 1. **Bypasses all PX4 controllers** — uses `RoverThrottleSteeringSetpointType`
-   to write normalized throttle ∈ [-1, 1] and steering ∈ [-1, 1] directly to
+   to write normalized throttle and steering ∈ [-1, 1] directly to
    the actuator allocation layer (`AckermannActControl`).
 
-2. **Maps `cmd_vel` linearly**:
-   - `linear.x / max_speed` → throttle (clamped to [-1, 1])
+2. **Maps `cmd_vel` linearly**, with throttle range controlled by `bidirectional_esc`:
+   - `linear.x / max_speed` → throttle, clamped to **[-1, 1]** if `bidirectional_esc=true`
+     (supports reverse), or **[0, 1]** if `bidirectional_esc=false` (unidirectional ESC only)
    - `-angular.z / max_steering_rate` → steering (negated: ROS CCW+ → PX4 right+)
 
 3. **Implements a cmd_vel watchdog** — if no message arrives within
@@ -89,8 +90,23 @@ loop, which re-registers without restarting the OS process.
 |---|---|
 | `src/px4_bringup/include/px4_bringup/rover_manual_mode.hpp` | Mode implementation |
 | `src/px4_bringup/src/rover_manual_main.cpp` | Entry point with retry loop |
+| `src/px4_bringup/config/px4_bridge.yaml` | Default parameters (incl. `bidirectional_esc`) |
+| `src/px4_bringup/launch/px4_bringup.launch.py` | Launch arg `reversible_drive` → `bidirectional_esc` |
 | `src/px4-ros2-interface-lib/.../wait_for_fmu.cpp` | FMU heartbeat check (unmodified) |
 | `src/px4-ros2-interface-lib/.../health_and_arming_checks.cpp` | Runtime watchdog, 4 s (unmodified) |
+
+### ESC type configuration
+
+`bidirectional_esc` (default: `false`) controls the throttle output range:
+
+| `bidirectional_esc` | Throttle range | ESC wiring |
+|---|---|---|
+| `false` | [0, 1] | Unidirectional — PWM_MIN = stop, PWM_MAX = full forward |
+| `true`  | [-1, 1] | Bidirectional — centre = stop, extremes = full reverse/forward |
+
+Set via launch arg (preferred): `reversible_drive:=true/false` in `px4_bringup.launch.py`.
+The same arg is accepted by `nav2_bringup.launch.py` to align Nav2's `vx_min` and
+`min_velocity` with the ESC capability.
 
 ### Retry loop rationale (`rover_manual_main.cpp`)
 
