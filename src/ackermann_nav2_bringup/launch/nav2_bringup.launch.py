@@ -118,7 +118,7 @@ ARGUMENTS = [
         default_value=PathJoinSubstitution([
             get_package_share_directory('nav2_bt_navigator'),
             'behavior_trees',
-            'navigate_w_replanning_and_recovery.xml',
+            'navigate_to_pose_w_replanning_and_recovery.xml',
         ]),
         description='Behavior Tree XML for NavigateToPose',
     ),
