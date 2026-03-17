@@ -178,7 +178,11 @@ def launch_setup(context, *args, **kwargs):
         #'use_sim_time': use_sim_time,
         #'enable_stamped_cmd_vel': enable_stamped_cmd_vel,
         'vx_min': '-0.35' if is_reversible else '0.0',
-        'min_velocity': '[-0.5, 0.0, -2.0]' if is_reversible else '[0.0, 0.0, -2.0]',
+        # min_velocity is a float[] — RewrittenYaml only handles scalars, so it is
+        # injected directly on the velocity_smoother node below.
+    }
+    min_velocity_override = {
+        'min_velocity': [-0.5, 0.0, -2.0] if is_reversible else [0.0, 0.0, -2.0],
     }
 
     configured_params = ParameterFile(
@@ -286,7 +290,7 @@ def launch_setup(context, *args, **kwargs):
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params],
+                parameters=[configured_params, min_velocity_override],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
             ),
@@ -387,7 +391,7 @@ def launch_setup(context, *args, **kwargs):
                         package='nav2_velocity_smoother',
                         plugin='nav2_velocity_smoother::VelocitySmoother',
                         name='velocity_smoother',
-                        parameters=[configured_params],
+                        parameters=[configured_params, min_velocity_override],
                         remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
                     ),
                     ComposableNode(
