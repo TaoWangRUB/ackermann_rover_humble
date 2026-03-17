@@ -7,10 +7,11 @@
 #   --px4              Enable PX4 SITL (disables ros2_control, implies --bridge --vo-bridge)
 #   --rtabmap          Launch RTAB-Map SLAM
 #   --nav2             Launch Nav2 navigation stack
-#   --bridge[=MODE]    Launch PX4 mode node (default: manual; options: speed_steering, trajectory, speed_attitude)
-#   --vo-bridge        Launch VO bridge: px4_vision_odom + px4_vehicle_odometry
-#   --odom-topic=TOPIC Odometry source for vision odom node (default: /odometry/filtered)
-#   --no-rviz          Disable RViz2
+#   --bridge[=MODE]      Launch PX4 mode node (default: manual; options: speed_steering, trajectory, speed_attitude)
+#   --vo-bridge          Launch VO bridge: px4_vision_odom + px4_vehicle_odometry
+#   --odom-topic=TOPIC   Odometry source for vision odom node (default: /odometry/filtered)
+#   --reversible-drive   Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
+#   --no-rviz            Disable RViz2
 #   --build[=PKG]      Build workspace (or specific pkg) before launching
 #   --build-only[=PKG] Build only, do not launch
 #
@@ -52,6 +53,12 @@
 #   ── PX4 SITL + trajectory mode ──
 #   ./scripts/start_ros2_nodes.sh --px4 --bridge=trajectory
 #
+#   ── Unidirectional ESC (default) ──
+#   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --px4
+#
+#   ── Bidirectional ESC ──
+#   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --px4 --reversible-drive
+#
 #   ── Build all, then launch Gazebo ──
 #   ./scripts/start_ros2_nodes.sh --build
 #
@@ -84,6 +91,7 @@ BRIDGE="false"
 BRIDGE_MODE="manual"
 VO_BRIDGE="false"
 ODOM_TOPIC="/odometry/filtered"
+REVERSIBLE_DRIVE="false"
 BUILD="false"
 BUILD_ONLY="false"
 BUILD_PKGS=""
@@ -97,9 +105,10 @@ for arg in "$@"; do
         --no-rviz)      RVIZ="false" ;;
         --bridge)       BRIDGE="true" ;;
         --bridge=*)     BRIDGE="true"; BRIDGE_MODE="${arg#--bridge=}" ;;
-        --vo-bridge)    VO_BRIDGE="true" ;;
-        --odom-topic=*) ODOM_TOPIC="${arg#--odom-topic=}" ;;
-        --build)        BUILD="true" ;;
+        --vo-bridge)         VO_BRIDGE="true" ;;
+        --odom-topic=*)      ODOM_TOPIC="${arg#--odom-topic=}" ;;
+        --reversible-drive)  REVERSIBLE_DRIVE="true" ;;
+        --build)             BUILD="true" ;;
         --build=*)      BUILD="true"; BUILD_PKGS="${arg#--build=}" ;;
         --build-only)   BUILD="true"; BUILD_ONLY="true" ;;
         --build-only=*) BUILD="true"; BUILD_ONLY="true"; BUILD_PKGS="${arg#--build-only=}" ;;
@@ -160,6 +169,7 @@ LAUNCH_CMD+=" enable_px4_sitl:=${PX4}"
 LAUNCH_CMD+=" rtabmap:=${RTABMAP}"
 LAUNCH_CMD+=" nav2:=${NAV2}"
 LAUNCH_CMD+=" rviz:=${RVIZ}"
+LAUNCH_CMD+=" reversible_drive:=${REVERSIBLE_DRIVE}"
 
 # Chain px4_bringup after robot_bringup when --bridge and/or --vo-bridge
 if [[ "${BRIDGE}" == "true" || "${VO_BRIDGE}" == "true" ]]; then
@@ -175,7 +185,8 @@ if [[ "${BRIDGE}" == "true" || "${VO_BRIDGE}" == "true" ]]; then
     LAUNCH_CMD+=" mode_type:=${BRIDGE_MODE}"
     LAUNCH_CMD+=" enable_vo_bridge:=${VO_BRIDGE}"
     LAUNCH_CMD+=" odom_topic:=${ODOM_TOPIC}"
-    LAUNCH_CMD+=" enable_vehicle_odometry:=${VO_BRIDGE} &"
+    LAUNCH_CMD+=" enable_vehicle_odometry:=${VO_BRIDGE}"
+    LAUNCH_CMD+=" reversible_drive:=${REVERSIBLE_DRIVE} &"
     LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
     LAUNCH_CMD+=" trap 'kill \$PIDS 2>/dev/null; wait' EXIT INT TERM;"
     LAUNCH_CMD+=" wait"
