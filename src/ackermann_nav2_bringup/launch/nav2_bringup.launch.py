@@ -113,6 +113,24 @@ ARGUMENTS = [
             'true  = bidirectional ESC: vx_min=-0.35, min_velocity x=-0.5.'
         ),
     ),
+    DeclareLaunchArgument(
+        'bt_xml',
+        default_value=PathJoinSubstitution([
+            get_package_share_directory('nav2_bt_navigator'),
+            'behavior_trees',
+            'navigate_w_replanning_and_recovery.xml',
+        ]),
+        description='Behavior Tree XML for NavigateToPose',
+    ),
+    DeclareLaunchArgument(
+        'navigate_through_poses_bt',
+        default_value=PathJoinSubstitution([
+            get_package_share_directory('nav2_bt_navigator'),
+            'behavior_trees',
+            'navigate_through_poses_w_replanning_and_recovery.xml',
+        ]),
+        description='Behavior Tree XML for NavigateThroughPoses',
+    ),
 ]
 
 
@@ -129,6 +147,8 @@ def launch_setup(context, *args, **kwargs):
     use_respawn = LaunchConfiguration('use_respawn')
     log_level = LaunchConfiguration('log_level')
     is_reversible = LaunchConfiguration('reversible_drive').perform(context).lower() == 'true'
+    bt_xml = LaunchConfiguration('bt_xml')
+    navigate_through_poses_bt = LaunchConfiguration('navigate_through_poses_bt')
 
     lifecycle_nodes = [
         'controller_server',
@@ -241,7 +261,10 @@ def launch_setup(context, *args, **kwargs):
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params],
+                parameters=[configured_params, {
+                    'default_nav_to_pose_bt_xml': bt_xml,
+                    'default_nav_through_poses_bt_xml': navigate_through_poses_bt,
+                }],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings,
             ),
@@ -347,7 +370,10 @@ def launch_setup(context, *args, **kwargs):
                         package='nav2_bt_navigator',
                         plugin='nav2_bt_navigator::BtNavigator',
                         name='bt_navigator',
-                        parameters=[configured_params],
+                        parameters=[configured_params, {
+                            'default_nav_to_pose_bt_xml': bt_xml,
+                            'default_nav_through_poses_bt_xml': navigate_through_poses_bt,
+                        }],
                         remappings=remappings,
                     ),
                     ComposableNode(
