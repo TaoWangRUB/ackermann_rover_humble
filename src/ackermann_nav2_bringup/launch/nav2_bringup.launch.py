@@ -178,6 +178,9 @@ def launch_setup(context, *args, **kwargs):
         #'use_sim_time': use_sim_time,
         #'enable_stamped_cmd_vel': enable_stamped_cmd_vel,
         'vx_min': '-0.35' if is_reversible else '0.0',
+        # Planner motion model: Reeds-Shepp allows reverse arcs (bidirectional),
+        # Dubin is forward-only arcs. Must match reversible_drive setting.
+        'motion_model_for_search': 'REEDS_SHEPP' if is_reversible else 'DUBIN',
         # min_velocity is a float[] — RewrittenYaml only handles scalars, so it is
         # injected directly on the velocity_smoother node below.
     }
