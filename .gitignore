@@ -14,3 +14,6 @@ log/
 *.pdf
 *.gv
 *.png
+
+# Local secret env
+.env

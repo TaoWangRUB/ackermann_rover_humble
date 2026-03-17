@@ -22,10 +22,12 @@
  * Accepts both geometry_msgs/Twist and geometry_msgs/TwistStamped.
  *
  * Extracts:
- *   - linear.x  → throttle [-1 (backward), 1 (forward)]
+ *   - linear.x  → throttle (range depends on bidirectional_esc)
  *   - angular.z → normalized steering [-1 (left), 1 (right)]
  *
- * linear.x is divided by max_speed to normalize to [-1, 1].
+ * linear.x is divided by max_speed to normalize throttle.
+ * If bidirectional_esc=true:  throttle ∈ [-1, 1] (supports reverse).
+ * If bidirectional_esc=false: throttle ∈ [ 0, 1] (unidirectional ESC, negative clamped to 0).
  * angular.z is divided by max_steering_rate and negated (ROS CCW+ → PX4 right+).
  *
  * Safety features:
@@ -40,6 +42,7 @@
  *   - max_speed           (double, default: 2.0)        — normalization [m/s]
  *   - max_steering_rate   (double, default: 1.0)        — normalization [rad/s]
  *   - cmd_vel_timeout     (double, default: 2.0)        — watchdog timeout [s]
+ *   - bidirectional_esc   (bool,   default: false)      — true = [-1,1], false = [0,1]
  *
  * Use this mode for quick open-loop testing without tuning speed/heading PIDs.
  */
@@ -47,7 +50,7 @@ class RoverManualMode : public px4_ros2::ModeBase
 {
 public:
   explicit RoverManualMode(rclcpp::Node & node)
-  : ModeBase(node, Settings{"Rover Manual"}.preventArming(false)),
+  : ModeBase(node, Settings{"RoverManual"}.preventArming(false)),
     node_(node)
   {
     throttle_steering_setpoint_ =
@@ -84,6 +87,12 @@ public:
     const bool use_stamped =
       node_.get_parameter("use_stamped").as_bool();
 
+    if (!node_.has_parameter("bidirectional_esc")) {
+      node_.declare_parameter("bidirectional_esc", false);
+    }
+    bidirectional_esc_ =
+      node_.get_parameter("bidirectional_esc").as_bool();
+
     // ── Subscriber (one type per topic — DDS constraint) ─────────
     if (use_stamped) {
       cmd_vel_stamped_sub_ = node_.create_subscription<geometry_msgs::msg::TwistStamped>(
@@ -102,10 +111,13 @@ public:
     RCLCPP_INFO(
       node_.get_logger(),
       "RoverManualMode: subscribing to '%s' (%s), "
-      "timeout=%.2f s, max_speed=%.2f m/s, max_steering_rate=%.2f rad/s",
+      "timeout=%.2f s, max_speed=%.2f m/s, max_steering_rate=%.2f rad/s, "
+      "bidirectional_esc=%s (throttle range %s)",
       topic.c_str(), use_stamped ? "TwistStamped" : "Twist",
       cmd_vel_timeout_s_,
-      static_cast<double>(max_speed_), static_cast<double>(max_steering_rate_));
+      static_cast<double>(max_speed_), static_cast<double>(max_steering_rate_),
+      bidirectional_esc_ ? "true" : "false",
+      bidirectional_esc_ ? "[-1, 1]" : "[0, 1]");
   }
 
   void onActivate() override
@@ -164,10 +176,13 @@ public:
       cmd_vel_timed_out_ = false;
     }
 
-    // Normalize forward speed to [-1, 1]
+    // Normalize forward speed: [-1, 1] for bidirectional ESC, [0, 1] for unidirectional
     float throttle = 0.0f;
     if (max_speed_ > 0.0f) {
-      throttle = std::clamp(static_cast<float>(cmd.linear.x) / max_speed_, -1.0f, 1.0f);
+      const float raw = static_cast<float>(cmd.linear.x) / max_speed_;
+      throttle = bidirectional_esc_
+        ? std::clamp(raw, -1.0f, 1.0f)
+        : std::clamp(raw,  0.0f, 1.0f);
     }
 
     // Normalize yaw rate to [-1, 1] and negate (ROS CCW+ → PX4 right+)
@@ -204,6 +219,7 @@ private:
   float max_speed_{2.0f};
   float max_steering_rate_{1.0f};
   double cmd_vel_timeout_s_{2.0};
+  bool bidirectional_esc_{false};
   bool cmd_vel_received_{false};
   bool cmd_vel_timed_out_{false};
 };

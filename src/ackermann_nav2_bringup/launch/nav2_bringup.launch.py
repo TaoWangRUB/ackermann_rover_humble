@@ -103,6 +103,34 @@ ARGUMENTS = [
         default_value='info',
         description='Log level',
     ),
+    DeclareLaunchArgument(
+        'reversible_drive',
+        default_value='false',
+        choices=['true', 'false'],
+        description=(
+            'Allow reverse driving. '
+            'false = unidirectional ESC: vx_min=0, min_velocity x=0. '
+            'true  = bidirectional ESC: vx_min=-0.35, min_velocity x=-0.5.'
+        ),
+    ),
+    DeclareLaunchArgument(
+        'bt_xml',
+        default_value=PathJoinSubstitution([
+            get_package_share_directory('nav2_bt_navigator'),
+            'behavior_trees',
+            'navigate_to_pose_w_replanning_and_recovery.xml',
+        ]),
+        description='Behavior Tree XML for NavigateToPose',
+    ),
+    DeclareLaunchArgument(
+        'navigate_through_poses_bt',
+        default_value=PathJoinSubstitution([
+            get_package_share_directory('nav2_bt_navigator'),
+            'behavior_trees',
+            'navigate_through_poses_w_replanning_and_recovery.xml',
+        ]),
+        description='Behavior Tree XML for NavigateThroughPoses',
+    ),
 ]
 
 
@@ -118,6 +146,9 @@ def launch_setup(context, *args, **kwargs):
     container_name_full = (namespace, '/', container_name)
     use_respawn = LaunchConfiguration('use_respawn')
     log_level = LaunchConfiguration('log_level')
+    is_reversible = LaunchConfiguration('reversible_drive').perform(context).lower() == 'true'
+    bt_xml = LaunchConfiguration('bt_xml')
+    navigate_through_poses_bt = LaunchConfiguration('navigate_through_poses_bt')
 
     lifecycle_nodes = [
         'controller_server',
@@ -146,6 +177,15 @@ def launch_setup(context, *args, **kwargs):
         'autostart': autostart,
         #'use_sim_time': use_sim_time,
         #'enable_stamped_cmd_vel': enable_stamped_cmd_vel,
+        'vx_min': '-0.35' if is_reversible else '0.0',
+        # Planner motion model: Reeds-Shepp allows reverse arcs (bidirectional),
+        # Dubin is forward-only arcs. Must match reversible_drive setting.
+        'motion_model_for_search': 'REEDS_SHEPP' if is_reversible else 'DUBIN',
+        # min_velocity is a float[] — RewrittenYaml only handles scalars, so it is
+        # injected directly on the velocity_smoother node below.
+    }
+    min_velocity_override = {
+        'min_velocity': [-0.5, 0.0, -2.0] if is_reversible else [0.0, 0.0, -2.0],
     }
 
     configured_params = ParameterFile(
@@ -228,7 +268,10 @@ def launch_setup(context, *args, **kwargs):
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params],
+                parameters=[configured_params, {
+                    'default_nav_to_pose_bt_xml': bt_xml,
+                    'default_nav_through_poses_bt_xml': navigate_through_poses_bt,
+                }],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings,
             ),
@@ -250,7 +293,7 @@ def launch_setup(context, *args, **kwargs):
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params],
+                parameters=[configured_params, min_velocity_override],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
             ),
@@ -334,7 +377,10 @@ def launch_setup(context, *args, **kwargs):
                         package='nav2_bt_navigator',
                         plugin='nav2_bt_navigator::BtNavigator',
                         name='bt_navigator',
-                        parameters=[configured_params],
+                        parameters=[configured_params, {
+                            'default_nav_to_pose_bt_xml': bt_xml,
+                            'default_nav_through_poses_bt_xml': navigate_through_poses_bt,
+                        }],
                         remappings=remappings,
                     ),
                     ComposableNode(
@@ -348,7 +394,7 @@ def launch_setup(context, *args, **kwargs):
                         package='nav2_velocity_smoother',
                         plugin='nav2_velocity_smoother::VelocitySmoother',
                         name='velocity_smoother',
-                        parameters=[configured_params],
+                        parameters=[configured_params, min_velocity_override],
                         remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
                     ),
                     ComposableNode(
