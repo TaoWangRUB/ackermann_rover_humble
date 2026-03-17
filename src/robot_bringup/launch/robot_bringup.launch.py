@@ -83,7 +83,7 @@ ARGUMENTS = [
             text=os.path.join(
                 get_package_share_directory('nav2_bt_navigator'),
                 'behavior_trees',
-                'navigate_w_replanning_and_recovery.xml'
+                'navigate_to_pose_w_replanning_and_recovery.xml'
             )
         ),
         description='Behavior Tree XML file for NavigateToPose.'
@@ -127,6 +127,15 @@ ARGUMENTS = [
         default_value='speed_steering',
         description='PX4 bridge mode: trajectory, speed_steering, speed_attitude, or manual.'
     ),
+    DeclareLaunchArgument(
+        'reversible_drive',
+        default_value='false',
+        choices=['true', 'false'],
+        description=(
+            'Bidirectional ESC: true = allow reverse (vx_min<0, throttle [-1,1]); '
+            'false = unidirectional (vx_min=0, throttle [0,1]).'
+        ),
+    ),
 ]
 
 
@@ -150,6 +159,7 @@ def generate_launch_description() -> LaunchDescription:
     rviz_enable = LaunchConfiguration('rviz')
     enable_px4_sitl = LaunchConfiguration('enable_px4_sitl')
     px4_mode_type = LaunchConfiguration('px4_mode_type')
+    reversible_drive = LaunchConfiguration('reversible_drive')
 
     robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
@@ -197,6 +207,7 @@ def generate_launch_description() -> LaunchDescription:
             'params_file': nav2_params_file,
             'bt_xml': nav2_bt_xml,
             'navigate_through_poses_bt': nav2_through_bt,
+            'reversible_drive': reversible_drive,
         }.items()
     )
 

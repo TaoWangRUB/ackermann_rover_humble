@@ -25,6 +25,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PX4_CMD="${SCRIPT_DIR}/px4_cmd.sh"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
+    exit 0
+fi
+
 VERIFY_ONLY=false
 if [[ "${1:-}" == "--verify-only" ]]; then
     VERIFY_ONLY=true

@@ -7,20 +7,17 @@
 #   --px4              Enable PX4 SITL (disables ros2_control, implies --bridge --vo-bridge)
 #   --rtabmap          Launch RTAB-Map SLAM
 #   --nav2             Launch Nav2 navigation stack
-#   --bridge[=MODE]    Launch PX4 mode node (default: speed_steering; options: trajectory, speed_attitude, manual)
-#   --vo-bridge        Launch VO bridge (px4_vision_odom → /fmu/in/vehicle_visual_odometry)
-#   --odom-topic=TOPIC Odometry source for VO bridge (default: /odometry/filtered)
-#   --odom-transport   Odometry transport for VO: 'xrce' (default) or 'mavlink'
-#   --mav-device       MAVLink device for MAVLink transport (default: /dev/ttyACM0)
-#   --mav-baud         MAVLink baud (default: 57600)
-#   --mav-rate         MAVLink publish rate (default: 20)
-#   --no-rviz          Disable RViz2
+#   --bridge[=MODE]      Launch PX4 mode node (default: manual; options: speed_steering, trajectory, speed_attitude)
+#   --vo-bridge          Launch VO bridge: px4_vision_odom + px4_vehicle_odometry
+#   --odom-topic=TOPIC   Odometry source for vision odom node (default: /odometry/filtered)
+#   --reversible-drive   Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
+#   --no-rviz            Disable RViz2
 #   --build[=PKG]      Build workspace (or specific pkg) before launching
 #   --build-only[=PKG] Build only, do not launch
 #
 # Flag implications:
 #   --px4        → auto-enables --bridge + --vo-bridge (PX4 SITL needs both)
-#   --vo-bridge  alone launches only the VO node (no mode node)
+#   --vo-bridge  alone launches only px4_vision_odom + px4_vehicle_odometry (no mode node)
 #   --bridge     alone launches only the mode node (no VO bridge)
 #   --bridge     without --px4 keeps enable_px4_sitl=false (ros2_control stays active)
 #
@@ -35,17 +32,11 @@
 #   ── Gazebo + RTAB-Map + Nav2 ──
 #   ./scripts/start_ros2_nodes.sh --rtabmap --nav2
 #
-#   ── Gazebo + VO bridge only (ros2_control active, no PX4 mode node) ──
-#   ./scripts/start_ros2_nodes.sh --vo-bridge
+#   ── Gazebo + RTAB-Map + VO bridge (ros2_control active, no PX4 mode node) ──
+#   ./scripts/start_ros2_nodes.sh --rtabmap --vo-bridge
 #
-#   ── Gazebo + VO bridge + custom odom topic ──
-#   ./scripts/start_ros2_nodes.sh --vo-bridge --odom-topic=/rtabmap/odom
-#
-#   ── Gazebo + PX4 mode node only (ros2_control active, no VO bridge) ──
-#   ./scripts/start_ros2_nodes.sh --bridge=manual
-#
-#   ── Gazebo + PX4 mode node + VO bridge (ros2_control active) ──
-#   ./scripts/start_ros2_nodes.sh --bridge --vo-bridge
+#   ── Gazebo + RTAB-Map + VO bridge using rtabmap/odom directly (bypass EKF) ──
+#   ./scripts/start_ros2_nodes.sh --rtabmap --vo-bridge --odom-topic=/rtabmap/odom
 #
 #   ── Gazebo + RTAB-Map + Nav2 + VO bridge (ros2_control active) ──
 #   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --vo-bridge
@@ -62,6 +53,12 @@
 #   ── PX4 SITL + trajectory mode ──
 #   ./scripts/start_ros2_nodes.sh --px4 --bridge=trajectory
 #
+#   ── Unidirectional ESC (default) ──
+#   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --px4
+#
+#   ── Bidirectional ESC ──
+#   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --px4 --reversible-drive
+#
 #   ── Build all, then launch Gazebo ──
 #   ./scripts/start_ros2_nodes.sh --build
 #
@@ -74,8 +71,6 @@
 #
 #   ── Any combination + disable RViz ──
 #   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --vo-bridge --no-rviz
-#   # Use MAVLink transport for VO (uses px4_mavlink_vpe defaults):
-#   ./scripts/start_ros2_nodes.sh --vo-bridge --odom-transport=mavlink
 #
 # Prerequisites:
 #   1. Docker container must be running (docker-compose up -d)
@@ -92,11 +87,11 @@ PX4="false"
 RTABMAP="false"
 NAV2="false"
 RVIZ="true"
-BRIDGE=""
-BRIDGE_MODE="speed_steering"
+BRIDGE="false"
+BRIDGE_MODE="manual"
 VO_BRIDGE="false"
 ODOM_TOPIC="/odometry/filtered"
-ODOM_TRANSPORT="xrce"
+REVERSIBLE_DRIVE="false"
 BUILD="false"
 BUILD_ONLY="false"
 BUILD_PKGS=""
@@ -110,13 +105,16 @@ for arg in "$@"; do
         --no-rviz)      RVIZ="false" ;;
         --bridge)       BRIDGE="true" ;;
         --bridge=*)     BRIDGE="true"; BRIDGE_MODE="${arg#--bridge=}" ;;
-        --vo-bridge)    VO_BRIDGE="true" ;;
-        --odom-topic=*) ODOM_TOPIC="${arg#--odom-topic=}" ;;
-        --odom-transport=*) ODOM_TRANSPORT="${arg#--odom-transport=}" ;;
-        --build)        BUILD="true" ;;
+        --vo-bridge)         VO_BRIDGE="true" ;;
+        --odom-topic=*)      ODOM_TOPIC="${arg#--odom-topic=}" ;;
+        --reversible-drive)  REVERSIBLE_DRIVE="true" ;;
+        --build)             BUILD="true" ;;
         --build=*)      BUILD="true"; BUILD_PKGS="${arg#--build=}" ;;
         --build-only)   BUILD="true"; BUILD_ONLY="true" ;;
         --build-only=*) BUILD="true"; BUILD_ONLY="true"; BUILD_PKGS="${arg#--build-only=}" ;;
+        -h|--help)
+            sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
+            exit 0 ;;
         *)
             echo "Unknown argument: $arg"
             echo "Usage: $0 [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
@@ -159,11 +157,8 @@ if [[ "${BRIDGE}" == "true" ]]; then
     echo "  px4_bridge:   ${BRIDGE_MODE}"
 fi
 if [[ "${VO_BRIDGE}" == "true" ]]; then
-    echo "  VO bridge:    ${VO_BRIDGE}"
+    echo "  VO bridge:    true"
     echo "  Odom topic:   ${ODOM_TOPIC}"
-fi
-if [[ "${VO_BRIDGE}" == "true" ]]; then
-    echo "  Odom transport:${ODOM_TRANSPORT}"
 fi
 echo ""
 
@@ -174,30 +169,25 @@ LAUNCH_CMD+=" enable_px4_sitl:=${PX4}"
 LAUNCH_CMD+=" rtabmap:=${RTABMAP}"
 LAUNCH_CMD+=" nav2:=${NAV2}"
 LAUNCH_CMD+=" rviz:=${RVIZ}"
+LAUNCH_CMD+=" reversible_drive:=${REVERSIBLE_DRIVE}"
 
-# Chain additional processes after bringup when --bridge and/or --vo-bridge
+# Chain px4_bringup after robot_bringup when --bridge and/or --vo-bridge
 if [[ "${BRIDGE}" == "true" || "${VO_BRIDGE}" == "true" ]]; then
     LAUNCH_CMD+=" &"
     LAUNCH_CMD+=" BRINGUP_PID=\$!;"
     LAUNCH_CMD+=" PIDS=\$BRINGUP_PID;"
     LAUNCH_CMD+=" echo 'Waiting 5s for Gazebo to start before launching px4 nodes...';"
     LAUNCH_CMD+=" sleep 5;"
-
-    if [[ "${BRIDGE}" == "true" ]]; then
-        # Launch mode node + optionally VO bridge via px4_bringup.launch.py
-        LAUNCH_CMD+=" ros2 launch px4_bringup px4_bringup.launch.py mode_type:=${BRIDGE_MODE} enable_vo_bridge:=${VO_BRIDGE} odom_topic:=${ODOM_TOPIC} odometry_transport:=${ODOM_TRANSPORT} &"
-        LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
-    else
-        # VO bridge only — launch either XRCE node or MAVLink bridge directly
-        if [[ "${ODOM_TRANSPORT}" == "xrce" ]]; then
-            LAUNCH_CMD+=" ros2 run px4_bringup px4_vision_odom.py --ros-args -p odom_topic:=${ODOM_TOPIC} -p odom_frame:=odom -p base_frame:=ackermann/base_link &"
-            LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
-        else
-            LAUNCH_CMD+=" /workspace/scripts/px4_mavlink_vpe.sh --topic ${ODOM_TOPIC} &"
-            LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
-        fi
-    fi
-
+    LAUNCH_CMD+=" source /opt/ros/\$ROS_DISTRO/setup.bash;"
+    LAUNCH_CMD+=" source /workspace/install/setup.bash;"
+    LAUNCH_CMD+=" ros2 launch px4_bringup px4_bringup.launch.py"
+    LAUNCH_CMD+=" enable_mode_node:=${BRIDGE}"
+    LAUNCH_CMD+=" mode_type:=${BRIDGE_MODE}"
+    LAUNCH_CMD+=" enable_vo_bridge:=${VO_BRIDGE}"
+    LAUNCH_CMD+=" odom_topic:=${ODOM_TOPIC}"
+    LAUNCH_CMD+=" enable_vehicle_odometry:=${VO_BRIDGE}"
+    LAUNCH_CMD+=" reversible_drive:=${REVERSIBLE_DRIVE} &"
+    LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
     LAUNCH_CMD+=" trap 'kill \$PIDS 2>/dev/null; wait' EXIT INT TERM;"
     LAUNCH_CMD+=" wait"
 fi
