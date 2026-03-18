@@ -50,11 +50,11 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.35
+      yaw_goal_tolerance: 0.5
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
-      time_steps: 40
+      time_steps: 56
       model_dt: 0.05
       batch_size: 1000
       ax_max: 3.0
@@ -70,7 +70,7 @@ controller_server:
       vy_max: 0.5
       wz_max: 1.9
       iteration_count: 1
-      prune_distance: 1.7
+      prune_distance: 1.0
       transform_tolerance: 0.3
       temperature: 0.3
       gamma: 0.015
@@ -106,11 +106,11 @@ controller_server:
         enabled: true
         cost_power: 1
         cost_weight: 3.0
-        threshold_to_consider: 0.5
+        threshold_to_consider: 0.25
       PreferForwardCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 5.0
+        cost_weight: 10.0
         threshold_to_consider: 0.5
       CostCritic:
         enabled: true
@@ -144,7 +144,7 @@ controller_server:
         offset_from_furthest: 4
         threshold_to_consider: 0.5
         max_angle_to_furthest: 1.0
-        mode: 0
+        mode: 2
       # TwirlingCritic:
       #   enabled: true
       #   twirling_cost_power: 1
@@ -246,10 +246,32 @@ planner_server:
     planner_plugins: ["GridBased"]
     costmap_update_timeout: 1.0
     GridBased:
-      plugin: "nav2_navfn_planner::NavfnPlanner"
-      tolerance: 0.5
-      use_astar: false
+      plugin: "nav2_smac_planner::SmacPlannerHybrid"
+      downsample_costmap: false
+      downsampling_factor: 1
+      tolerance: 0.25
       allow_unknown: true
+      max_iterations: 1000000
+      max_planning_time: 5.0
+      motion_model_for_search: "REEDS_SHEPP"  # overridden by launch: DUBIN (fwd-only) or REEDS_SHEPP (bidirectional)
+      angle_quantization_bins: 72
+      analytic_expansion_ratio: 3.5
+      analytic_expansion_max_length: 5.0
+      minimum_turning_radius: 0.50            # compromise: exits inflation zone (~0.22m robot + margin), loop stays manageable
+      reverse_penalty: 2.0
+      change_penalty: 0.05
+      non_straight_penalty: 1.05
+      cost_penalty: 2.0
+      retrospective_penalty: 0.015
+      lookup_table_size: 20.0
+      cache_obstacle_heuristic: false
+      debug_visualizations: false
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.3
+        w_data: 0.2
+        tolerance: 1.0e-10
+        do_refinement: true
 
 smoother_server:
   ros__parameters:

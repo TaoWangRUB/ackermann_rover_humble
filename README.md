@@ -92,7 +92,12 @@ Always run this before starting a new simulation session to avoid stale processe
 
 ## PX4 Bridge (`px4_bringup`)
 
-The `px4_bringup` package provides C++ bridges between the ROS 2 navigation stack and PX4 autopilot. Four C++ custom flight modes are implemented using the [`px4_ros2_interface_lib`](https://github.com/Auterion/px4-ros2-interface-lib) (added as a git submodule), plus a Python odometry bridge.
+The `px4_bringup` package provides C++ bridges between the ROS 2 navigation stack and PX4 autopilot. Four C++ custom flight modes are implemented using the [`px4_ros2_interface_lib`](https://github.com/Auterion/px4-ros2-interface-lib) (added as a git submodule). Two Python odometry bridges are available:
+
+- **`px4_vision_odom.py`** — converts `nav_msgs/Odometry` (ENU/FLU) to `VehicleOdometry` (NED/FRD) and publishes to `/fmu/in/vehicle_visual_odometry` via Micro-XRCE-DDS. The `odom_topic` argument selects the input odometry source.
+- **`px4_vehicle_odometry.py`** — subscribes to `/fmu/out/vehicle_odometry` (PX4 EKF2 output, NED/FRD) and converts to ENU/FLU for ROS 2, publishing on `/px4_vehicle_odom` and `/px4_vehicle_odom_base` for comparison with EKF odometry.
+
+Both nodes are launched together by `--vo-bridge`.
 
 ### Modes
 
@@ -101,26 +106,32 @@ The `px4_bringup` package provides C++ bridges between the ROS 2 navigation stac
 | `offboard_trajectory_mode`  | Offboard (TrajectorySetpoint)          | TF2 body→odom (ENU→NED) velocity                         | Generic offboard velocity control |
 | `rover_speed_steering_mode` | Custom registered (RoverSpeedSteering) | `linear.x` → speed, `angular.z` → normalized steering    | **Recommended for Ackermann**     |
 | `rover_speed_attitude_mode` | Custom registered (RoverSpeedAttitude) | `linear.x` → speed, `angular.z` integrated → yaw heading | Heading-hold driving              |
+| `rover_manual_mode`         | Custom registered (RoverManual)        | Pass-through throttle + steering                          | Manual teleoperation              |
 
 ### Launch
 
 ```bash
-# Default: rover speed+steering (recommended for Ackermann)
+# Mode node only (default: manual)
 ros2 launch px4_bringup px4_bringup.launch.py
 
-# Offboard trajectory mode
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=trajectory
+# Specific mode
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
 
-# Heading-hold mode
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_attitude
+# VO bridge only (no mode node)
+ros2 launch px4_bringup px4_bringup.launch.py enable_mode_node:=false enable_vo_bridge:=true
 
-# Open-loop manual mode
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=manual
+# Mode + VO bridge
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering enable_vo_bridge:=true
+
+# From host via helper script:
+./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_steering
+./scripts/start_px4_bringup_vo.sh --vo-bridge
+./scripts/start_px4_bringup_vo.sh --bridge --vo-bridge
 ```
 
 ### Odometry Bridge
 
-The `px4_vision_odom.py` script converts `nav_msgs/Odometry` (ENU/FLU) to PX4 `VehicleOdometry` (NED/FRD) using TF2 lookups at 50 Hz, matching the coordinate conventions defined in PX4's `GZBridge.cpp`. See [Architecture Overview](docs/architecture/overview.md) for the full coordinate conversion reference.
+`px4_vision_odom.py` converts `nav_msgs/Odometry` (ENU/FLU) to PX4 `VehicleOdometry` (NED/FRD). `px4_vehicle_odometry.py` does the inverse — PX4 EKF2 output back to ROS 2 frames for diagnostics. See [Architecture Overview](docs/architecture/overview.md) for the full coordinate conversion reference.
 
 ## Architecture Blueprints
 

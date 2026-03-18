@@ -3,7 +3,7 @@ title: Architecture Overview
 status: Draft
 owner: architecture_team
 agent: Copilot
-last_updated: 2026-02-18
+last_updated: 2026-03-14
 doc_type: architecture
 ros_distro: humble
 ---
@@ -173,7 +173,7 @@ Custom registered modes (`px4_ros2::ModeBase`) differ from traditional offboard 
 | Failsafe       | Basic offboard timeout                            | Full failsafe state machine integration   |
 | Coexistence    | One controller                                    | Multiple modes selectable via RC/QGC      |
 
-### Three Implemented Modes
+### Four Implemented Modes
 
 All modes subscribe to `/cmd_vel` (`geometry_msgs/Twist`) and are implemented as header-only C++ classes under `src/px4_bringup/include/px4_bringup/`.
 
@@ -202,53 +202,45 @@ All modes subscribe to `/cmd_vel` (`geometry_msgs/Twist`) and are implemented as
 - **PX4 controller chain**: Velocity → Attitude → Rate → Control Allocation
 - **Use case**: Heading-hold driving; PX4 handles heading → steering conversion
 
-### Odometry Bridge (`px4_vision_odom.py`)
+#### 4. Rover Manual Mode (`rover_manual_mode`)
 
-Converts `nav_msgs/Odometry` (ENU/FLU) → PX4 `VehicleOdometry` (NED/FRD) at a fixed **20 Hz** output rate (hardcoded `0.05 s` timer period):
-- Position: ENU `(y, x, -z)` → NED (`pose_frame = POSE_FRAME_NED`)
-- Quaternion: `q_ENU→NED · q_FLU→ENU · inv(q_FLU→FRD)` (Hamilton product, not a component swap)
-- Velocity: body FLU `(x, -y, -z)` → body FRD (`velocity_frame = VELOCITY_FRAME_BODY_FRD`)
-- Angular velocity: body FLU `(x, -y, -z)` → body FRD
+- **Setpoint type**: `RoverManualSetpointType`
+- **Behavior**: Pass-through open-loop throttle and steering commands from `/cmd_vel` directly to PX4 without higher-level heading integration. Useful for manual teleoperation or baseline hardware testing where the autopilot should not perform trajectory or heading control.
+- **Conversion**: `linear.x` → throttle command (mapped to forward/backward RPM or velocity proxy), `angular.z` → steering command (mapped to steering angle or normalized steering input). Values are clamped to safety limits defined in PX4 parameters.
+- **Use case**: Direct teleoperation and low-level hardware characterization; not recommended for autonomous planning loops where heading stabilization is desired.
 
-The odom subscriber callback updates internal state; the timer publishes the latest converted message at the fixed rate regardless of input frequency.
+### Odometry Bridge (XRCE)
+
+Two Python bridge nodes are launched together by `--vo-bridge`:
+
+- **`px4_vision_odom.py`** — converts `nav_msgs/Odometry` (ENU/FLU) from `odom_topic` to `VehicleOdometry` (NED/FRD) and publishes to `/fmu/in/vehicle_visual_odometry` via Micro-XRCE-DDS. Coordinate conversion:
+  - Position: ENU `(y, x, -z)` → NED (`pose_frame = POSE_FRAME_NED`)
+  - Quaternion: `q_ENU→NED · q_FLU→ENU · inv(q_FLU→FRD)` (Hamilton product)
+  - Velocity: body FLU `(x, -y, -z)` → body FRD (`velocity_frame = VELOCITY_FRAME_BODY_FRD`)
+  - Angular velocity: body FLU `(x, -y, -z)` → body FRD
+
+- **`px4_vehicle_odometry.py`** — subscribes to `/fmu/out/vehicle_odometry` (NED/FRD from PX4 EKF2) and converts back to ENU/FLU for ROS 2, publishing on `/px4_vehicle_odom` (`frame_id: vehicle_odom`, `child_frame_id: cubepilot_link`) and `/px4_vehicle_odom_base` (re-expressed to `odom → ackermann/base_link` for direct comparison with the EKF odometry).
+
+The `odom_topic` argument applies only to `px4_vision_odom.py` (the input source for the visual odometry feed). `px4_vehicle_odometry.py` always reads from `/fmu/out/vehicle_odometry`.
 
 ### Launch
 
 ```bash
 # Inside Docker:
-ros2 launch px4_bringup px4_bringup.launch.py                              # speed_steering (default)
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=trajectory         # offboard trajectory
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_attitude     # heading-hold
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=manual             # open-loop throttle + steering
+ros2 launch px4_bringup px4_bringup.launch.py                                                     # manual mode only (default)
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=trajectory                              # offboard trajectory
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_attitude                          # heading-hold
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering                          # speed + steering
+ros2 launch px4_bringup px4_bringup.launch.py enable_mode_node:=false enable_vo_bridge:=true     # VO bridge only (no mode node)
+ros2 launch px4_bringup px4_bringup.launch.py enable_vo_bridge:=true odom_topic:=/odometry/filtered  # mode + VO bridge
 
 # From host (parameterized helper):
-./scripts/start_px4_bringup_vo.sh                                           # mode only, no VO
-./scripts/start_px4_bringup_vo.sh --vo-bridge                               # mode + VO bridge
-./scripts/start_px4_bringup_vo.sh --vo-bridge --odom-topic /rtabmap/odom    # custom odom source
-./scripts/start_px4_bringup_vo.sh --mode-type trajectory --vo-bridge        # trajectory mode + VO
-```
-
-### File Structure
-
-```
-src/px4_bringup/
-├── include/px4_bringup/
-│   ├── offboard_trajectory_mode.hpp
-│   ├── rover_speed_steering_mode.hpp
-│   └── rover_speed_attitude_mode.hpp
-├── src/
-│   ├── offboard_trajectory_main.cpp
-│   ├── rover_speed_steering_main.cpp
-│   └── rover_speed_attitude_main.cpp
-├── scripts/
-│   ├── px4_offboard_control.py     # Standalone offboard velocity controller
-│   └── px4_vision_odom.py          # Odometry ENU/FLU → NED/FRD (TF2, 20 Hz)
-├── launch/
-│   └── px4_bringup.launch.py
-├── config/
-│   └── px4_bridge.yaml
-├── CMakeLists.txt
-└── package.xml
+./scripts/start_px4_bringup_vo.sh --bridge                                                        # mode node only (manual)
+./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_steering                             # speed_steering mode only
+./scripts/start_px4_bringup_vo.sh --vo-bridge                                                     # VO bridge only (vision odom + vehicle odom)
+./scripts/start_px4_bringup_vo.sh --bridge --vo-bridge                                            # mode + VO bridge (manual mode)
+./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_steering --vo-bridge                 # speed_steering mode + VO
+./scripts/start_px4_bringup_vo.sh --bridge --vo-bridge --odom-topic /rtabmap/odom                 # mode + VO, custom odom topic
 ```
 
 ## PX4 SITL Co-Simulation
@@ -259,15 +251,15 @@ PX4 Software-In-The-Loop (SITL) runs alongside Gazebo Harmonic inside the same D
 
 - PX4 v1.16+ compiled **inside Docker** with `GZ_DISTRO=harmonic` so the `gz_bridge` module links against the container's gz-harmonic libraries.
 - Airframe **51000** (`gz_rover_ackermann`).
-- `warehouse.sdf` must contain `<spherical_coordinates>` for GPS/magnetometer reference.
+- `warehouse.sdf` must contain `<spherical_coordinates>` for GPS/magnetometer reference (GPS mode only; not required for VIO-only mode with `--vio`).
 
 ### Launch
 
 #### Quick Start (from host)
 
 The helper script `scripts/start_ros2_nodes.sh` wraps `robot_bringup` (and
-optionally `px4_bridge` / VO bridge) so you don't need to source workspaces or
-type long commands:
+optionally the px4 VO/mode bridge) so you don't need to source workspaces or
+type long commands.
 
 ```bash
 # ── Gazebo only (ros2_control) ──
@@ -279,25 +271,19 @@ type long commands:
 # ── Gazebo + RTAB-Map + Nav2 ──
 ./scripts/start_ros2_nodes.sh --rtabmap --nav2
 
-# ── Gazebo + VO bridge only (ros2_control active, no PX4 mode node) ──
-./scripts/start_ros2_nodes.sh --vo-bridge
+# ── Gazebo + RTAB-Map + VO bridge (ros2_control active, no PX4 mode node) ──
+./scripts/start_ros2_nodes.sh --rtabmap --vo-bridge
 
-# ── Gazebo + VO bridge + custom odom topic ──
-./scripts/start_ros2_nodes.sh --vo-bridge --odom-topic=/rtabmap/odom
-
-# ── Gazebo + PX4 mode node only (ros2_control active, no VO bridge) ──
-./scripts/start_ros2_nodes.sh --bridge
-
-# ── Gazebo + PX4 mode node + VO bridge (ros2_control active) ──
-./scripts/start_ros2_nodes.sh --bridge --vo-bridge
+# ── Gazebo + RTAB-Map + VO bridge using rtabmap/odom directly (bypass EKF) ──
+./scripts/start_ros2_nodes.sh --rtabmap --vo-bridge --odom-topic=/rtabmap/odom
 
 # ── Gazebo + RTAB-Map + Nav2 + VO bridge (ros2_control active) ──
 ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --vo-bridge
 
 # ── Gazebo + RTAB-Map + Nav2 + PX4 mode + VO bridge (ros2_control active) ──
-./scripts/start_ros2_nodes.sh --rtabmap --nav2 --bridge --vo-bridge
+./scripts/start_ros2_nodes.sh --rtabmap --nav2 --bridge=manual --vo-bridge
 
-# ── PX4 SITL (no ros2_control, auto-enables mode + VO) ──
+# ── PX4 SITL (no ros2_control, auto mode + VO) ──
 ./scripts/start_ros2_nodes.sh --px4
 
 # ── PX4 SITL + RTAB-Map + Nav2 ──
@@ -305,6 +291,12 @@ type long commands:
 
 # ── PX4 SITL + trajectory mode ──
 ./scripts/start_ros2_nodes.sh --px4 --bridge=trajectory
+
+# ── PX4 SITL with VIO-only EKF2 (no GPS) ──
+./scripts/start_px4_sitl.sh --vio
+
+# ── PX4 SITL official model + VIO-only EKF2 ──
+./scripts/start_px4_sitl.sh --official --vio
 
 # ── Build all, then launch Gazebo ──
 ./scripts/start_ros2_nodes.sh --build
@@ -327,14 +319,9 @@ type long commands:
 | `--px4`             | PX4 SITL mode (disables ros2_control, auto-enables `--bridge` + `--vo-bridge`) |
 | `--rtabmap`         | Launch RTAB-Map SLAM                                                   |
 | `--nav2`            | Launch Nav2 navigation stack                                           |
-| `--bridge[=MODE]`   | Launch PX4 mode node (default: `speed_steering`; options: `trajectory`, `speed_attitude`, `manual`) |
-| `--vo-bridge`       | Launch VO bridge only (`px4_vision_odom` → `/fmu/in/vehicle_visual_odometry`) |
-| `--odom-topic=TOPIC` | Odometry source for VO bridge (default: `/odometry/filtered`)          |
-| `--no-rviz`         | Disable RViz2                                                          |
-| `--build[=PKG]`     | Build workspace (or specific package) before launching                 |
-| `--build-only[=PKG]` | Build only, do not launch                                             |
-
-**Flag implications:**
+| `--bridge[=MODE]`   | Launch PX4 mode node only (default: `manual`; options: `speed_steering`, `trajectory`, `speed_attitude`) |
+| `--vo-bridge`       | Launch VO bridge: `px4_vision_odom.py` (vision odom → PX4) + `px4_vehicle_odometry.py` (PX4 odom → ROS 2) |
+| `--odom-topic=TOPIC` | Odometry topic for `px4_vision_odom.py` only (default: `/odometry/filtered`) |
 
 | Input              | `enable_px4_sitl` | ros2_control | Mode node | VO bridge |
 | ------------------- | ----------------- | ------------ | --------- | --------- |
@@ -436,9 +423,13 @@ cd /px4/build/px4_sitl_default/bin && timeout 5 ./px4-listener vehicle_local_pos
 
 #### Preflight & Arming
 
-> **Note:** The `start_px4_sitl.sh` helper script already sets `COM_RC_IN_MODE=4`
-> (disable manual RC requirement) and switches to Hold mode (`auto:loiter`) on
-> startup. These are required for SITL without a joystick/RC transmitter.
+> **Note:** When using `--vio`, `start_px4_sitl.sh` automatically sets
+> `COM_RC_IN_MODE=4` (disables manual RC requirement) via `PX4_PARAM_*` environment
+> variables, which `init.d-posix/rcS` applies after param import and airframe defaults.
+> Without `--vio`, set it manually at `pxh>`: `param set COM_RC_IN_MODE 4`.
+> Switching to Hold mode (`commander mode auto:loiter`) and setting the EKF origin
+> (`commander set_ekf_origin`) must always be done manually from `pxh>` after the
+> VIO bridge is publishing.
 
 ```bash
 cd /px4/build/px4_sitl_default/bin
@@ -569,6 +560,62 @@ ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist \
   '{linear: {x: 1.0}, angular: {z: 0.0}}'
 ```
 
+The registration-and-activation flow above can be checked with the PX4
+registration reply and then activated from the host using ROS 2 and the
+PX4 `px4-commander` helper. Example (these work in this repo's setup):
+
+```bash
+# 1) watch registration replies from PX4 (shows name, mode_id)
+pxh> listener register_ext_component_reply
+
+# 2) request the registered external mode (mode id 23 in this repo)
+ros2 topic pub --once /fmu/in/vehicle_command px4_msgs/msg/VehicleCommand \\
+   "{command: 100001, param1: 23.0, target_system: 1, target_component: 1, source_system: 255, source_component: 0, from_external: true}"
+```
+
+I also added a helper script at `scripts/activate_rover_manual.sh` that
+publishes the vehicle command inside the `ackermann_slam` container and
+then runs `px4-commander arm` from the PX4 build directory.
+
+### VIO-Only Mode (No GPS)
+
+Use `--vio` to run SITL with External Vision (EV) as the sole navigation source — matching the real-hardware Cube Black configuration.
+
+```bash
+# Terminal 2:
+./scripts/start_microxrce_agent.sh
+# Terminal 3 — VIO mode (sets EKF2 params automatically):
+./scripts/start_px4_sitl.sh --vio
+```
+
+The script exports `PX4_PARAM_*` environment variables before launching PX4.
+`init.d-posix/rcS` processes these after param import and airframe defaults, setting:
+
+| Parameter | Value | Effect |
+|---|---|---|
+| `EKF2_GPS_CTRL` | 0 | Disable GPS fusion |
+| `EKF2_EV_CTRL` | 15 | Fuse EV hpos + vpos + vel + yaw |
+| `EKF2_HGT_REF` | 3 | Vision height reference |
+| `EKF2_MAG_TYPE` | 5 | No magnetometer (VIO heading) |
+| `EKF2_EVP/V/A_NOISE` | 0.1 | Vision measurement noise |
+| `EKF2_EV_DELAY` | 50 ms | Vision pipeline latency compensation |
+| `COM_RC_IN_MODE` | 4 | Stick input disabled (autonomous) |
+
+After boot, once the VIO bridge (`px4_bringup.launch.py`) is publishing, run from `pxh>`:
+
+```
+commander set_ekf_origin 51.4934 7.4120 100.0
+commander mode auto:loiter
+```
+
+Verify EKF2 is fusing vision:
+
+```bash
+cd /px4/build/px4_sitl_default/bin
+./px4-listener vehicle_local_position -n 1   # xy_valid=True, z_valid=True
+./px4-listener estimator_status_flags -n 1   # cs_ev_pos=True, cs_ev_vel=True, cs_ev_yaw=True
+```
+
 ### Shutdown
 
 ```bash
@@ -588,7 +635,7 @@ docker-compose -f docker/docker-compose.yml exec ackermann_slam bash -c "pkill -
 | `worlds/warehouse.sdf`             | Spherical coordinates for GPS reference       |
 | `gazebo_bringup.launch.py`         | Conditional ros2_control skip                 |
 | `robot_bringup.launch.py`          | `enable_px4_sitl` and `px4_mode_type` args    |
-| `scripts/start_px4_sitl.sh`        | PX4 SITL launcher (airframe 51000)            |
+| `scripts/start_px4_sitl.sh`        | PX4 SITL launcher (airframe 51000); `--official` for stock model, `--vio` for VIO-only EKF2 (no GPS) |
 | `scripts/start_microxrce_agent.sh` | MicroXRCEAgent launcher (UDP port 8888)       |
 | `scripts/start_ros2_nodes.sh`      | Host-side launcher (Gazebo + optional bridge) |
 | `scripts/test_actuators.sh`        | Host-side actuator test wrapper                |

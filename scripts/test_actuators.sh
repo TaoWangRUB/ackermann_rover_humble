@@ -38,6 +38,11 @@ usage() {
     exit 1
 }
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
+    exit 0
+fi
+
 CMD="${1:-}"
 VALUE="${2:-0.5}"
 DURATION="${3:-3}"
