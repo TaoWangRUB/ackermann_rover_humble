@@ -1,0 +1,40 @@
+realsense_camera_node:
+  ros__parameters:
+    # Camera identifier — used as topic namespace and TF frame prefix
+    camera_name: "camera"
+
+    # USB serial number of the device (empty string = first device found)
+    serial_no: ""
+
+    # Camera model: "d435i" | "l515" | "t265"
+    # Determines which streams are enabled and which topics are published
+    camera_model: "d435i"
+
+    # -------------------------------------------------------------------------
+    # D435i / L515 options
+    # -------------------------------------------------------------------------
+
+    # Stream enable flags (ignored for t265)
+    enable_color: true
+    enable_depth: true
+    enable_imu: false        # D435i and L515 support IMU; automatically enabled for t265
+
+    # Color stream
+    color_width: 640
+    color_height: 480
+    color_fps: 30
+
+    # Depth stream
+    depth_width: 640
+    depth_height: 480
+    depth_fps: 30
+
+    # Align depth frame to color frame coordinate system
+    align_depth_to_color: false
+
+    # -------------------------------------------------------------------------
+    # T265 options (ignored for d435i / l515)
+    # -------------------------------------------------------------------------
+
+    # Fisheye frame rate
+    fisheye_fps: 30
