@@ -109,6 +109,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     gcc-arm-none-eabi \
     libnewlib-arm-none-eabi \
     libstdc++-arm-none-eabi-newlib \
+    libusb-1.0-0-dev \
+    libudev-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # PX4 Python dependencies
@@ -129,6 +131,24 @@ RUN cd /tmp && \
     -DUAGENT_USE_SYSTEM_LOGGER=OFF -DUAGENT_BUILD_TESTS=OFF && \
     make -j$(nproc) && make install && ldconfig && \
     rm -rf /tmp/Micro-XRCE-DDS-Agent
+
+# Intel RealSense SDK v2.51.1
+# FORCE_RSUSB_BACKEND=ON uses the libusb user-space backend (no kernel UVC patch needed in Docker)
+# Installed to /usr/local so find_package(realsense2) works for downstream ROS 2 packages
+RUN cd /tmp && \
+    git clone --depth 1 --branch v2.51.1 https://github.com/IntelRealSense/librealsense.git && \
+    find /tmp/librealsense \( -name "*.h" -o -name "*.cpp" \) \
+        -exec sed -i "s/\xe2\x80\x98/'/g; s/\xe2\x80\x99/'/g" {} + && \
+    cd librealsense && mkdir build && cd build && \
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DFORCE_RSUSB_BACKEND=ON \
+        -DBUILD_EXAMPLES=OFF \
+        -DBUILD_GRAPHICAL_EXAMPLES=OFF \
+        -DBUILD_WITH_CUDA=OFF \
+        -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    make -j$(nproc) && make install && ldconfig && \
+    rm -rf /tmp/librealsense
 
 # (Optional) Install package dependencies for any repos brought in via ros2.repos.
 # Your bind-mounted project can run rosdep / colcon inside the container.
