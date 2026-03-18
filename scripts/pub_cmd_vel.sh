@@ -7,9 +7,14 @@
 #   ./scripts/pub_cmd_vel.sh 0 0              # stop
 set -euo pipefail
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
+    exit 0
+fi
+
 LINEAR_X="${1:-1.0}"
-ANGULAR_Z="${2:-0.0}"
-RATE="${3:-10}"
+ANGULAR_Z="${2:-0.5}"
+RATE="${3:-1}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="${SCRIPT_DIR}/../docker/docker-compose.yml"

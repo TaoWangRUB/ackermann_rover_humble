@@ -74,7 +74,7 @@ def generate_launch_description() -> LaunchDescription:
         'subscribe_scan':subscribe_scan,
         'subscribe_odom':True,
         'use_action_for_goal':True,
-        'odom_sensor_sync': True,   
+        'odom_sensor_sync': False,   
         # RTAB-Map's parameters should be strings:
         'Mem/NotLinkedNodesKept':'false',
         'Grid/MaxGroundHeight': '0.1',
@@ -144,6 +144,7 @@ def generate_launch_description() -> LaunchDescription:
             'use_mag': False,
             'world_frame': 'enu',
             'publish_tf': False,
+            'use_sim_time': use_sim_time,
         }],
         remappings=[('imu/data_raw', '/l515/imu/raw_transformed')],
     )
@@ -298,6 +299,7 @@ def generate_launch_description() -> LaunchDescription:
             'angle_min': -3.1415,
             'angle_max': 3.1415,
             'angle_increment': 0.0087,
+            'use_sim_time': use_sim_time,
         }],
         remappings=[
             ('depth', LaunchConfiguration('depth_image_topic')),
@@ -312,7 +314,8 @@ def generate_launch_description() -> LaunchDescription:
         package='rtabmap_util', executable='point_cloud_xyz', output='screen',
         parameters=[{'decimation': 2,
                      'max_depth': 20.0,
-                     'voxel_size': 0.02}],
+                     'voxel_size': 0.02,
+                     'use_sim_time': use_sim_time}],
         remappings=remappings)
     
     # Second, we segment the floor from the obstacles.
