@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>realsense_camera_bingup</name>
+  <name>realsense_camera_bringup</name>
   <version>0.1.0</version>
   <description>Custom ROS 2 wrapper for Intel RealSense cameras using librealsense2 SDK v2.51.1.</description>
   <maintainer email="dev@example.com">Ackermann Rover Team</maintainer>
@@ -10,6 +10,10 @@
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
   <depend>nav_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>eigen3_cmake_module</depend>
   <depend>cv_bridge</depend>
 
   <!-- librealsense2 is a system library installed to /usr/local, not a ROS package -->

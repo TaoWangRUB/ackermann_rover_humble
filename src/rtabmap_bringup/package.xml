@@ -21,8 +21,6 @@
   <exec_depend>imu_filter_madgwick</exec_depend>
   <exec_depend>depthimage_to_laserscan</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>nav_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
 
   <export>
