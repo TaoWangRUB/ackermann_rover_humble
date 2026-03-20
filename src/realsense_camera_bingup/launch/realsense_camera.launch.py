@@ -21,10 +21,10 @@ ARGUMENTS = [
                           description='IMU streams — D435i and L515'),
     DeclareLaunchArgument('color_width',  default_value='640'),
     DeclareLaunchArgument('color_height', default_value='480'),
-    DeclareLaunchArgument('color_fps',    default_value='30'),
+    DeclareLaunchArgument('color_fps',    default_value='15'),
     DeclareLaunchArgument('depth_width',  default_value='640'),
     DeclareLaunchArgument('depth_height', default_value='480'),
-    DeclareLaunchArgument('depth_fps',    default_value='30'),
+    DeclareLaunchArgument('depth_fps',    default_value='15'),
     DeclareLaunchArgument('align_depth_to_color', default_value='false'),
     # T265
     DeclareLaunchArgument('fisheye_fps', default_value='30',
@@ -39,7 +39,7 @@ def generate_launch_description() -> LaunchDescription:
     node = Node(
         package='realsense_camera_bingup',
         executable='realsense_camera_node',
-        name='realsense_camera_node',
+        name=LaunchConfiguration('camera_name'),
         output='screen',
         parameters=[
             params_file,
