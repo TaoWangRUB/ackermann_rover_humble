@@ -1,55 +1,40 @@
 #!/usr/bin/env bash
 # Launch one or more RealSense cameras inside the Docker container.
-# Each requested camera runs as its own realsense_camera_node instance.
+# All cameras run from a single launch file with IfCondition flags.
 #
 # Usage (from host):
 #   ./scripts/start_cameras.sh [OPTIONS]
 #
-# Camera flags (default: --l515 if none specified):
-#   --d435i                Launch D435i (camera_name=d435i)
-#   --l515                 Launch L515  (camera_name=l515)
-#   --t265                 Launch T265  (camera_name=t265)
+# Camera flags (default: --d435i if none specified):
+#   --d435i                Launch D435i
+#   --l515                 Launch L515
+#   --t265                 Launch T265
 #
 # Per-camera options:
-#   --serial-d435i=SN      USB serial number for D435i (default: auto)
-#   --serial-l515=SN       USB serial number for L515  (default: auto)
-#   --serial-t265=SN       USB serial number for T265  (default: auto)
-#   --imu                  Enable IMU for D435i and L515 (default: disabled)
-#   --align-depth          Align depth to color for D435i / L515
+#   --serial-d435i=SN      USB serial number for D435i
+#   --serial-l515=SN       USB serial number for L515
+#   --serial-t265=SN       USB serial number for T265
+#   --imu / --no-imu       Enable/disable D435i IMU (default: enabled)
+#   --align-depth          Align depth to color (default: enabled)
+#   --no-align-depth       Disable depth alignment
 #   --infra                Enable infrared streams 1 & 2
-#   --enable-sync          Enable pipeline frame sync
-#   --exposure-rgb=VAL     Set RGB camera exposure (disables auto-exposure)
-#   --exposure-depth=VAL   Set depth module exposure (disables auto-exposure)
-#   --gain-rgb=VAL         Set RGB camera gain
-#   --gain-depth=VAL       Set depth module gain
-#   --color-profile=WxHxF  Color profile override (e.g. 640x480x30)
-#   --depth-profile=WxHxF  Depth profile override (e.g. 640x480x30)
+#   --exposure-rgb=VAL     RGB exposure in us (disables auto-exposure)
+#   --exposure-depth=VAL   Depth exposure in us (disables auto-exposure)
+#   --gain-rgb=VAL         RGB gain
+#   --gain-depth=VAL       Depth gain
+#   --color-profile=WxHxF  Color profile (e.g. 640x480x30)
+#   --depth-profile=WxHxF  Depth profile (e.g. 640x480x30)
 #
 # Build options:
 #   --build[=PKG]          Build workspace (or specific pkg) before launching
 #   --build-only[=PKG]     Build only, do not launch
 #
 # Examples:
-#   # Default: launch L515 only
-#   ./scripts/start_cameras.sh
-#
-#   # Launch D435i only
-#   ./scripts/start_cameras.sh --d435i
-#
-#   # Launch all three cameras
-#   ./scripts/start_cameras.sh --d435i --l515 --t265
-#
-#   # D435i with IMU + T265 tracking
-#   ./scripts/start_cameras.sh --d435i --t265 --imu
-#
-#   # Specific serial numbers (when multiple of same model connected)
-#   ./scripts/start_cameras.sh --d435i --serial-d435i=123456789 --l515 --serial-l515=987654321
-#
-#   # D435i with manual exposure and infrared
+#   ./scripts/start_cameras.sh                           # D435i only (default)
+#   ./scripts/start_cameras.sh --d435i --l515            # D435i + L515
+#   ./scripts/start_cameras.sh --d435i --l515 --t265     # all three
 #   ./scripts/start_cameras.sh --d435i --exposure-rgb=100 --infra
-#
-#   # Build package then launch
-#   ./scripts/start_cameras.sh --d435i --l515 --build=realsense_camera_bingup
+#   ./scripts/start_cameras.sh --build=realsense_camera_bringup --d435i
 #
 # Prerequisites:
 #   Docker container must be running (docker-compose up -d)
@@ -66,10 +51,9 @@ LAUNCH_T265="false"
 SERIAL_D435I=""
 SERIAL_L515=""
 SERIAL_T265=""
-ENABLE_IMU="false"
-ALIGN_DEPTH="false"
+ENABLE_IMU="true"
+ALIGN_DEPTH="true"
 ENABLE_INFRA="false"
-ENABLE_SYNC="false"
 EXPOSURE_RGB=""
 EXPOSURE_DEPTH=""
 GAIN_RGB=""
@@ -90,9 +74,10 @@ for arg in "$@"; do
         --serial-l515=*)     SERIAL_L515="${arg#--serial-l515=}" ;;
         --serial-t265=*)     SERIAL_T265="${arg#--serial-t265=}" ;;
         --imu)               ENABLE_IMU="true" ;;
+        --no-imu)            ENABLE_IMU="false" ;;
         --align-depth)       ALIGN_DEPTH="true" ;;
+        --no-align-depth)    ALIGN_DEPTH="false" ;;
         --infra)             ENABLE_INFRA="true" ;;
-        --enable-sync)       ENABLE_SYNC="true" ;;
         --exposure-rgb=*)    EXPOSURE_RGB="${arg#--exposure-rgb=}" ;;
         --exposure-depth=*)  EXPOSURE_DEPTH="${arg#--exposure-depth=}" ;;
         --gain-rgb=*)        GAIN_RGB="${arg#--gain-rgb=}" ;;
@@ -113,9 +98,9 @@ for arg in "$@"; do
     esac
 done
 
-# Default to L515 if no camera selected
+# Default to D435i if no camera selected
 if [[ "${LAUNCH_D435I}" == "false" && "${LAUNCH_L515}" == "false" && "${LAUNCH_T265}" == "false" ]]; then
-    LAUNCH_L515="true"
+    LAUNCH_D435I="true"
 fi
 
 # --- Build step ---
@@ -137,44 +122,55 @@ fi
 
 # --- Summary ---
 echo "Launching RealSense cameras inside Docker container..."
-[[ "${LAUNCH_D435I}" == "true" ]] && echo "  D435i:  serial=${SERIAL_D435I:-auto}  imu=${ENABLE_IMU}  align_depth=${ALIGN_DEPTH}  infra=${ENABLE_INFRA}"
-[[ "${LAUNCH_L515}"  == "true" ]] && echo "  L515:   serial=${SERIAL_L515:-auto}  imu=${ENABLE_IMU}  align_depth=${ALIGN_DEPTH}  infra=${ENABLE_INFRA}"
-[[ "${LAUNCH_T265}"  == "true" ]] && echo "  T265:   serial=${SERIAL_T265:-auto}"
+[[ "${LAUNCH_D435I}" == "true" ]] && echo "  D435i:  serial=${SERIAL_D435I:-auto}  imu=${ENABLE_IMU}  align=${ALIGN_DEPTH}  infra=${ENABLE_INFRA}"
+[[ "${LAUNCH_L515}"  == "true" ]] && echo "  L515:   serial=${SERIAL_L515:-auto}  align=${ALIGN_DEPTH}  infra=${ENABLE_INFRA}"
+[[ "${LAUNCH_T265}"  == "true" ]] && echo "  T265:   serial=${SERIAL_T265:-auto}  (odom only)"
 echo ""
 
-# --- Build inner launch command ---
-SOURCE="source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && _a='realsense'; _b='_camera_node'; pkill -f \"\${_a}\${_b}\" 2>/dev/null; sleep 1; ros2 daemon stop 2>/dev/null; ros2 daemon start 2>/dev/null"
-LAUNCH_CMD="${SOURCE} && PIDS='';"
-
-_add_camera() {
-    local model="$1"   # d435i | l515 | t265
-    local serial="$2"
-    local extra="$3"   # additional ros2 launch args
-
-    LAUNCH_CMD+=" ros2 launch realsense_camera_bingup realsense_camera.launch.py"
-    LAUNCH_CMD+=" camera_model:=${model}"
-    LAUNCH_CMD+=" camera_name:=${model}"
-    [[ -n "${serial}" ]] && LAUNCH_CMD+=" serial_no:=${serial}"
-    LAUNCH_CMD+=" ${extra} &"
-    LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
+# --- Build launch arguments ---
+# Helper: append shared depth-camera overrides for a given prefix
+_add_depth_overrides() {
+    local pfx="$1"
+    LAUNCH_ARGS+=" ${pfx}_align_depth:=${ALIGN_DEPTH}"
+    LAUNCH_ARGS+=" ${pfx}_enable_infra1:=${ENABLE_INFRA} ${pfx}_enable_infra2:=${ENABLE_INFRA}"
+    if [[ -n "${EXPOSURE_RGB}" ]]; then
+        LAUNCH_ARGS+=" ${pfx}_rgb_exposure:=${EXPOSURE_RGB} ${pfx}_rgb_auto_exposure:=false"
+    fi
+    if [[ -n "${EXPOSURE_DEPTH}" ]]; then
+        LAUNCH_ARGS+=" ${pfx}_depth_exposure:=${EXPOSURE_DEPTH} ${pfx}_depth_auto_exposure:=false"
+    fi
+    if [[ -n "${GAIN_RGB}" ]]; then LAUNCH_ARGS+=" ${pfx}_rgb_gain:=${GAIN_RGB}"; fi
+    if [[ -n "${GAIN_DEPTH}" ]]; then LAUNCH_ARGS+=" ${pfx}_depth_gain:=${GAIN_DEPTH}"; fi
+    if [[ -n "${COLOR_PROFILE}" ]]; then LAUNCH_ARGS+=" ${pfx}_color_profile:=${COLOR_PROFILE}"; fi
+    if [[ -n "${DEPTH_PROFILE}" ]]; then LAUNCH_ARGS+=" ${pfx}_depth_profile:=${DEPTH_PROFILE}"; fi
 }
 
-# Build per-camera extra args for depth cameras (D435i / L515)
-DEPTH_EXTRA="enable_imu:=${ENABLE_IMU} align_depth.enable:=${ALIGN_DEPTH}"
-DEPTH_EXTRA+=" enable_infra1:=${ENABLE_INFRA} enable_infra2:=${ENABLE_INFRA}"
-DEPTH_EXTRA+=" enable_sync:=${ENABLE_SYNC}"
-[[ -n "${EXPOSURE_RGB}" ]]   && DEPTH_EXTRA+=" rgb_camera.exposure:=${EXPOSURE_RGB} rgb_camera.enable_auto_exposure:=false"
-[[ -n "${EXPOSURE_DEPTH}" ]] && DEPTH_EXTRA+=" depth_module.exposure:=${EXPOSURE_DEPTH} depth_module.enable_auto_exposure:=false"
-[[ -n "${GAIN_RGB}" ]]       && DEPTH_EXTRA+=" rgb_camera.gain:=${GAIN_RGB}"
-[[ -n "${GAIN_DEPTH}" ]]     && DEPTH_EXTRA+=" depth_module.gain:=${GAIN_DEPTH}"
-[[ -n "${COLOR_PROFILE}" ]]  && DEPTH_EXTRA+=" rgb_camera.color_profile:=${COLOR_PROFILE}"
-[[ -n "${DEPTH_PROFILE}" ]]  && DEPTH_EXTRA+=" depth_module.depth_profile:=${DEPTH_PROFILE}"
+SOURCE="source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && _a='realsense'; _b='_camera_node'; pkill -f \"\${_a}\${_b}\" 2>/dev/null; sleep 1; ros2 daemon stop 2>/dev/null; ros2 daemon start 2>/dev/null"
 
-[[ "${LAUNCH_D435I}" == "true" ]] && _add_camera "d435i" "${SERIAL_D435I}" "${DEPTH_EXTRA}"
-[[ "${LAUNCH_L515}"  == "true" ]] && _add_camera "l515"  "${SERIAL_L515}"  "${DEPTH_EXTRA}"
-[[ "${LAUNCH_T265}"  == "true" ]] && _add_camera "t265"  "${SERIAL_T265}"  ""
+LAUNCH_ARGS=""
+LAUNCH_ARGS+=" enable_d435i:=${LAUNCH_D435I}"
+LAUNCH_ARGS+=" enable_l515:=${LAUNCH_L515}"
+LAUNCH_ARGS+=" enable_t265:=${LAUNCH_T265}"
 
-LAUNCH_CMD+=" trap 'kill -INT \$PIDS 2>/dev/null; sleep 2; kill \$PIDS 2>/dev/null; wait' EXIT INT TERM;"
-LAUNCH_CMD+=" wait"
+# D435i
+if [[ -n "${SERIAL_D435I}" ]]; then LAUNCH_ARGS+=" d435i_serial_no:=${SERIAL_D435I}"; fi
+LAUNCH_ARGS+=" d435i_enable_imu:=${ENABLE_IMU}"
+_add_depth_overrides "d435i"
+# When T265 is on the same USB hub, delay D435i/L515 so T265 resets and
+# starts streaming first (T265 reset takes ~8s; 12s gives a safe margin).
+if [[ "${LAUNCH_T265}" == "true" ]]; then
+    LAUNCH_ARGS+=" d435i_startup_delay_s:=12.0"
+fi
+# L515
+if [[ -n "${SERIAL_L515}" ]]; then LAUNCH_ARGS+=" l515_serial_no:=${SERIAL_L515}"; fi
+_add_depth_overrides "l515"
+if [[ "${LAUNCH_T265}" == "true" ]]; then
+    LAUNCH_ARGS+=" l515_startup_delay_s:=12.0"
+fi
+
+# T265
+if [[ -n "${SERIAL_T265}" ]]; then LAUNCH_ARGS+=" t265_serial_no:=${SERIAL_T265}"; fi
+
+LAUNCH_CMD="${SOURCE} && ros2 launch realsense_camera_bringup realsense_camera.launch.py${LAUNCH_ARGS}"
 
 exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "${LAUNCH_CMD}"

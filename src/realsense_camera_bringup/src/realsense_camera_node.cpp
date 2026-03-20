@@ -1,10 +1,10 @@
-#include "realsense_camera_bingup/realsense_camera_node.hpp"
+#include "realsense_camera_bringup/realsense_camera_node.hpp"
 #include <sensor_msgs/image_encodings.hpp>
 #include <chrono>
 #include <thread>
 #include <cstdio>
 
-namespace realsense_camera_bingup
+namespace realsense_camera_bringup
 {
 
 RealsenseCameraNode::RealsenseCameraNode(const rclcpp::NodeOptions & options)
@@ -12,12 +12,38 @@ RealsenseCameraNode::RealsenseCameraNode(const rclcpp::NodeOptions & options)
 {
   declare_parameters();
   create_publishers();
-  try {
-    reset_device();
-    start_pipeline();
-  } catch (const std::exception & e) {
-    RCLCPP_FATAL(get_logger(), "Failed to initialise camera: %s", e.what());
-    throw;
+
+  // Retry loop — "Unable to open device interface" is a transient USB
+  // enumeration race that can occur when multiple cameras reset simultaneously
+  // on the same hub.  Retrying after a short delay resolves it reliably.
+  constexpr int    MAX_RETRIES   = 5;
+  constexpr double RETRY_DELAY_S = 5.0;
+
+  for (int attempt = 1; attempt <= MAX_RETRIES; ++attempt) {
+    try {
+      if (enable_hardware_reset_) {
+        reset_device();   // enumerate + hardware reset
+      }
+      start_pipeline();
+      return;   // success
+    } catch (const std::exception & e) {
+      const std::string what = e.what();
+      const bool retriable   = what.find("Unable to open device") != std::string::npos ||
+                               what.find("device is streaming")   != std::string::npos ||
+                               what.find("failed to set power")   != std::string::npos ||
+                               what.find("No device connected")   != std::string::npos;
+
+      if (retriable && attempt < MAX_RETRIES) {
+        RCLCPP_WARN(get_logger(),
+          "Camera init attempt %d/%d failed (%s) — retrying in %.0fs...",
+          attempt, MAX_RETRIES, what.c_str(), RETRY_DELAY_S);
+        std::this_thread::sleep_for(
+          std::chrono::milliseconds(static_cast<int>(RETRY_DELAY_S * 1000)));
+      } else {
+        RCLCPP_FATAL(get_logger(), "Failed to initialise camera: %s", what.c_str());
+        throw;
+      }
+    }
   }
 }
 
@@ -59,6 +85,20 @@ bool RealsenseCameraNode::parse_profile_string(
 // ---------------------------------------------------------------------------
 void RealsenseCameraNode::declare_parameters()
 {
+  // --- Startup delay (stagger multi-camera inits to avoid USB race) ---
+  const double startup_delay_s = declare_parameter<double>("startup_delay_s", 0.0);
+  if (startup_delay_s > 0.0) {
+    RCLCPP_INFO(get_logger(), "Startup delay %.1fs — waiting for other cameras to settle...",
+      startup_delay_s);
+    std::this_thread::sleep_for(
+      std::chrono::milliseconds(static_cast<int>(startup_delay_s * 1000)));
+  }
+
+  // --- Hardware reset ---
+  // Default false — matches official realsense-ros (initial_reset=false).
+  // Set true to clear firmware stuck-streaming states on startup.
+  enable_hardware_reset_ = declare_parameter<bool>("enable_hardware_reset", false);
+
   // --- Identity ---
   camera_name_      = declare_parameter<std::string>("camera_name", "camera");
   serial_no_        = declare_parameter<std::string>("serial_no", "");
@@ -132,9 +172,10 @@ void RealsenseCameraNode::declare_parameters()
   bool align_old = declare_parameter<bool>("align_depth_to_color", false);
   if (align_old && !align_depth_enable_) align_depth_enable_ = true;
 
+  // --- TF publishing ---
+  publish_tf_ = declare_parameter<bool>("publish_tf", false);
+
   // --- Stubbed parameters (declared for compatibility, not yet functional) ---
-  if (declare_parameter<bool>("publish_tf", false))
-    RCLCPP_WARN(get_logger(), "publish_tf is not yet implemented — TF frames will not be broadcast.");
   if (declare_parameter<bool>("enable_rgbd", false))
     RCLCPP_WARN(get_logger(), "enable_rgbd is not yet implemented.");
   if (declare_parameter<bool>("pointcloud.enable", false))
@@ -173,6 +214,9 @@ void RealsenseCameraNode::create_publishers()
   }
   if (camera_model_ == CameraModel::T265) {
     odom_pub_ = create_publisher<nav_msgs::msg::Odometry>(camera_name_ + "/odom", qos);
+    if (publish_tf_) {
+      tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+    }
     if (enable_fisheye_) {
       fisheye1_image_pub_ = create_publisher<sensor_msgs::msg::Image>(camera_name_ + "/fisheye1/image_raw", qos);
       fisheye1_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>(camera_name_ + "/fisheye1/camera_info", qos);
@@ -187,8 +231,6 @@ void RealsenseCameraNode::create_publishers()
 // ---------------------------------------------------------------------------
 void RealsenseCameraNode::reset_device()
 {
-  RCLCPP_INFO(get_logger(), "Resetting RealSense device to clear stuck states...");
-
   // rs2::context enumerates USB devices asynchronously — give it time to complete
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   auto devices = ctx_.query_devices();
@@ -232,9 +274,26 @@ void RealsenseCameraNode::reset_device()
       std::string("No RealSense device matching '") + match_key + "' found.");
   }
 
+  if (!enable_hardware_reset_) {
+    RCLCPP_INFO(get_logger(), "Device found — skipping hardware reset (enable_hardware_reset=false).");
+    return;
+  }
+
   const std::string reset_serial = dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER);
+
+  // T265: unload the tracking module before reset so firmware releases its
+  // USB handle cleanly (mirrors the official realsense-ros wrapper behaviour).
+  if (camera_model_ == CameraModel::T265) {
+    try { ctx_.unload_tracking_module(); } catch (...) {}
+  }
+
   RCLCPP_INFO(get_logger(), "Issuing hardware_reset() to device [%s]...", reset_serial.c_str());
-  dev.hardware_reset();
+  try {
+    dev.hardware_reset();
+  } catch (const rs2::error & e) {
+    RCLCPP_WARN(get_logger(), "hardware_reset() failed: %s — continuing without reset.", e.what());
+    return;
+  }
 
   // Poll until THIS specific device reappears (not just any RealSense)
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
@@ -267,6 +326,9 @@ void RealsenseCameraNode::start_pipeline()
       cfg_.enable_stream(RS2_STREAM_FISHEYE, 2, RS2_FORMAT_Y8);
     }
     cfg_.enable_stream(RS2_STREAM_POSE, RS2_FORMAT_6DOF);
+    // T265 IMU is delivered through the pipeline (not direct sensor API)
+    if (enable_accel_) cfg_.enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F);
+    if (enable_gyro_) cfg_.enable_stream(RS2_STREAM_GYRO, RS2_FORMAT_MOTION_XYZ32F);
   } else {
     if (enable_color_) cfg_.enable_stream(RS2_STREAM_COLOR, color_width_, color_height_, RS2_FORMAT_RGB8, color_fps_);
     if (enable_depth_) cfg_.enable_stream(RS2_STREAM_DEPTH, depth_width_, depth_height_, RS2_FORMAT_Z16, depth_fps_);
@@ -294,6 +356,8 @@ void RealsenseCameraNode::start_pipeline()
         cfg_.enable_stream(RS2_STREAM_FISHEYE, 2, RS2_FORMAT_Y8);
       }
       cfg_.enable_stream(RS2_STREAM_POSE, RS2_FORMAT_6DOF);
+      if (enable_accel_) cfg_.enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F);
+      if (enable_gyro_) cfg_.enable_stream(RS2_STREAM_GYRO, RS2_FORMAT_MOTION_XYZ32F);
     } else {
       if (enable_color_) cfg_.enable_stream(RS2_STREAM_COLOR, -1, 0, 0, RS2_FORMAT_RGB8, 0);
       if (enable_depth_) cfg_.enable_stream(RS2_STREAM_DEPTH, -1, 0, 0, RS2_FORMAT_Z16, 0);
@@ -360,7 +424,9 @@ void RealsenseCameraNode::start_pipeline()
   // Apply sensor options (exposure, gain, auto_exposure)
   apply_sensor_options(profile);
 
-  if (enable_imu_) start_imu_sensor(dev);
+  // T265 streams IMU through the pipeline (pose+motion are fused internally).
+  // Only D435i/L515 need the direct sensor API for IMU.
+  if (enable_imu_ && camera_model_ != CameraModel::T265) start_imu_sensor(dev);
   RCLCPP_INFO(get_logger(), "Pipeline started (callback mode).");
 }
 
@@ -698,15 +764,30 @@ void RealsenseCameraNode::publish_pose_frame(const rs2::pose_frame & frame)
   msg->twist.twist.angular.y = pose.angular_velocity.y;
   msg->twist.twist.angular.z = pose.angular_velocity.z;
 
+  // Broadcast TF: odom_frame → pose_frame
+  if (tf_broadcaster_) {
+    geometry_msgs::msg::TransformStamped tf;
+    tf.header = msg->header;
+    tf.child_frame_id = msg->child_frame_id;
+    tf.transform.translation.x = pose.translation.x;
+    tf.transform.translation.y = pose.translation.y;
+    tf.transform.translation.z = pose.translation.z;
+    tf.transform.rotation.x = pose.rotation.x;
+    tf.transform.rotation.y = pose.rotation.y;
+    tf.transform.rotation.z = pose.rotation.z;
+    tf.transform.rotation.w = pose.rotation.w;
+    tf_broadcaster_->sendTransform(tf);
+  }
+
   odom_pub_->publish(std::move(msg));
 }
 
-} // namespace realsense_camera_bingup
+} // namespace realsense_camera_bringup
 
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<realsense_camera_bingup::RealsenseCameraNode>(rclcpp::NodeOptions{}));
+  rclcpp::spin(std::make_shared<realsense_camera_bringup::RealsenseCameraNode>(rclcpp::NodeOptions{}));
   rclcpp::shutdown();
   return 0;
 }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(realsense_camera_bingup)
+project(realsense_camera_bringup)
 
 # Default to C++17 for ROS 2 Jazzy
 if(NOT CMAKE_CXX_STANDARD)
@@ -16,6 +16,10 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 # Use manually installed librealsense from /usr/local (v2.51) — avoids the ROS-bundled
 # librealsense2 2.55+ which dropped L515 support.
@@ -35,15 +39,28 @@ ament_target_dependencies(realsense_camera_node
   rclcpp
   sensor_msgs
   nav_msgs
+  tf2_ros
+  geometry_msgs
 )
 
 target_link_libraries(realsense_camera_node
   ${realsense2_LIBRARY}
 )
 
+add_executable(odom_tf_relay
+  src/odom_tf_relay.cpp
+)
+ament_target_dependencies(odom_tf_relay
+  rclcpp nav_msgs geometry_msgs tf2_ros tf2_geometry_msgs
+)
+target_include_directories(odom_tf_relay PUBLIC
+  ${EIGEN3_INCLUDE_DIRS}
+)
+
 # Install rules
 install(TARGETS
   realsense_camera_node
+  odom_tf_relay
   DESTINATION lib/${PROJECT_NAME}
 )
 

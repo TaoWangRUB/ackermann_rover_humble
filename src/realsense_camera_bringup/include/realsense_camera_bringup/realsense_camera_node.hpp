@@ -6,12 +6,14 @@
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <tf2_ros/transform_broadcaster.h>
 #include <librealsense2/rs.hpp>
 #include <thread>
 #include <mutex>
 #include <memory>
 
-namespace realsense_camera_bingup
+namespace realsense_camera_bringup
 {
 
 enum class CameraModel { D435I, L515, T265 };
@@ -58,8 +60,10 @@ private:
   int depth_width_, depth_height_, depth_fps_;
   int unite_imu_method_; // 1=copy, 2=linear_interpolation
 
-  // Parameters — sync / alignment
+  // Parameters — sync / alignment / TF / init
   bool enable_sync_, align_depth_enable_;
+  bool publish_tf_;
+  bool enable_hardware_reset_;
 
   // Parameters — RGB sensor controls
   std::string rgb_color_profile_;
@@ -87,6 +91,9 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
 
+  // TF broadcaster
+  std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+
   // Cached CameraInfo
   sensor_msgs::msg::CameraInfo color_info_msg_, depth_info_msg_, fisheye1_info_msg_, fisheye2_info_msg_;
   sensor_msgs::msg::CameraInfo infra1_info_msg_, infra2_info_msg_;
@@ -97,6 +104,6 @@ private:
   rs2::sensor imu_sensor_;  // direct motion sensor (separate from pipeline)
 };
 
-} // namespace realsense_camera_bingup
+} // namespace realsense_camera_bringup
 
 #endif
