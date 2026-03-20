@@ -35,6 +35,7 @@ services:
       - ..:/workspace
       - ../gazebo_cache:/root/.gazebo
       - ${PX4_DIR:-../../PX4-Autopilot}:/px4
+      - ${REALSENSE_ROS_DIR:-../../realsense-ros}:/realsense-ros
       - /dev:/dev
 
     # Same isolation model as your manual docker run

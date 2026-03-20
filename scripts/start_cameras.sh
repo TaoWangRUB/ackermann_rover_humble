@@ -116,7 +116,7 @@ echo "Launching RealSense cameras inside Docker container..."
 echo ""
 
 # --- Build inner launch command ---
-SOURCE="source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash"
+SOURCE="source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && _a='realsense'; _b='_camera_node'; pkill -f \"\${_a}\${_b}\" 2>/dev/null; sleep 1; ros2 daemon stop 2>/dev/null; ros2 daemon start 2>/dev/null"
 LAUNCH_CMD="${SOURCE} && PIDS='';"
 
 _add_camera() {
@@ -127,7 +127,7 @@ _add_camera() {
     LAUNCH_CMD+=" ros2 launch realsense_camera_bingup realsense_camera.launch.py"
     LAUNCH_CMD+=" camera_model:=${model}"
     LAUNCH_CMD+=" camera_name:=${model}"
-    LAUNCH_CMD+=" serial_no:=${serial}"
+    [[ -n "${serial}" ]] && LAUNCH_CMD+=" serial_no:=${serial}"
     LAUNCH_CMD+=" ${extra} &"
     LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
 }
@@ -138,7 +138,7 @@ DEPTH_EXTRA="enable_imu:=${ENABLE_IMU} align_depth_to_color:=${ALIGN_DEPTH}"
 [[ "${LAUNCH_L515}"  == "true" ]] && _add_camera "l515"  "${SERIAL_L515}"  "${DEPTH_EXTRA}"
 [[ "${LAUNCH_T265}"  == "true" ]] && _add_camera "t265"  "${SERIAL_T265}"  ""
 
-LAUNCH_CMD+=" trap 'kill \$PIDS 2>/dev/null; wait' EXIT INT TERM;"
+LAUNCH_CMD+=" trap 'kill -INT \$PIDS 2>/dev/null; sleep 2; kill \$PIDS 2>/dev/null; wait' EXIT INT TERM;"
 LAUNCH_CMD+=" wait"
 
 exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "${LAUNCH_CMD}"
