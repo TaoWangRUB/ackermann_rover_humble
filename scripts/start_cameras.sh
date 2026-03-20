@@ -16,6 +16,14 @@
 #   --serial-t265=SN       USB serial number for T265  (default: auto)
 #   --imu                  Enable IMU for D435i and L515 (default: disabled)
 #   --align-depth          Align depth to color for D435i / L515
+#   --infra                Enable infrared streams 1 & 2
+#   --enable-sync          Enable pipeline frame sync
+#   --exposure-rgb=VAL     Set RGB camera exposure (disables auto-exposure)
+#   --exposure-depth=VAL   Set depth module exposure (disables auto-exposure)
+#   --gain-rgb=VAL         Set RGB camera gain
+#   --gain-depth=VAL       Set depth module gain
+#   --color-profile=WxHxF  Color profile override (e.g. 640x480x30)
+#   --depth-profile=WxHxF  Depth profile override (e.g. 640x480x30)
 #
 # Build options:
 #   --build[=PKG]          Build workspace (or specific pkg) before launching
@@ -37,6 +45,9 @@
 #   # Specific serial numbers (when multiple of same model connected)
 #   ./scripts/start_cameras.sh --d435i --serial-d435i=123456789 --l515 --serial-l515=987654321
 #
+#   # D435i with manual exposure and infrared
+#   ./scripts/start_cameras.sh --d435i --exposure-rgb=100 --infra
+#
 #   # Build package then launch
 #   ./scripts/start_cameras.sh --d435i --l515 --build=realsense_camera_bingup
 #
@@ -57,6 +68,14 @@ SERIAL_L515=""
 SERIAL_T265=""
 ENABLE_IMU="false"
 ALIGN_DEPTH="false"
+ENABLE_INFRA="false"
+ENABLE_SYNC="false"
+EXPOSURE_RGB=""
+EXPOSURE_DEPTH=""
+GAIN_RGB=""
+GAIN_DEPTH=""
+COLOR_PROFILE=""
+DEPTH_PROFILE=""
 BUILD="false"
 BUILD_ONLY="false"
 BUILD_PKGS=""
@@ -72,6 +91,14 @@ for arg in "$@"; do
         --serial-t265=*)     SERIAL_T265="${arg#--serial-t265=}" ;;
         --imu)               ENABLE_IMU="true" ;;
         --align-depth)       ALIGN_DEPTH="true" ;;
+        --infra)             ENABLE_INFRA="true" ;;
+        --enable-sync)       ENABLE_SYNC="true" ;;
+        --exposure-rgb=*)    EXPOSURE_RGB="${arg#--exposure-rgb=}" ;;
+        --exposure-depth=*)  EXPOSURE_DEPTH="${arg#--exposure-depth=}" ;;
+        --gain-rgb=*)        GAIN_RGB="${arg#--gain-rgb=}" ;;
+        --gain-depth=*)      GAIN_DEPTH="${arg#--gain-depth=}" ;;
+        --color-profile=*)   COLOR_PROFILE="${arg#--color-profile=}" ;;
+        --depth-profile=*)   DEPTH_PROFILE="${arg#--depth-profile=}" ;;
         --build)             BUILD="true" ;;
         --build=*)           BUILD="true"; BUILD_PKGS="${arg#--build=}" ;;
         --build-only)        BUILD="true"; BUILD_ONLY="true" ;;
@@ -110,8 +137,8 @@ fi
 
 # --- Summary ---
 echo "Launching RealSense cameras inside Docker container..."
-[[ "${LAUNCH_D435I}" == "true" ]] && echo "  D435i:  serial=${SERIAL_D435I:-auto}  imu=${ENABLE_IMU}  align_depth=${ALIGN_DEPTH}"
-[[ "${LAUNCH_L515}"  == "true" ]] && echo "  L515:   serial=${SERIAL_L515:-auto}  imu=${ENABLE_IMU}  align_depth=${ALIGN_DEPTH}"
+[[ "${LAUNCH_D435I}" == "true" ]] && echo "  D435i:  serial=${SERIAL_D435I:-auto}  imu=${ENABLE_IMU}  align_depth=${ALIGN_DEPTH}  infra=${ENABLE_INFRA}"
+[[ "${LAUNCH_L515}"  == "true" ]] && echo "  L515:   serial=${SERIAL_L515:-auto}  imu=${ENABLE_IMU}  align_depth=${ALIGN_DEPTH}  infra=${ENABLE_INFRA}"
 [[ "${LAUNCH_T265}"  == "true" ]] && echo "  T265:   serial=${SERIAL_T265:-auto}"
 echo ""
 
@@ -132,7 +159,16 @@ _add_camera() {
     LAUNCH_CMD+=" PIDS=\"\$PIDS \$!\";"
 }
 
-DEPTH_EXTRA="enable_imu:=${ENABLE_IMU} align_depth_to_color:=${ALIGN_DEPTH}"
+# Build per-camera extra args for depth cameras (D435i / L515)
+DEPTH_EXTRA="enable_imu:=${ENABLE_IMU} align_depth.enable:=${ALIGN_DEPTH}"
+DEPTH_EXTRA+=" enable_infra1:=${ENABLE_INFRA} enable_infra2:=${ENABLE_INFRA}"
+DEPTH_EXTRA+=" enable_sync:=${ENABLE_SYNC}"
+[[ -n "${EXPOSURE_RGB}" ]]   && DEPTH_EXTRA+=" rgb_camera.exposure:=${EXPOSURE_RGB} rgb_camera.enable_auto_exposure:=false"
+[[ -n "${EXPOSURE_DEPTH}" ]] && DEPTH_EXTRA+=" depth_module.exposure:=${EXPOSURE_DEPTH} depth_module.enable_auto_exposure:=false"
+[[ -n "${GAIN_RGB}" ]]       && DEPTH_EXTRA+=" rgb_camera.gain:=${GAIN_RGB}"
+[[ -n "${GAIN_DEPTH}" ]]     && DEPTH_EXTRA+=" depth_module.gain:=${GAIN_DEPTH}"
+[[ -n "${COLOR_PROFILE}" ]]  && DEPTH_EXTRA+=" rgb_camera.color_profile:=${COLOR_PROFILE}"
+[[ -n "${DEPTH_PROFILE}" ]]  && DEPTH_EXTRA+=" depth_module.depth_profile:=${DEPTH_PROFILE}"
 
 [[ "${LAUNCH_D435I}" == "true" ]] && _add_camera "d435i" "${SERIAL_D435I}" "${DEPTH_EXTRA}"
 [[ "${LAUNCH_L515}"  == "true" ]] && _add_camera "l515"  "${SERIAL_L515}"  "${DEPTH_EXTRA}"
