@@ -46,7 +46,11 @@ Destructor
 
 **IMU via direct sensor API, not pipeline.** The pipeline's sync module buffers video frames waiting for IMU timestamps, causing latency. IMU is opened independently via `rs2::sensor.open()` + `sensor.start()` with its own callback.
 
-**Hardware reset on startup.** Clears stuck USB states. Polls for the specific device serial (not just any RealSense) to avoid false-positive detection of other connected cameras.
+**Hardware reset disabled by default (`enable_hardware_reset=false`).** Matches official realsense-ros behaviour (`initial_reset=false`). Set to `true` only when the device firmware is in a stuck-streaming state from a previous crashed session. For T265, `unload_tracking_module()` is called before reset to release the firmware's USB handle cleanly.
+
+**Retry loop on init (5 attempts, 5s apart).** Transient USB errors (`Unable to open device`, `failed to set power state`, `No device connected`, `device is streaming`) are retried rather than crashing the node.
+
+**`startup_delay_s` parameter for USB sequencing.** When multiple cameras share a USB hub, their simultaneous `hardware_reset()` calls cause USB power-state races. The script automatically applies `d435i_startup_delay_s:=12` when `--t265` is used, so T265 resets and starts streaming before D435i opens.
 
 **Auto-profile fallback.** If the requested resolution/fps isn't supported (e.g. L515 quirks), the pipeline retries with `width=0, height=0, fps=0` so librealsense picks the closest valid profile.
 
@@ -176,6 +180,167 @@ Same structure as D435i. Key differences:
 
 T265 ignores all color/depth/infra/alignment parameters.
 
+## Multi-Camera Launch & USB Sequencing
+
+### The Problem: USB Power-State Races
+
+When multiple RealSense cameras share the same USB hub, simultaneous `hardware_reset()` calls compete for USB power-state control. The symptom is one or both cameras failing with:
+
+```
+failed to set power state
+Unable to open device interface
+```
+
+The root cause is that librealsense resets the USB device during `hardware_reset()`, which briefly interrupts power to all devices on the hub. If two cameras reset simultaneously, each disrupts the other's re-enumeration.
+
+### Solution: Sequential Startup with `startup_delay_s`
+
+Each camera node accepts a `startup_delay_s` parameter (default `0.0`) that sleeps before calling `reset_device()` or `start_pipeline()`. This serialises initialisation without requiring hardware changes.
+
+**Correct startup order for D435i + T265 on a shared USB hub:**
+
+| Time | Camera | Action |
+|------|--------|--------|
+| 0s | T265 | `hardware_reset()` + wait for re-enumeration (~8s) + `start_pipeline()` |
+| 12s | D435i | `start_pipeline()` directly (no reset needed) |
+
+T265 resets first because it most commonly gets stuck in a previous streaming state after a crash. D435i does **not** reset — librealsense re-opens it cleanly when the previous ROS session has exited.
+
+### `enable_hardware_reset` Parameter
+
+| Value | Default for | When to use |
+|-------|------------|-------------|
+| `false` | D435i, L515 | Normal operation — device opens cleanly after clean shutdown |
+| `true` | T265 | T265 often remains in streaming state after a crash; reset clears this |
+
+Matches the official `realsense-ros` default (`initial_reset=false`). Set to `true` only when the device firmware is stuck from a previous crashed session.
+
+### Automatic Delay via `start_cameras.sh`
+
+The shell script automatically sets the 12-second delay when `--t265` is requested:
+
+```bash
+# These delays are applied automatically — no manual flags needed:
+#   d435i_startup_delay_s:=12.0
+#   l515_startup_delay_s:=12.0  (if L515 is also enabled)
+
+./scripts/start_cameras.sh --d435i --t265          # D435i delayed 12s
+./scripts/start_cameras.sh --d435i --l515 --t265   # Both D435i and L515 delayed 12s
+./scripts/start_cameras.sh --d435i --l515          # No delay (no T265)
+```
+
+### Manual Override via Launch Args
+
+```bash
+ros2 launch realsense_camera_bringup realsense_camera.launch.py \
+  enable_d435i:=true enable_t265:=true \
+  d435i_startup_delay_s:=12.0 \
+  t265_enable_hardware_reset:=true
+```
+
+### Recovery from USB Errors
+
+If cameras fail to open after repeated kills/crashes, the USB power state may be corrupted at the kernel level. Reset it with:
+
+```bash
+# Find your device bus/device numbers from: lsusb
+python3 -c "import fcntl; fcntl.ioctl(open('/dev/bus/usb/<BUS>/<DEV>','wb'), 0x5514, 0)"
+```
+
+Then re-run `start_cameras.sh` — the retry loop (5 attempts, 5s apart) handles transient re-enumeration delays.
+
+---
+
+## `odom_tf_relay` Node
+
+### Purpose
+
+The T265 tracking camera publishes odometry with `child_frame_id = t265_pose_frame` — the pose of the camera itself. For use with `robot_localization` EKF (which expects `child_frame_id = ackermann/base_link`) or Nav2, the odometry must be re-expressed so that the child frame is the robot base link.
+
+`odom_tf_relay` performs this re-expression using the static TF between the sensor and the base link (published by `robot_state_publisher` from the URDF).
+
+### Mathematics
+
+Given:
+- `T_WC` — odometry from sensor (world → camera pose, with linear/angular velocity in camera frame)
+- `T_CB` — rigid transform from camera to base_link (from static TF tree)
+
+**Pose composition:**
+```
+pos_WB = pos_WC + R(q_WC) * pos_CB
+q_WB   = q_WC ⊗ q_CB
+```
+
+**Velocity (lever-arm corrected):**
+```
+v_B  = R_BC * (v_C + ω_C × pos_CB)
+ω_B  = R_BC * ω_C
+```
+where `R_BC = rotation by conj(q_CB)` maps camera-frame vectors into base-link frame.
+
+**Covariance rotation** (all four 3×3 blocks of the 6×6 pose and twist covariance matrices):
+```
+Σ_B = R_BC * Σ_C * R_BCᵀ
+```
+Applied to `[pp, pr, rp, rr]` blocks independently. Passing covariance unchanged when there is a rotation between frames would give incorrect uncertainty ellipsoids.
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `input_topic` | `/odom` | Source odometry topic |
+| `output_topic` | `/odom_base` | Remapped output topic |
+| `base_frame` | `ackermann/base_link` | Desired `child_frame_id` in output |
+| `output_frame` | `""` | Override `frame_id` (empty = keep input `frame_id`) |
+| `tf_timeout_s` | `1.0` | TF lookup timeout on first call (seconds) |
+
+### TF Lookup Behaviour
+
+- TF is looked up **once** (on the first received message) and cached for all subsequent messages.
+- If TF is unavailable at startup, falls back to identity transform and emits a **single** warning (no spam).
+- If `child_frame_id` already equals `base_frame`, the message is relayed unchanged (no transform applied).
+
+### T265 Integration in Launch File
+
+The relay node is automatically started alongside the T265 camera node, conditioned on `enable_t265`:
+
+```python
+t265_odom_relay = Node(
+    package='realsense_camera_bringup',
+    executable='odom_tf_relay',
+    name='t265_odom_relay',
+    condition=IfCondition(LaunchConfiguration('enable_t265')),
+    parameters=[{
+        'input_topic':  '/t265/odom',
+        'output_topic': '/t265/odom_base',
+        'base_frame':   'ackermann/base_link',
+    }],
+)
+```
+
+### Launch Arguments (T265 relay)
+
+| Argument | Default |
+|----------|---------|
+| `t265_odom_input_topic` | `/t265/odom` |
+| `t265_odom_output_topic` | `/t265/odom_base` |
+| `t265_relay_base_frame` | `ackermann/base_link` |
+
+Override at launch:
+
+```bash
+ros2 launch realsense_camera_bringup realsense_camera.launch.py \
+  enable_t265:=true \
+  t265_odom_output_topic:=/odom/t265 \
+  t265_relay_base_frame:=base_link
+```
+
+### Source
+
+`src/realsense_camera_bringup/src/odom_tf_relay.cpp`
+
+---
+
 ## Shell Script (`scripts/start_cameras.sh`)
 
 Convenience wrapper that launches cameras inside the Docker container via `docker-compose exec ackermann_slam`.
@@ -265,8 +430,9 @@ librealsense2 v2.51.1 is pre-installed in the Docker image at `/usr/local`.
 
 | File | Path |
 |------|------|
-| Node source | `src/realsense_camera_bringup/src/realsense_camera_node.cpp` |
-| Header | `src/realsense_camera_bringup/include/realsense_camera_bringup/realsense_camera_node.hpp` |
+| Camera node source | `src/realsense_camera_bringup/src/realsense_camera_node.cpp` |
+| Camera node header | `src/realsense_camera_bringup/include/realsense_camera_bringup/realsense_camera_node.hpp` |
+| Odom relay source | `src/realsense_camera_bringup/src/odom_tf_relay.cpp` |
 | CMakeLists | `src/realsense_camera_bringup/CMakeLists.txt` |
 | Launch file | `src/realsense_camera_bringup/launch/realsense_camera.launch.py` |
 | Config YAML | `src/realsense_camera_bringup/config/realsense_params.yaml` |
