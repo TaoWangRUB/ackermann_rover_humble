@@ -160,6 +160,12 @@ if [[ "${HW}" == "true" && "${HW_CAMERA_EXPLICIT}" == "false" ]]; then
     HW_L515="true"
 fi
 
+# Auto-select RTAB-Map depth camera: L515 preferred, fall back to D435i
+HW_RTABMAP_CAM="l515"
+if [[ "${HW_L515}" == "false" && "${HW_D435I}" == "true" ]]; then
+    HW_RTABMAP_CAM="d435i"
+fi
+
 # --px4 (PX4 SITL) always needs both mode node and VO bridge
 if [[ "${PX4}" == "true" ]]; then
     BRIDGE="true"
@@ -190,6 +196,7 @@ if [[ "${HW}" == "true" ]]; then
     echo "  D435i:        ${HW_D435I}"
     echo "  L515:         ${HW_L515}"
     echo "  T265:         ${HW_T265}"
+    echo "  RTAB-Map cam: ${HW_RTABMAP_CAM}"
 else
     echo "  Mode:         simulation (Gazebo)"
     echo "  PX4 SITL:     ${PX4}"
@@ -215,6 +222,7 @@ if [[ "${HW}" == "true" ]]; then
     LAUNCH_CMD+=" hw_enable_d435i:=${HW_D435I}"
     LAUNCH_CMD+=" hw_enable_l515:=${HW_L515}"
     LAUNCH_CMD+=" hw_enable_t265:=${HW_T265}"
+    LAUNCH_CMD+=" hw_rtabmap_camera:=${HW_RTABMAP_CAM}"
 else
     LAUNCH_CMD+=" enable_px4_sitl:=${PX4}"
 fi

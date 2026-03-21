@@ -178,6 +178,14 @@ ARGUMENTS = [
         choices=['true', 'false'],
         description='[HW mode] Enable T265 tracking camera and odom_tf_relay.',
     ),
+    DeclareLaunchArgument(
+        'hw_rtabmap_camera',
+        default_value='l515',
+        description=(
+            '[HW mode] Camera name used as RTAB-Map topic prefix (e.g. l515, d435i). '
+            'Set automatically by start_ros2_nodes.sh: prefers l515, falls back to d435i.'
+        ),
+    ),
 ]
 
 
@@ -206,6 +214,7 @@ def generate_launch_description() -> LaunchDescription:
     hw_enable_d435i = LaunchConfiguration('hw_enable_d435i')
     hw_enable_l515 = LaunchConfiguration('hw_enable_l515')
     hw_enable_t265 = LaunchConfiguration('hw_enable_t265')
+    hw_rtabmap_camera = LaunchConfiguration('hw_rtabmap_camera')
 
     robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
@@ -296,27 +305,27 @@ def generate_launch_description() -> LaunchDescription:
             'localization': localization,
             'rtabmap_viz': rtabmap_viz,
             'rgb_image_topic': PythonExpression([
-                '"l515/color/image_raw"'
+                '"', hw_rtabmap_camera, '/color/image_raw"'
                 ' if "', use_gazebo, '" == "false"'
                 ' else "/l515/image"'
             ]),
             'rgb_camera_info_topic': PythonExpression([
-                '"l515/color/camera_info"'
+                '"', hw_rtabmap_camera, '/color/camera_info"'
                 ' if "', use_gazebo, '" == "false"'
                 ' else "/l515/camera_info"'
             ]),
             'depth_image_topic': PythonExpression([
-                '"l515/aligned_depth_to_color/image_raw"'
+                '"', hw_rtabmap_camera, '/aligned_depth_to_color/image_raw"'
                 ' if "', use_gazebo, '" == "false"'
                 ' else "/l515/depth_image"'
             ]),
             'depth_camera_info_topic': PythonExpression([
-                '"l515/aligned_depth_to_color/camera_info"'
+                '"', hw_rtabmap_camera, '/aligned_depth_to_color/camera_info"'
                 ' if "', use_gazebo, '" == "false"'
                 ' else "/l515/camera_info"'
             ]),
             'imu_raw_topic': PythonExpression([
-                '"l515/imu"'
+                '"', hw_rtabmap_camera, '/imu"'
                 ' if "', use_gazebo, '" == "false"'
                 ' else "/l515/imu/raw"'
             ]),
