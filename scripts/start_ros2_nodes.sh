@@ -4,12 +4,12 @@
 # source workspaces or type long ros2 launch commands manually.
 #
 # Flags:
-#   --hw               Hardware mode: real cameras instead of Gazebo (use_gazebo:=false).
-#                      Starts robot_state_publisher + realsense_camera_bringup.
-#                      Default cameras in HW mode: L515 only.
-#   --d435i            [HW mode] Enable D435i depth camera
-#   --l515             [HW mode] Enable L515 depth camera (on by default in HW mode)
-#   --t265             [HW mode] Enable T265 tracking camera + odom_tf_relay
+#   --hw                   Hardware mode: real cameras instead of Gazebo (use_gazebo:=false).
+#                          Starts robot_state_publisher + realsense_camera_bringup.
+#   --depth-camera=NAME    Depth camera for RTAB-Map: l515 (default) or d435i.
+#                          Selects which camera node starts (HW), which Gazebo bridge topics
+#                          are exposed (sim), and which RTAB-Map topics are subscribed.
+#   --t265                 [HW mode] Enable T265 tracking camera + odom_tf_relay
 #   --px4              Enable PX4 SITL (disables ros2_control, implies --bridge --vo-bridge)
 #   --rtabmap          Launch RTAB-Map SLAM
 #   --nav2             Launch Nav2 navigation stack
@@ -38,8 +38,8 @@
 #   ── Hardware mode + RTAB-Map + Nav2 ──
 #   ./scripts/start_ros2_nodes.sh --hw --rtabmap --nav2
 #
-#   ── Hardware mode + L515 + T265 + RTAB-Map ──
-#   ./scripts/start_ros2_nodes.sh --hw --l515 --t265 --rtabmap
+#   ── Hardware mode + D435i + T265 + RTAB-Map ──
+#   ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265 --rtabmap
 #
 #   ── Hardware mode + VO bridge to real PX4 ──
 #   ./scripts/start_ros2_nodes.sh --hw --rtabmap --vo-bridge --bridge=speed_steering
@@ -106,10 +106,8 @@ COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
 
 # Defaults
 HW="false"
-HW_D435I="false"
-HW_L515="false"   # set to true below if --hw without explicit camera flags
+DEPTH_CAMERA="l515"
 HW_T265="false"
-HW_CAMERA_EXPLICIT="false"  # tracks whether user passed any camera flag
 PX4="false"
 RTABMAP="false"
 NAV2="false"
@@ -126,10 +124,9 @@ BUILD_PKGS=""
 # Parse arguments
 for arg in "$@"; do
     case "$arg" in
-        --hw)           HW="true" ;;
-        --d435i)        HW_D435I="true"; HW_CAMERA_EXPLICIT="true" ;;
-        --l515)         HW_L515="true";  HW_CAMERA_EXPLICIT="true" ;;
-        --t265)         HW_T265="true";  HW_CAMERA_EXPLICIT="true" ;;
+        --hw)              HW="true" ;;
+        --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
+        --t265)            HW_T265="true" ;;
         --px4)          PX4="true" ;;
         --rtabmap)      RTABMAP="true" ;;
         --nav2)         NAV2="true" ;;
@@ -148,24 +145,13 @@ for arg in "$@"; do
             exit 0 ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: $0 [--hw] [--d435i] [--l515] [--t265] [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
+            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
             exit 1
             ;;
     esac
 done
 
 # ── Flag implications ──
-# --hw without explicit camera flags → default to L515
-if [[ "${HW}" == "true" && "${HW_CAMERA_EXPLICIT}" == "false" ]]; then
-    HW_L515="true"
-fi
-
-# Auto-select RTAB-Map depth camera: L515 preferred, fall back to D435i
-HW_RTABMAP_CAM="l515"
-if [[ "${HW_L515}" == "false" && "${HW_D435I}" == "true" ]]; then
-    HW_RTABMAP_CAM="d435i"
-fi
-
 # --px4 (PX4 SITL) always needs both mode node and VO bridge
 if [[ "${PX4}" == "true" ]]; then
     BRIDGE="true"
@@ -193,12 +179,11 @@ fi
 echo "Launching ROS 2 nodes inside Docker container..."
 if [[ "${HW}" == "true" ]]; then
     echo "  Mode:         hardware (real cameras)"
-    echo "  D435i:        ${HW_D435I}"
-    echo "  L515:         ${HW_L515}"
+    echo "  Depth camera: ${DEPTH_CAMERA}"
     echo "  T265:         ${HW_T265}"
-    echo "  RTAB-Map cam: ${HW_RTABMAP_CAM}"
 else
     echo "  Mode:         simulation (Gazebo)"
+    echo "  Depth camera: ${DEPTH_CAMERA}"
     echo "  PX4 SITL:     ${PX4}"
 fi
 echo "  RTAB-Map:     ${RTABMAP}"
@@ -216,13 +201,11 @@ echo ""
 # Build the launch command
 LAUNCH_CMD="source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && "
 LAUNCH_CMD+="ros2 launch robot_bringup robot_bringup.launch.py"
+LAUNCH_CMD+=" depth_camera:=${DEPTH_CAMERA}"
 if [[ "${HW}" == "true" ]]; then
     LAUNCH_CMD+=" use_gazebo:=false"
     LAUNCH_CMD+=" use_sim_time:=false"
-    LAUNCH_CMD+=" hw_enable_d435i:=${HW_D435I}"
-    LAUNCH_CMD+=" hw_enable_l515:=${HW_L515}"
     LAUNCH_CMD+=" hw_enable_t265:=${HW_T265}"
-    LAUNCH_CMD+=" hw_rtabmap_camera:=${HW_RTABMAP_CAM}"
 else
     LAUNCH_CMD+=" enable_px4_sitl:=${PX4}"
 fi

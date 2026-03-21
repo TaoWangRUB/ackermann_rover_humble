@@ -3,13 +3,20 @@
 
 Modes
 -----
-Simulation (default):
+Simulation (default, L515):
   ros2 launch robot_bringup robot_bringup.launch.py
 
-Hardware (real cameras, no Gazebo):
+Simulation with D435i:
+  ros2 launch robot_bringup robot_bringup.launch.py depth_camera:=d435i
+
+Hardware — L515 (default):
+  ros2 launch robot_bringup robot_bringup.launch.py \\
+      use_gazebo:=false use_sim_time:=false rtabmap:=true
+
+Hardware — D435i + T265:
   ros2 launch robot_bringup robot_bringup.launch.py \\
       use_gazebo:=false use_sim_time:=false \\
-      hw_enable_l515:=true rtabmap:=true
+      depth_camera:=d435i hw_enable_t265:=true rtabmap:=true
 """
 
 import os
@@ -158,33 +165,23 @@ ARGUMENTS = [
         ),
     ),
     # -----------------------------------------------------------------------
-    # Hardware-mode camera selection (use_gazebo:=false)
+    # Depth camera selection — applies to both simulation and hardware.
+    # Drives: which camera node is launched (HW), Gazebo bridge topics (sim),
+    # URDF TF frames, and all RTAB-Map topic subscriptions.
     # -----------------------------------------------------------------------
     DeclareLaunchArgument(
-        'hw_enable_d435i',
-        default_value='false',
-        choices=['true', 'false'],
-        description='[HW mode] Enable D435i depth camera node.',
-    ),
-    DeclareLaunchArgument(
-        'hw_enable_l515',
-        default_value='true',
-        choices=['true', 'false'],
-        description='[HW mode] Enable L515 depth camera node (primary RTAB-Map source).',
+        'depth_camera',
+        default_value='l515',
+        description=(
+            'Name of the depth camera used for RTAB-Map (e.g. l515, d435i). '
+            'Controls which topics are bridged in sim and which node is started in HW.'
+        ),
     ),
     DeclareLaunchArgument(
         'hw_enable_t265',
         default_value='false',
         choices=['true', 'false'],
         description='[HW mode] Enable T265 tracking camera and odom_tf_relay.',
-    ),
-    DeclareLaunchArgument(
-        'hw_rtabmap_camera',
-        default_value='l515',
-        description=(
-            '[HW mode] Camera name used as RTAB-Map topic prefix (e.g. l515, d435i). '
-            'Set automatically by start_ros2_nodes.sh: prefers l515, falls back to d435i.'
-        ),
     ),
 ]
 
@@ -211,10 +208,8 @@ def generate_launch_description() -> LaunchDescription:
     enable_px4_sitl = LaunchConfiguration('enable_px4_sitl')
     px4_mode_type = LaunchConfiguration('px4_mode_type')
     reversible_drive = LaunchConfiguration('reversible_drive')
-    hw_enable_d435i = LaunchConfiguration('hw_enable_d435i')
-    hw_enable_l515 = LaunchConfiguration('hw_enable_l515')
+    depth_camera = LaunchConfiguration('depth_camera')
     hw_enable_t265 = LaunchConfiguration('hw_enable_t265')
-    hw_rtabmap_camera = LaunchConfiguration('hw_rtabmap_camera')
 
     robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
@@ -241,6 +236,8 @@ def generate_launch_description() -> LaunchDescription:
             'y': y_pos,
             'z': z_pos,
             'enable_px4_sitl': enable_px4_sitl,
+            'depth_camera': depth_camera,
+            'enable_t265': hw_enable_t265,
         }.items()
     )
 
@@ -250,6 +247,23 @@ def generate_launch_description() -> LaunchDescription:
 
     # RSP publishes the TF tree (camera mounts, wheel kinematics) from the URDF.
     # In Gazebo mode this is started inside gazebo_bringup; here it runs standalone.
+    #
+    # In HW mode there are no wheel encoders connected to ROS.
+    # cmd_vel_joint_relay derives /joint_states from /cmd_vel using inverse
+    # Ackermann kinematics: individual per-kingpin steering angles and integrated
+    # wheel rotation positions.  Intended for RViz visualisation only; SLAM and
+    # Nav2 use camera-derived odometry.
+    hw_joint_state_publisher = Node(
+        package='robot_bringup',
+        executable='cmd_vel_joint_relay.py',
+        output='screen',
+        condition=UnlessCondition(use_gazebo),
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'robot_ns': robot_name,
+        }],
+    )
+
     hw_robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -259,8 +273,8 @@ def generate_launch_description() -> LaunchDescription:
             'robot_description': Command([
                 'xacro', ' ', xacro_file, ' ',
                 'ns:=', robot_name, ' ',
-                'enable_d435i:=', hw_enable_d435i, ' ',
-                'enable_l515:=', hw_enable_l515, ' ',
+                'enable_d435i:=', PythonExpression(['"true" if "', depth_camera, '" == "d435i" else "false"']), ' ',
+                'enable_l515:=',  PythonExpression(['"true" if "', depth_camera, '" == "l515"  else "false"']), ' ',
                 'enable_t265:=', hw_enable_t265, ' ',
                 'enable_rplidar:=false ',
                 'enable_cubepilot:=false',
@@ -277,19 +291,19 @@ def generate_launch_description() -> LaunchDescription:
         ),
         condition=UnlessCondition(use_gazebo),
         launch_arguments={
-            'enable_d435i': hw_enable_d435i,
-            'enable_l515':  hw_enable_l515,
+            'enable_d435i': PythonExpression(['"true" if "', depth_camera, '" == "d435i" else "false"']),
+            'enable_l515':  PythonExpression(['"true" if "', depth_camera, '" == "l515"  else "false"']),
             'enable_t265':  hw_enable_t265,
         }.items(),
     )
 
     # -----------------------------------------------------------------------
-    # RTAB-Map — topic names differ between sim (Gazebo bridge) and hardware
+    # RTAB-Map — topic names derived from depth_camera in both modes.
     #
-    # Sim  topics: /l515/image, /l515/camera_info, /l515/depth_image, /l515/imu/raw
-    # HW   topics: l515/color/image_raw, l515/color/camera_info,
-    #              l515/aligned_depth_to_color/image_raw,
-    #              l515/aligned_depth_to_color/camera_info, l515/imu
+    # Sim:  /{depth_camera}/image, /{depth_camera}/camera_info,
+    #       /{depth_camera}/depth_image, /{depth_camera}/imu/raw
+    # HW:   {depth_camera}/color/image_raw, {depth_camera}/color/camera_info,
+    #       {depth_camera}/aligned_depth_to_color/image_raw, {depth_camera}/imu
     # -----------------------------------------------------------------------
     # NOTE: px4_bridge is NOT launched here; start it separately after XRCE-DDS:
     #   ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
@@ -305,29 +319,29 @@ def generate_launch_description() -> LaunchDescription:
             'localization': localization,
             'rtabmap_viz': rtabmap_viz,
             'rgb_image_topic': PythonExpression([
-                '"', hw_rtabmap_camera, '/color/image_raw"'
+                '"', depth_camera, '/color/image_raw"'
                 ' if "', use_gazebo, '" == "false"'
-                ' else "/l515/image"'
+                ' else "/', depth_camera, '/image"'
             ]),
             'rgb_camera_info_topic': PythonExpression([
-                '"', hw_rtabmap_camera, '/color/camera_info"'
+                '"', depth_camera, '/color/camera_info"'
                 ' if "', use_gazebo, '" == "false"'
-                ' else "/l515/camera_info"'
+                ' else "/', depth_camera, '/camera_info"'
             ]),
             'depth_image_topic': PythonExpression([
-                '"', hw_rtabmap_camera, '/aligned_depth_to_color/image_raw"'
+                '"', depth_camera, '/aligned_depth_to_color/image_raw"'
                 ' if "', use_gazebo, '" == "false"'
-                ' else "/l515/depth_image"'
+                ' else "/', depth_camera, '/depth_image"'
             ]),
             'depth_camera_info_topic': PythonExpression([
-                '"', hw_rtabmap_camera, '/aligned_depth_to_color/camera_info"'
+                '"', depth_camera, '/aligned_depth_to_color/camera_info"'
                 ' if "', use_gazebo, '" == "false"'
-                ' else "/l515/camera_info"'
+                ' else "/', depth_camera, '/camera_info"'
             ]),
             'imu_raw_topic': PythonExpression([
-                '"', hw_rtabmap_camera, '/imu"'
+                '"', depth_camera, '/imu"'
                 ' if "', use_gazebo, '" == "false"'
-                ' else "/l515/imu/raw"'
+                ' else "/', depth_camera, '/imu/raw"'
             ]),
         }.items()
     )
@@ -365,6 +379,7 @@ def generate_launch_description() -> LaunchDescription:
     # Simulation
     ld.add_action(gazebo_launch)
     # Hardware (mutually exclusive with Gazebo)
+    ld.add_action(hw_joint_state_publisher)
     ld.add_action(hw_robot_state_publisher)
     ld.add_action(hw_cameras_launch)
     # Common
