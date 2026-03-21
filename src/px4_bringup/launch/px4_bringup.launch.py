@@ -56,8 +56,8 @@ def generate_launch_description():
 
     base_frame_arg = DeclareLaunchArgument(
         'base_frame',
-        default_value='ackermann/base_link',
-        description='TF frame for the robot base (body FLU)'
+        default_value='cubepilot_link',
+        description='TF frame for the IMU/flight controller (body FLU)'
     )
 
     # ── Odometry transport selection ──────────────────────────────────────

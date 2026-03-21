@@ -14,6 +14,13 @@
  *   pos_WB = pos_WC + R(q_WC) * pos_CB
  *   q_WB   = q_WC ⊗ q_CB
  *
+ * Origin alignment:
+ *   The first computed (pos_WB, q_WB) is latched and subtracted from all
+ *   subsequent outputs so that the odom origin coincides with base_link at
+ *   t=0.  Without this, the output starts at pos_CB (the sensor→base_link
+ *   mount offset), which misaligns it with other odom sources (e.g.
+ *   robot_localization EKF) that define origin at base_link.
+ *
  * Velocity (rigid-body, lever-arm corrected, all quaternions [x,y,z,w]):
  *   v_B  = R_BC * (v_C + ω_C × pos_CB)
  *   ω_B  = R_BC * ω_C
@@ -211,6 +218,18 @@ private:
     Eigen::Vector3d    pos_WB = pos_WC + rotate(q_WC, pos_CB);
     Eigen::Quaterniond q_WB   = (q_WC * q_CB).normalized();
 
+    // ── Origin alignment: subtract first pose so odom starts at (0,0,0) ─
+    if (!origin_latched_) {
+      origin_pos_     = pos_WB;
+      origin_q_inv_   = q_WB.conjugate();
+      origin_latched_ = true;
+      RCLCPP_INFO(get_logger(),
+        "Origin latched: [%.3f %.3f %.3f] — subtracting from all outputs",
+        origin_pos_.x(), origin_pos_.y(), origin_pos_.z());
+    }
+    pos_WB = origin_q_inv_ * (pos_WB - origin_pos_);
+    q_WB   = (origin_q_inv_ * q_WB).normalized();
+
     // ── Velocity transform (rigid body) ──────────────────────────────────
     const auto & lv = msg->twist.twist.linear;
     const auto & av = msg->twist.twist.angular;
@@ -272,6 +291,11 @@ private:
   std::string        cached_sensor_;
   Eigen::Vector3d    pos_CB_        = Eigen::Vector3d::Zero();
   Eigen::Quaterniond q_CB_          = Eigen::Quaterniond::Identity();
+
+  // Origin alignment — latch first (pos_WB, q_WB) to zero-out mount offset
+  bool               origin_latched_ = false;
+  Eigen::Vector3d    origin_pos_     = Eigen::Vector3d::Zero();
+  Eigen::Quaterniond origin_q_inv_   = Eigen::Quaterniond::Identity();
 };
 
 int main(int argc, char ** argv)
