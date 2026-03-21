@@ -13,30 +13,47 @@ RealsenseCameraNode::RealsenseCameraNode(const rclcpp::NodeOptions & options)
   declare_parameters();
   create_publishers();
 
-  // Retry loop — "Unable to open device interface" is a transient USB
-  // enumeration race that can occur when multiple cameras reset simultaneously
-  // on the same hub.  Retrying after a short delay resolves it reliably.
+  // Retry loop — handles two classes of transient USB/firmware errors:
+  //   1. "failed to set power state" / "Unable to open device" — enumeration race
+  //      on shared hubs; just wait and retry (no extra reset needed).
+  //   2. "Couldn't resolve requests" / "device is streaming" — firmware stuck in
+  //      streaming state from a previously killed process; force a hardware reset
+  //      to release the device before retrying.
+  // Note: hardware reset is only issued on the first normal attempt (via
+  // enable_hardware_reset flag).  Repeating it on every retry for T265 triggers
+  // repeated USB reconnect cycles that worsen the "failed to set power state" error.
   constexpr int    MAX_RETRIES   = 5;
   constexpr double RETRY_DELAY_S = 5.0;
 
   for (int attempt = 1; attempt <= MAX_RETRIES; ++attempt) {
     try {
-      if (enable_hardware_reset_) {
-        reset_device();   // enumerate + hardware reset
+      if (enable_hardware_reset_ && attempt == 1) {
+        reset_device();   // enumerate + hardware reset — first attempt only
       }
       start_pipeline();
       return;   // success
     } catch (const std::exception & e) {
       const std::string what = e.what();
-      const bool retriable   = what.find("Unable to open device") != std::string::npos ||
-                               what.find("device is streaming")   != std::string::npos ||
-                               what.find("failed to set power")   != std::string::npos ||
-                               what.find("No device connected")   != std::string::npos;
+      // "Couldn't resolve requests" / "device is streaming": firmware stuck
+      // streaming from a previous crash — a hardware reset is required to recover.
+      const bool is_stuck  = what.find("Couldn't resolve requests") != std::string::npos ||
+                             what.find("device is streaming")       != std::string::npos;
+      const bool retriable = is_stuck ||
+                             what.find("Unable to open device")     != std::string::npos ||
+                             what.find("failed to set power")       != std::string::npos ||
+                             what.find("No device connected")       != std::string::npos;
 
       if (retriable && attempt < MAX_RETRIES) {
         RCLCPP_WARN(get_logger(),
           "Camera init attempt %d/%d failed (%s) — retrying in %.0fs...",
           attempt, MAX_RETRIES, what.c_str(), RETRY_DELAY_S);
+        if (is_stuck) {
+          // Forced reset to clear stuck streaming state (even if enable_hardware_reset=false)
+          RCLCPP_WARN(get_logger(), "Device appears stuck — issuing forced hardware reset.");
+          try { reset_device(); } catch (const std::exception & re) {
+            RCLCPP_WARN(get_logger(), "Forced reset failed: %s — will retry anyway.", re.what());
+          }
+        }
         std::this_thread::sleep_for(
           std::chrono::milliseconds(static_cast<int>(RETRY_DELAY_S * 1000)));
       } else {
