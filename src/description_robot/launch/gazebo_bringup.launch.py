@@ -14,7 +14,7 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, TextSubstitution, PathJoinSubstitution
+from launch.substitutions import Command, LaunchConfiguration, PythonExpression, TextSubstitution, PathJoinSubstitution
 from launch_ros.actions import Node
 
 from launch.event_handlers import OnProcessExit
@@ -34,8 +34,7 @@ def generate_launch_description() -> LaunchDescription:
     y_pos = LaunchConfiguration('y')
     z_pos = LaunchConfiguration('z')
     gz_args = LaunchConfiguration('gz_args')
-    enable_d435i = LaunchConfiguration('enable_d435i')
-    enable_l515 = LaunchConfiguration('enable_l515')
+    depth_camera = LaunchConfiguration('depth_camera')
     enable_t265 = LaunchConfiguration('enable_t265')
     enable_rplidar = LaunchConfiguration('enable_rplidar')
     enable_cubepilot = LaunchConfiguration('enable_cubepilot')
@@ -73,8 +72,9 @@ def generate_launch_description() -> LaunchDescription:
     declare_x = DeclareLaunchArgument('x', default_value='0.0', description='Initial X position in meters.')
     declare_y = DeclareLaunchArgument('y', default_value='0.0', description='Initial Y position in meters.')
     declare_z = DeclareLaunchArgument('z', default_value='0.1', description='Initial Z position in meters.')
-    declare_enable_d435i = DeclareLaunchArgument('enable_d435i', default_value='false', description='Enable D435i depth camera.')
-    declare_enable_l515 = DeclareLaunchArgument('enable_l515', default_value='true', description='Enable L515 LiDAR camera.')
+    declare_depth_camera = DeclareLaunchArgument(
+        'depth_camera', default_value='l515',
+        description='Depth camera for RTAB-Map (l515 or d435i); drives bridge topics and URDF TF frames.')
     declare_enable_t265 = DeclareLaunchArgument('enable_t265', default_value='false', description='Enable T265 tracking camera.')
     declare_enable_rplidar = DeclareLaunchArgument('enable_rplidar', default_value='true', description='Enable RPLiDAR.')
     declare_enable_cubepilot = DeclareLaunchArgument('enable_cubepilot', default_value='true', description='Enable CubePilot (IMU, baro, mag, GPS).')
@@ -97,8 +97,8 @@ def generate_launch_description() -> LaunchDescription:
                 'xacro', ' ', xacro_file, ' ',
                 'gazebo:=harmonic', ' ',
                 'namespace:=', namespace, ' ',
-                'enable_d435i:=', enable_d435i, ' ',
-                'enable_l515:=', enable_l515, ' ',
+                'enable_d435i:=', PythonExpression(['"true" if "', depth_camera, '" == "d435i" else "false"']), ' ',
+                'enable_l515:=',  PythonExpression(['"true" if "', depth_camera, '" == "l515"  else "false"']), ' ',
                 'enable_t265:=', enable_t265, ' ',
                 'enable_rplidar:=', enable_rplidar, ' ',
                 'enable_cubepilot:=', enable_cubepilot,
@@ -108,32 +108,20 @@ def generate_launch_description() -> LaunchDescription:
         ],
     )
 
-    # Bridge Gazebo Transport topics to ROS 2 so RTAB-Map can consume them
+    # Bridge Gazebo Transport topics to ROS 2 so RTAB-Map can consume them.
+    # Depth-camera topics are derived from the depth_camera arg (e.g. l515, d435i).
     bridge_topics = [
         '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
-        #'/d435i/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
-        #'/d435i/points' + '@sensor_msgs/msg/PointCloud2' + '[gz.msgs.PointCloudPacked',
-        #'/d435i/depth_image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-        #'/d435i/image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-        #'/d435i/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
-        '/l515/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
-        '/l515/points' + '@sensor_msgs/msg/PointCloud2' + '[gz.msgs.PointCloudPacked',
-        '/l515/depth_image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-        '/l515/image' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-        '/l515/imu/raw' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
-        #'/t265/fisheye1/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
-        #'/t265/fisheye1/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-        #'/t265/fisheye2/camera_info' + '@sensor_msgs/msg/CameraInfo' + '[gz.msgs.CameraInfo',
-        #'/t265/fisheye2/image_raw' + '@sensor_msgs/msg/Image' + '[gz.msgs.Image',
-        #'/t265/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
-        '/t265/pose/sample' + '@nav_msgs/msg/Odometry' + '[gz.msgs.Odometry',
-        '/ackermann/odom' + '@nav_msgs/msg/Odometry' + '[gz.msgs.Odometry',
-        '/ackermann/tf' + '@tf2_msgs/msg/TFMessage' + '[gz.msgs.Pose_V',
-        '/model/ackermann/tf' + '@tf2_msgs/msg/TFMessage' + '[gz.msgs.Pose_V',
-        #'/ackermann/joint_state' + '@sensor_msgs/msg/JointState' + '[gz.msgs.Model',
-        #'/ackermann/cmd_vel' + '@geometry_msgs/msg/Twist' + ']gz.msgs.Twist',
-        '/rplidar/scan' + '@sensor_msgs/msg/LaserScan' + '[gz.msgs.LaserScan',
-        #'/cubepilot/imu' + '@sensor_msgs/msg/Imu' + '[gz.msgs.IMU',
+        PythonExpression(['"/', depth_camera, '/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo"']),
+        PythonExpression(['"/', depth_camera, '/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked"']),
+        PythonExpression(['"/', depth_camera, '/depth_image@sensor_msgs/msg/Image[gz.msgs.Image"']),
+        PythonExpression(['"/', depth_camera, '/image@sensor_msgs/msg/Image[gz.msgs.Image"']),
+        PythonExpression(['"/', depth_camera, '/imu/raw@sensor_msgs/msg/Imu[gz.msgs.IMU"']),
+        '/t265/pose/sample@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+        '/ackermann/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+        '/ackermann/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
+        '/model/ackermann/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
+        '/rplidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
     ]
 
     parameter_bridge = Node(
@@ -200,8 +188,7 @@ def generate_launch_description() -> LaunchDescription:
             declare_x,
             declare_y,
             declare_z,
-            declare_enable_d435i,
-            declare_enable_l515,
+            declare_depth_camera,
             declare_enable_t265,
             declare_enable_rplidar,
             declare_enable_cubepilot,
