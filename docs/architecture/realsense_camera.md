@@ -300,6 +300,33 @@ Applied to `[pp, pr, rp, rr]` blocks independently. Passing covariance unchanged
 - If TF is unavailable at startup, falls back to identity transform and emits a **single** warning (no spam).
 - If `child_frame_id` already equals `base_frame`, the message is relayed unchanged (no transform applied).
 
+### Origin Latching
+
+The T265 VIO starts with its odom origin at the sensor's initial position (0,0,0 in
+`t265_odom_frame`). After rigid-body composition, the first output `pos_WB` equals
+the static mount offset `pos_CB` (e.g. `[-0.187, 0, -0.210]`), not (0,0,0).
+
+This misaligns the T265 odom origin with other sources like `robot_localization` EKF
+(`/odometry/filtered`), which defines origin at `base_link` = (0,0,0).
+
+To fix this, `odom_tf_relay` **latches the first computed pose** (`pos_WB₀`, `q_WB₀`)
+and subtracts it from all subsequent outputs:
+
+```
+pos_out = conj(q_WB₀) * (pos_WB - pos_WB₀)
+q_out   = conj(q_WB₀) ⊗ q_WB
+```
+
+This ensures `/t265/odom_base` starts at (0,0,0) regardless of the sensor mount offset.
+The latch value is logged at startup:
+
+```
+[t265_odom_relay] Origin latched: [-0.187 0.001 -0.210] — subtracting from all outputs
+```
+
+See also: [ADR-008](../decisions/ADR-008-px4-odometry-frames.md) for how this aligns
+with the PX4 visual odometry origin.
+
 ### T265 Integration in Launch File
 
 The relay node is automatically started alongside the T265 camera node, conditioned on `enable_t265`:
