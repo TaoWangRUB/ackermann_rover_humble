@@ -2,7 +2,7 @@
 title: "ADR-008: PX4 Visual Odometry Frame and Origin Alignment"
 status: Accepted
 owner: decisions_team
-last_updated: 2026-03-21
+last_updated: 2026-03-22
 doc_type: ADR
 ros_distro: humble
 ---
@@ -116,6 +116,68 @@ at the raw sensor→base_link mount offset.
 - `EKF2_EV_POS` simplifies to zero — no manual measurement needed
 - Changing the cubepilot mount position in URDF automatically propagates
   through the TF tree; no PX4 parameter update required
+
+## Verification (2026-03-22, stationary robot, HW mode)
+
+### Command
+
+```bash
+./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265 --rtabmap --no-rviz --bridge --vo-bridge
+```
+
+### Expected behaviour
+
+For a stationary robot, all three odom sources should report base_link near
+(0, 0, 0). The key check is that X-Y values agree across sources — confirming
+no mount-offset is double-counted or missing.
+
+URDF mount offsets that would appear as errors if mishandled:
+
+| Frame | X offset from base_link | Would cause X error of |
+|---|---|---|
+| `cubepilot_link` | +0.087 m | ±0.087 m if forward/reverse path inconsistent |
+| `d435i_link` / `t265_link` | +0.187 m | ±0.187 m if origin not latched |
+
+### Observed results
+
+| Topic | X (m) | Y (m) | Z (m) | Status |
+|---|---|---|---|---|
+| `/odometry/filtered` (EKF) | 0.014 | -0.057 | 0.0 | baseline |
+| `/px4_vehicle_odom_base` (PX4→base_link) | 0.010 | -0.058 | 0.492 | X-Y aligned with EKF |
+| `/t265/odom_base` (T265) | 0.000 | 0.000 | 0.000 | origin latched correctly |
+
+### Analysis
+
+- **X-Y alignment**: `/odometry/filtered` and `/px4_vehicle_odom_base` agree to
+  within ~4 mm (X: 0.014 vs 0.010, Y: -0.057 vs -0.058). No ±0.087 m cubepilot
+  offset or ±0.187 m camera offset visible — frame transforms are consistent
+  end-to-end.
+
+- **Z discrepancy on PX4 output** (0.492 m): Expected. PX4 EKF2 uses barometer
+  for height (`EKF2_HGT_REF=0`) and barometric pressure drift accumulates over
+  time. The ROS EKF forces Z=0 (2D-configured, `Reg/Force3DoF=true`). This is
+  not a frame error.
+
+- **T265 at origin**: `odom_tf_relay` origin-latching correctly subtracted the
+  initial mount offset `[-0.187, 0, -0.210]`. Without latching, this would have
+  shown as a constant X=-0.187 m error.
+
+- **VIO input to PX4** (`/fmu/in/vehicle_visual_odometry`): `pose_frame=1`
+  (NED), position near zero, quaternion consistent with ENU→NED conversion.
+  `velocity_frame=3` (BODY_FRD), velocities near zero (stationary). PX4 EKF2
+  accepted the measurements (`/fmu/out/vehicle_odometry` publishing).
+
+### How to re-verify
+
+```bash
+# With all nodes running:
+ros2 topic echo /odometry/filtered --once | grep -A3 'position:'
+ros2 topic echo /px4_vehicle_odom_base --once | grep -A3 'position:'
+ros2 topic echo /t265/odom_base --once | grep -A3 'position:'
+
+# X-Y should agree within ~1 cm for a stationary robot.
+# Differences > 8 cm in X or > 18 cm in X indicate a frame transform bug.
+```
 
 ## Files changed
 
