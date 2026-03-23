@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-"""Test script to verify robot motion by publishing cmd_vel and checking odom."""
+"""Test script to verify robot motion by publishing cmd_vel and checking odom.
+
+Usage:
+    python3 scripts/motion_test.py
+
+Publishes cmd_vel at 1.0 m/s for 5 seconds and reports distance traveled.
+Requires Gazebo simulation with ros2_control running.
+"""
+import sys
+
+if len(sys.argv) > 1 and sys.argv[1] in ('-h', '--help'):
+    print(__doc__.strip())
+    sys.exit(0)
+
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import TwistStamped

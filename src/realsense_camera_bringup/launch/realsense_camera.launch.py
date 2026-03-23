@@ -176,7 +176,7 @@ def generate_launch_description() -> LaunchDescription:
         # T265 starts immediately and resets first; D435i/L515 use startup_delay
         # to avoid USB power-state races on shared hubs.
         ('t265_startup_delay_s',        '0.0'),
-        ('t265_enable_hardware_reset',  'true'),
+        ('t265_enable_hardware_reset',  'false'),
         # odom_tf_relay: re-express T265 odom into ackermann/base_link
         ('t265_odom_input_topic',  '/t265/odom'),
         ('t265_odom_output_topic', '/t265/odom_base'),

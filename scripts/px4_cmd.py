@@ -49,9 +49,9 @@ def connect_mavlink(retries=3):
     return None
 
 def main():
-    if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <command> [timeout]")
-        sys.exit(1)
+    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
+        print(__doc__.strip())
+        sys.exit(0 if len(sys.argv) >= 2 else 1)
 
     cmd = sys.argv[1]
     timeout = float(sys.argv[2]) if len(sys.argv) > 2 else 5.0
