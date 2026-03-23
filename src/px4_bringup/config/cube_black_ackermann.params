@@ -49,6 +49,10 @@
 # ── PWM Actuator Mapping (MAIN outputs) ─────────────────────────────────────
 # MAIN OUT 1 → Throttle (Motor 1)
 1	1	PWM_MAIN_FUNC1	101	6
+# Match disarmed value so throttle=-1 → PWM 1000 → ESC stop (unidirectional)
+1	1	PWM_MAIN_MIN1	1000	6
+1	1	PWM_MAIN_MAX1	1900	6
+1	1	PWM_MAIN_DIS1	1000	6
 
 # MAIN OUT 2 → Steering (Servo 1)
 1	1	PWM_MAIN_FUNC2	201	6
