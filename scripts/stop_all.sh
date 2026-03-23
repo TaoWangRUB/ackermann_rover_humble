@@ -27,14 +27,14 @@ echo "Stopping all processes in container..."
 # Pass 1: kill launch parents and well-known process names
 ${DC} exec -T ackermann_slam bash -c "
     pkill -9 -f 'ros2 launch' 2>/dev/null || true
-    pkill -9 -f 'rviz2|gz sim|ruby|MicroXRCE' 2>/dev/null || true
+    pkill -9 -f 'rviz2|gz sim|ruby|MicroXRCEAgent' 2>/dev/null || true
     sleep 1
 " 2>/dev/null || true
 
 # Pass 2: kill any remaining ROS / workspace nodes (catches orphans)
 ${DC} exec -T ackermann_slam bash -c "
     ps aux --no-headers \
-      | grep -E '/opt/ros|/workspace/install' \
+      | grep -E '/opt/ros|/opt/microxrce|/workspace/install' \
       | grep -v grep \
       | awk '{print \$2}' \
       | xargs kill -9 2>/dev/null || true
@@ -43,7 +43,7 @@ ${DC} exec -T ackermann_slam bash -c "
 # Verify
 REMAINING=$(${DC} exec -T ackermann_slam bash -c "
     ps aux --no-headers \
-      | grep -E '/opt/ros|/workspace/install' \
+      | grep -E '/opt/ros|/opt/microxrce|/workspace/install' \
       | grep -v grep \
       | wc -l
 " 2>/dev/null || echo "0")
@@ -54,7 +54,7 @@ else
     echo "WARNING: ${REMAINING} process(es) still running. Retrying..."
     ${DC} exec -T ackermann_slam bash -c "
         ps aux --no-headers \
-          | grep -E '/opt/ros|/workspace/install' \
+          | grep -E '/opt/ros|/opt/microxrce|/workspace/install' \
           | grep -v grep \
           | awk '{print \$2}' \
           | xargs kill -9 2>/dev/null || true

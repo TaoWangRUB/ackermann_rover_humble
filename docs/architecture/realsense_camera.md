@@ -453,6 +453,58 @@ librealsense2 v2.51.1 is pre-installed in the Docker image at `/usr/local`.
 | `camera_namespace` | Topic namespace prefix |
 | `unite_imu_method` | IMU interpolation (currently: cache + publish on gyro arrival) |
 
+## Verification
+
+### Quick Start (tmux session)
+
+```bash
+# 1. Start Docker container
+./scripts/start_docker.sh
+
+# 2. Launch tmux session (XRCE agent + ROS 2 nodes + odom verification)
+./scripts/start_session.sh --depth-camera=d435i --t265 --rtabmap --no-rviz --bridge --vo-bridge
+
+# 3. Navigate panes: Ctrl+b then arrow keys
+# 4. Stop: 
+./scripts/stop_all.sh && tmux kill-session -t rover
+```
+
+### Manual Verification
+
+With all nodes running inside the container:
+
+```bash
+# Check camera topics are publishing
+ros2 topic hz /d435i/color/image_raw
+ros2 topic hz /d435i/depth/image_rect_raw
+ros2 topic hz /t265/odom
+
+# Check odom alignment (stationary robot — X-Y should agree within ~1 cm)
+ros2 topic echo /odometry/filtered --once | grep -A3 'position:'
+ros2 topic echo /t265/odom_base --once | grep -A3 'position:'
+ros2 topic echo /px4_vehicle_odom_base --once | grep -A3 'position:'
+```
+
+### Automated Odom Verification
+
+```bash
+# One-shot
+./scripts/verify_odom.sh
+
+# Continuous (every 5s)
+./scripts/verify_odom.sh --loop
+```
+
+Checks all three odom sources (`/odometry/filtered`, `/t265/odom_base`, `/px4_vehicle_odom_base`) and prints positions side-by-side. For a stationary robot:
+
+| Check | Expected | Indicates bug if |
+|-------|----------|------------------|
+| X-Y agreement across sources | within ~1 cm | > 8 cm difference in X |
+| T265 origin at (0,0,0) | yes (origin-latched) | X ≈ -0.187 m (mount offset not subtracted) |
+| PX4 Z drift | normal (barometric) | N/A — not a frame error |
+
+See [ADR-008](../decisions/ADR-008-px4-odometry-frames.md) for detailed verification results and frame alignment analysis.
+
 ## File Locations
 
 | File | Path |

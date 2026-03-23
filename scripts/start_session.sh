@@ -55,16 +55,19 @@ tmux kill-session -t "${SESSION}" 2>/dev/null || true
 
 # --- Pane 0 (top-left): Micro-XRCE-DDS Agent (serial) ---
 tmux new-session -d -s "${SESSION}" -n "rover" \
-    "${SCRIPT_DIR}/start_microxrce_agent.sh --serial"
+    "bash -c '${SCRIPT_DIR}/start_microxrce_agent.sh --serial; echo \"[exited \$?] — press Enter to restart\"; read; exec bash'"
+
+# Keep panes open if a command exits or crashes (must be after session exists)
+tmux set-option -t "${SESSION}" remain-on-exit on
 
 # --- Pane 1 (top-right): ROS 2 nodes ---
 tmux split-window -h -t "${SESSION}:rover" \
-    "echo 'Waiting 3s for XRCE agent...'; sleep 3; ${SCRIPT_DIR}/start_ros2_nodes.sh ${ROS2_ARGS}"
+    "bash -c 'echo \"Waiting 3s for XRCE agent...\"; sleep 3; ${SCRIPT_DIR}/start_ros2_nodes.sh ${ROS2_ARGS}; echo \"[exited \$?] — press Enter to restart\"; read; exec bash'"
 
 # --- Pane 2 (bottom): Verification ---
 if [[ "$VERIFY" == true ]]; then
-    tmux split-window -v -t "${SESSION}:rover" -l 30% \
-        "echo 'Waiting 30s for nodes to start publishing...'; sleep 30; ${SCRIPT_DIR}/verify_odom.sh --loop"
+    tmux split-window -v -t "${SESSION}:rover" -l 12 \
+        "bash -c 'echo \"Waiting 30s for nodes to start publishing...\"; sleep 30; ${SCRIPT_DIR}/verify_odom.sh --loop; echo \"[exited \$?]\"; read; exec bash'"
 fi
 
 # Select the ROS 2 nodes pane (top-right) and attach

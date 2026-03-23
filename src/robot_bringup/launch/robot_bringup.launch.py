@@ -277,7 +277,7 @@ def generate_launch_description() -> LaunchDescription:
                 'enable_l515:=',  PythonExpression(['"true" if "', depth_camera, '" == "l515"  else "false"']), ' ',
                 'enable_t265:=', hw_enable_t265, ' ',
                 'enable_rplidar:=false ',
-                'enable_cubepilot:=false',
+                'enable_cubepilot:=true',
             ]),
             'use_sim_time': use_sim_time,
         }],
@@ -285,6 +285,8 @@ def generate_launch_description() -> LaunchDescription:
 
     # Real RealSense cameras (D435i / L515 / T265 selected by hw_enable_* args).
     # The T265 odom_tf_relay is also started automatically when enable_t265:=true.
+    # When T265 is enabled, delay D435i/L515 startup by 12s so T265 resets
+    # and starts streaming first (avoids USB power-state races on shared hub).
     hw_cameras_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(realsense_bringup_share, 'launch', 'realsense_camera.launch.py')
@@ -294,6 +296,8 @@ def generate_launch_description() -> LaunchDescription:
             'enable_d435i': PythonExpression(['"true" if "', depth_camera, '" == "d435i" else "false"']),
             'enable_l515':  PythonExpression(['"true" if "', depth_camera, '" == "l515"  else "false"']),
             'enable_t265':  hw_enable_t265,
+            'd435i_startup_delay_s': PythonExpression(['"12.0" if "', hw_enable_t265, '" == "true" else "0.0"']),
+            'l515_startup_delay_s':  PythonExpression(['"12.0" if "', hw_enable_t265, '" == "true" else "0.0"']),
         }.items(),
     )
 
