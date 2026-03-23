@@ -48,10 +48,13 @@
 
 # ── PWM Actuator Mapping (MAIN outputs) ─────────────────────────────────────
 # MAIN OUT 1 → Throttle (Motor 1)
+#
+# PX4 "Throttle" output maps [-1, 1] → [PWM_MIN, PWM_MAX].
+# rover_manual_mode remaps cmd_vel to this range based on bidirectional_esc param.
+# PWM values are selected by upload_params.sh --reversible-drive flag:
+#   Unidirectional (default): MIN=DIS=1000 so throttle -1 → ESC stop
+#   Bidirectional:            MIN=1100, center (1500) = ESC stop
 1	1	PWM_MAIN_FUNC1	101	6
-# Match disarmed value so throttle=-1 → PWM 1000 → ESC stop (unidirectional)
-1	1	PWM_MAIN_MIN1	1000	6
-1	1	PWM_MAIN_MAX1	1900	6
 1	1	PWM_MAIN_DIS1	1000	6
 
 # MAIN OUT 2 → Steering (Servo 1)

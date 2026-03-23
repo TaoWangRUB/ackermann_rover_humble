@@ -462,7 +462,7 @@ librealsense2 v2.51.1 is pre-installed in the Docker image at `/usr/local`.
 ./scripts/start_docker.sh
 
 # 2. Launch tmux session (XRCE agent + ROS 2 nodes + odom verification)
-./scripts/start_session.sh --depth-camera=d435i --t265 --rtabmap --no-rviz --bridge --vo-bridge
+./scripts/start_camera_px4_test_session.sh --depth-camera=d435i --t265 --rtabmap --no-rviz --bridge --vo-bridge
 
 # 3. Navigate panes: Ctrl+b then arrow keys
 # 4. Stop: 

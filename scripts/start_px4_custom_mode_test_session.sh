@@ -15,9 +15,9 @@
 # After all panes are up, the script activates the custom mode and arms.
 #
 # Usage:
-#   ./scripts/start_px4_test_session.sh                  # defaults
-#   ./scripts/start_px4_test_session.sh --mode-id 24     # custom mode ID
-#   ./scripts/start_px4_test_session.sh --no-activate    # skip mode activation
+#   ./scripts/start_px4_custom_mode_test_session.sh                  # defaults
+#   ./scripts/start_px4_custom_mode_test_session.sh --mode-id 24     # custom mode ID
+#   ./scripts/start_px4_custom_mode_test_session.sh --no-activate    # skip mode activation
 #
 # To stop everything:
 #   tmux kill-session -t px4test
@@ -79,10 +79,10 @@ tmux send-keys -t "${SESSION}:px4test.0" \
 
 if [[ "$ACTIVATE" == true ]]; then
     tmux send-keys -t "${SESSION}:px4test.4" \
-        "echo 'Waiting 20s for PX4 mode registration...' && sleep 20 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}" Enter
+        "echo 'Waiting 20s for PX4 mode registration...' && sleep 20 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; docker-compose -f ${SCRIPT_DIR}/../docker/docker-compose.yml exec ackermann_slam bash" Enter
 else
     tmux send-keys -t "${SESSION}:px4test.4" \
-        "# Activation disabled (--no-activate). Run manually: ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}" Enter
+        "docker-compose -f ${SCRIPT_DIR}/../docker/docker-compose.yml exec ackermann_slam bash" Enter
 fi
 
 # Select the PX4 bringup pane and attach
