@@ -3,8 +3,9 @@
 # Upload PX4 parameters via MAVLink shell — reliable alternative to QGC file load.
 #
 # Usage (from host, with Cube Black connected via USB):
-#   ./scripts/upload_params.sh                  # upload all params
-#   ./scripts/upload_params.sh --verify-only    # just verify current values
+#   ./scripts/upload_params.sh                       # upload all params (unidirectional ESC)
+#   ./scripts/upload_params.sh --reversible-drive    # upload with bidirectional ESC PWM
+#   ./scripts/upload_params.sh --verify-only         # just verify current values
 #
 # Why use this instead of QGC "Load from file"?
 #   1. QGC's .params parser silently skips lines with wrong whitespace.
@@ -31,9 +32,13 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 VERIFY_ONLY=false
-if [[ "${1:-}" == "--verify-only" ]]; then
-    VERIFY_ONLY=true
-fi
+REVERSIBLE_DRIVE=false
+for arg in "$@"; do
+    case "${arg}" in
+        --verify-only)      VERIFY_ONLY=true ;;
+        --reversible-drive) REVERSIBLE_DRIVE=true ;;
+    esac
+done
 
 # ── Parameter source ──────────────────────────────────────────────────────────
 # Single source of truth: the QGC-compatible .params file.
@@ -73,6 +78,20 @@ done < "${PARAMS_FILE}"
 if [[ -z "${AIRFRAME_PARAM}" ]]; then
     echo "ERROR: SYS_AUTOSTART not found in ${PARAMS_FILE}"
     exit 1
+fi
+
+# ── ESC-dependent PWM values ──────────────────────────────────────────────────
+# PX4 "Throttle" maps [-1, 1] → [PWM_MIN, PWM_MAX].
+# Unidirectional: MIN=1000 (=DIS) so throttle -1 → ESC stop, +1 → full fwd
+# Bidirectional:  MIN=1100, MAX=1900, center 1500 = ESC stop
+if [[ "${REVERSIBLE_DRIVE}" == true ]]; then
+    PARAMS+=("PWM_MAIN_MIN1 1100 int")
+    PARAMS+=("PWM_MAIN_MAX1 1900 int")
+    echo "ESC mode: bidirectional (PWM_MIN=1100, PWM_MAX=1900, center=1500=stop)"
+else
+    PARAMS+=("PWM_MAIN_MIN1 1000 int")
+    PARAMS+=("PWM_MAIN_MAX1 1900 int")
+    echo "ESC mode: unidirectional (PWM_MIN=1000=DIS=stop, PWM_MAX=1900)"
 fi
 
 echo "Loaded ${#PARAMS[@]} parameters (+1 airframe) from ${PARAMS_FILE##*/}"

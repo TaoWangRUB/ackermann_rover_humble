@@ -12,9 +12,9 @@
 #   └──────────────────┴──────────────────┘
 #
 # Usage:
-#   ./scripts/start_session.sh                                         # defaults
-#   ./scripts/start_session.sh --depth-camera=d435i --t265 --rtabmap   # pass flags to ROS 2 nodes
-#   ./scripts/start_session.sh --no-verify                             # skip verification pane
+#   ./scripts/start_camera_px4_test_session.sh                                         # defaults
+#   ./scripts/start_camera_px4_test_session.sh --depth-camera=d435i --t265 --rtabmap   # pass flags to ROS 2 nodes
+#   ./scripts/start_camera_px4_test_session.sh --no-verify                             # skip verification pane
 #
 # The Micro-XRCE-DDS Agent starts first. ROS 2 nodes start after a short
 # delay so the agent is ready. Verification starts after nodes have time
@@ -74,7 +74,7 @@ tmux send-keys -t "${SESSION}:rover.1" \
 if [[ "$VERIFY" == true ]]; then
     tmux split-window -v -t "${SESSION}:rover.1" -l 12
     tmux send-keys -t "${SESSION}:rover.2" \
-        "sleep 30 && ${SCRIPT_DIR}/verify_odom.sh --loop" Enter
+        "sleep 30 && ${SCRIPT_DIR}/verify_odom.sh --loop; docker-compose -f ${SCRIPT_DIR}/../docker/docker-compose.yml exec ackermann_slam bash" Enter
 fi
 
 # Select the ROS 2 nodes pane and attach
