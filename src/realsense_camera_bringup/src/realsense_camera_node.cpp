@@ -19,23 +19,22 @@ RealsenseCameraNode::RealsenseCameraNode(const rclcpp::NodeOptions & options)
   //   2. "Couldn't resolve requests" / "device is streaming" — firmware stuck in
   //      streaming state from a previously killed process; force a hardware reset
   //      to release the device before retrying.
-  // Note: hardware reset is only issued on the first normal attempt (via
-  // enable_hardware_reset flag).  Repeating it on every retry for T265 triggers
-  // repeated USB reconnect cycles that worsen the "failed to set power state" error.
-  constexpr int    MAX_RETRIES   = 5;
-  constexpr double RETRY_DELAY_S = 5.0;
+  constexpr int MAX_RETRIES = 5;
+  // T265 needs longer waits — its Movidius VPU takes 15-20s to re-enumerate
+  // after a hardware reset or USB reconnect.
+  const double retry_delay_s = (camera_model_ == CameraModel::T265) ? 10.0 : 5.0;
+  bool did_hardware_reset = false;
 
   for (int attempt = 1; attempt <= MAX_RETRIES; ++attempt) {
     try {
-      if (enable_hardware_reset_ && attempt == 1) {
-        reset_device();   // enumerate + hardware reset — first attempt only
+      if (enable_hardware_reset_ && !did_hardware_reset) {
+        reset_device();
+        did_hardware_reset = true;
       }
       start_pipeline();
       return;   // success
     } catch (const std::exception & e) {
       const std::string what = e.what();
-      // "Couldn't resolve requests" / "device is streaming": firmware stuck
-      // streaming from a previous crash — a hardware reset is required to recover.
       const bool is_stuck  = what.find("Couldn't resolve requests") != std::string::npos ||
                              what.find("device is streaming")       != std::string::npos;
       const bool retriable = is_stuck ||
@@ -46,16 +45,26 @@ RealsenseCameraNode::RealsenseCameraNode(const rclcpp::NodeOptions & options)
       if (retriable && attempt < MAX_RETRIES) {
         RCLCPP_WARN(get_logger(),
           "Camera init attempt %d/%d failed (%s) — retrying in %.0fs...",
-          attempt, MAX_RETRIES, what.c_str(), RETRY_DELAY_S);
-        if (is_stuck) {
-          // Forced reset to clear stuck streaming state (even if enable_hardware_reset=false)
+          attempt, MAX_RETRIES, what.c_str(), retry_delay_s);
+
+        // For T265: forced reset on "stuck" worsens USB state — just wait.
+        // For D435i/L515: a forced reset can clear stuck streaming.
+        if (is_stuck && !did_hardware_reset && camera_model_ != CameraModel::T265) {
           RCLCPP_WARN(get_logger(), "Device appears stuck — issuing forced hardware reset.");
-          try { reset_device(); } catch (const std::exception & re) {
+          try { reset_device(); did_hardware_reset = true; } catch (const std::exception & re) {
             RCLCPP_WARN(get_logger(), "Forced reset failed: %s — will retry anyway.", re.what());
           }
         }
+
         std::this_thread::sleep_for(
-          std::chrono::milliseconds(static_cast<int>(RETRY_DELAY_S * 1000)));
+          std::chrono::milliseconds(static_cast<int>(retry_delay_s * 1000)));
+
+        // Recreate pipeline + config to avoid stale state from failed start.
+        // After pipe_.start() fails, the pipeline object may hold a dead USB
+        // handle; creating a fresh one forces librealsense to re-enumerate.
+        ctx_ = rs2::context();
+        pipe_ = rs2::pipeline(ctx_);
+        cfg_ = rs2::config();
       } else {
         RCLCPP_FATAL(get_logger(), "Failed to initialise camera: %s", what.c_str());
         throw;
@@ -312,22 +321,32 @@ void RealsenseCameraNode::reset_device()
     return;
   }
 
-  // Poll until THIS specific device reappears (not just any RealSense)
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+  // Poll until THIS specific device reappears (not just any RealSense).
+  // T265 Movidius VPU takes 15-20s to re-enumerate after reset.
+  const int poll_timeout_s = (camera_model_ == CameraModel::T265) ? 25 : 10;
+  const int settle_time_s  = (camera_model_ == CameraModel::T265) ? 5  : 3;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(poll_timeout_s);
   while (std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    for (auto d : ctx_.query_devices()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    // Fresh context to avoid cached stale device handles
+    rs2::context poll_ctx;
+    for (auto d : poll_ctx.query_devices()) {
       try {
         if (d.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER) == reset_serial) {
-          RCLCPP_INFO(get_logger(), "Device USB reconnected — waiting for sensors to initialise...");
-          std::this_thread::sleep_for(std::chrono::seconds(3));
+          RCLCPP_INFO(get_logger(), "Device USB reconnected — waiting %ds for sensors to initialise...",
+            settle_time_s);
+          std::this_thread::sleep_for(std::chrono::seconds(settle_time_s));
+          // Refresh main context so start_pipeline sees the new device
+          ctx_ = rs2::context();
+          pipe_ = rs2::pipeline(ctx_);
           RCLCPP_INFO(get_logger(), "Device ready.");
           return;
         }
       } catch (const rs2::error &) { continue; }
     }
   }
-  RCLCPP_WARN(get_logger(), "Device did not reappear within 10 s after reset — proceeding anyway.");
+  RCLCPP_WARN(get_logger(), "Device did not reappear within %d s after reset — proceeding anyway.",
+    poll_timeout_s);
 }
 
 // ---------------------------------------------------------------------------

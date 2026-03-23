@@ -6,10 +6,10 @@
 #
 # Layout:
 #   ┌──────────────────┬──────────────────┐
-#   │   XRCE Agent     │   ROS 2 Nodes    │
-#   ├──────────────────┴──────────────────┤
-#   │          Verification               │
-#   └─────────────────────────────────────┘
+#   │                  │   XRCE Agent     │
+#   │   ROS 2 Nodes    ├──────────────────┤
+#   │                  │  Verification    │
+#   └──────────────────┴──────────────────┘
 #
 # Usage:
 #   ./scripts/start_session.sh                                         # defaults
@@ -53,23 +53,30 @@ fi
 # Kill existing session if present
 tmux kill-session -t "${SESSION}" 2>/dev/null || true
 
-# --- Pane 0 (top-left): Micro-XRCE-DDS Agent (serial) ---
-tmux new-session -d -s "${SESSION}" -n "rover" \
-    "bash -c '${SCRIPT_DIR}/start_microxrce_agent.sh --serial; echo \"[exited \$?] — press Enter to restart\"; read; exec bash'"
+# Each pane runs commands via send-keys. Ctrl+C kills the running command
+# and drops back to the host bash prompt. Scripts run on the host and use
+# docker-compose exec internally to talk to the container.
+#
+# --- Pane 0 (left, full height): ROS 2 nodes ---
+tmux new-session -d -s "${SESSION}" -n "rover"
 
-# Keep panes open if a command exits or crashes (must be after session exists)
-tmux set-option -t "${SESSION}" remain-on-exit on
+# Enable mouse: click to select pane, scroll, resize panes (after session exists)
+tmux set-option -t "${SESSION}" -g mouse on
+tmux send-keys -t "${SESSION}:rover.0" \
+    "sleep 3 && ${SCRIPT_DIR}/start_ros2_nodes.sh ${ROS2_ARGS}" Enter
 
-# --- Pane 1 (top-right): ROS 2 nodes ---
-tmux split-window -h -t "${SESSION}:rover" \
-    "bash -c 'echo \"Waiting 3s for XRCE agent...\"; sleep 3; ${SCRIPT_DIR}/start_ros2_nodes.sh ${ROS2_ARGS}; echo \"[exited \$?] — press Enter to restart\"; read; exec bash'"
+# --- Pane 1 (right-top): Micro-XRCE-DDS Agent (serial) ---
+tmux split-window -h -t "${SESSION}:rover"
+tmux send-keys -t "${SESSION}:rover.1" \
+    "${SCRIPT_DIR}/start_microxrce_agent.sh --serial" Enter
 
-# --- Pane 2 (bottom): Verification ---
+# --- Pane 2 (right-bottom): Verification ---
 if [[ "$VERIFY" == true ]]; then
-    tmux split-window -v -t "${SESSION}:rover" -l 12 \
-        "bash -c 'echo \"Waiting 30s for nodes to start publishing...\"; sleep 30; ${SCRIPT_DIR}/verify_odom.sh --loop; echo \"[exited \$?]\"; read; exec bash'"
+    tmux split-window -v -t "${SESSION}:rover.1" -l 12
+    tmux send-keys -t "${SESSION}:rover.2" \
+        "sleep 30 && ${SCRIPT_DIR}/verify_odom.sh --loop" Enter
 fi
 
-# Select the ROS 2 nodes pane (top-right) and attach
-tmux select-pane -t "${SESSION}:rover.1"
+# Select the ROS 2 nodes pane and attach
+tmux select-pane -t "${SESSION}:rover.0"
 exec tmux attach-session -t "${SESSION}"
