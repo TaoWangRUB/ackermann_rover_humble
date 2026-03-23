@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Verify odometry alignment across all sources (EKF, T265, PX4).
-# Polls each odom topic once and prints positions side-by-side.
+# Polls each odom topic and prints positions side-by-side.
+# Keeps last known values when a topic doesn't respond in time.
 # For a stationary robot, X-Y should agree within ~1 cm.
 #
 # Usage:
@@ -27,6 +28,9 @@ fi
 
 SOURCE="source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash 2>/dev/null"
 
+# Persistent last-known values
+declare -A LAST_X LAST_Y LAST_Z LAST_TIME
+
 print_odom() {
     local label="$1" topic="$2"
     local result
@@ -35,14 +39,16 @@ print_odom() {
         timeout 3 ros2 topic echo ${topic} --once 2>/dev/null | grep -A3 'position:' | head -4
     " 2>/dev/null) || true
 
-    if [[ -z "$result" ]]; then
-        printf "  %-30s  (no data)\n" "${label}"
+    if [[ -n "$result" ]]; then
+        LAST_X["$topic"]=$(echo "$result" | grep 'x:' | head -1 | awk '{print $2}')
+        LAST_Y["$topic"]=$(echo "$result" | grep 'y:' | head -1 | awk '{print $2}')
+        LAST_Z["$topic"]=$(echo "$result" | grep 'z:' | head -1 | awk '{print $2}')
+        LAST_TIME["$topic"]=$(date '+%H:%M:%S')
+        printf "  %-30s  X: %8s  Y: %8s  Z: %8s\n" "${label}" "${LAST_X[$topic]}" "${LAST_Y[$topic]}" "${LAST_Z[$topic]}"
+    elif [[ -n "${LAST_X[$topic]:-}" ]]; then
+        printf "  %-30s  X: %8s  Y: %8s  Z: %8s  (last: %s)\n" "${label}" "${LAST_X[$topic]}" "${LAST_Y[$topic]}" "${LAST_Z[$topic]}" "${LAST_TIME[$topic]}"
     else
-        local x y z
-        x=$(echo "$result" | grep 'x:' | head -1 | awk '{print $2}')
-        y=$(echo "$result" | grep 'y:' | head -1 | awk '{print $2}')
-        z=$(echo "$result" | grep 'z:' | head -1 | awk '{print $2}')
-        printf "  %-30s  X: %8s  Y: %8s  Z: %8s\n" "${label}" "$x" "$y" "$z"
+        printf "  %-30s  (waiting...)\n" "${label}"
     fi
 }
 
@@ -62,6 +68,7 @@ check_topics() {
 }
 
 run_check() {
+    clear
     echo "══════════════════════════════════════════════════════"
     echo "  Odometry Verification  $(date '+%H:%M:%S')"
     echo "══════════════════════════════════════════════════════"
@@ -78,7 +85,7 @@ run_check() {
 
 if [[ "$LOOP" == true ]]; then
     echo "Polling every ${INTERVAL}s. Press Ctrl+C to stop."
-    echo ""
+    sleep 1
     while true; do
         run_check
         sleep "$INTERVAL"
