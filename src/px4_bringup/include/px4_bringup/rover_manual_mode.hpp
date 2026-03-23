@@ -92,6 +92,9 @@ public:
     }
     bidirectional_esc_ =
       node_.get_parameter("bidirectional_esc").as_bool();
+    // PX4 "Throttle" output maps [-1,1] → [PWM_MIN,PWM_MAX].
+    // Bidirectional: 0 = center = stop.  Unidirectional: -1 = PWM_MIN = stop.
+    stop_throttle_ = bidirectional_esc_ ? 0.0f : -1.0f;
 
     // ── Subscriber (one type per topic — DDS constraint) ─────────
     if (use_stamped) {
@@ -117,7 +120,7 @@ public:
       cmd_vel_timeout_s_,
       static_cast<double>(max_speed_), static_cast<double>(max_steering_rate_),
       bidirectional_esc_ ? "true" : "false",
-      bidirectional_esc_ ? "[-1, 1]" : "[0, 1]");
+      bidirectional_esc_ ? "[-1, 1]" : "[-1, 1] (remapped from [0, 1])");
   }
 
   void onActivate() override
@@ -133,8 +136,8 @@ public:
 
   void onDeactivate() override
   {
-    RCLCPP_INFO(node_.get_logger(), "RoverManualMode deactivated — sending zero setpoint");
-    throttle_steering_setpoint_->update(0.0f, 0.0f);
+    RCLCPP_INFO(node_.get_logger(), "RoverManualMode deactivated — sending stop setpoint");
+    throttle_steering_setpoint_->update(stop_throttle_, 0.0f);
   }
 
   void updateSetpoint(float /*dt_s*/) override
@@ -152,9 +155,9 @@ public:
       cmd = last_cmd_vel_;
     }
 
-    // Before first cmd_vel: send zeros, wait quietly
+    // Before first cmd_vel: send stop throttle, wait quietly
     if (!received) {
-      throttle_steering_setpoint_->update(0.0f, 0.0f);
+      throttle_steering_setpoint_->update(stop_throttle_, 0.0f);
       return;
     }
 
@@ -163,11 +166,11 @@ public:
       if (!cmd_vel_timed_out_) {
         RCLCPP_WARN(
           node_.get_logger(),
-          "cmd_vel timeout (>%.2f s) — zeroing setpoint (vehicle will stop)",
+          "cmd_vel timeout (>%.2f s) — sending stop setpoint (vehicle will stop)",
           cmd_vel_timeout_s_);
         cmd_vel_timed_out_ = true;
       }
-      throttle_steering_setpoint_->update(0.0f, 0.0f);
+      throttle_steering_setpoint_->update(stop_throttle_, 0.0f);
       return;
     }
 
@@ -176,13 +179,21 @@ public:
       cmd_vel_timed_out_ = false;
     }
 
-    // Normalize forward speed: [-1, 1] for bidirectional ESC, [0, 1] for unidirectional
+    // Normalize forward speed to PX4 throttle.
+    // PX4 "Throttle" output function maps [-1, 1] → [PWM_MIN, PWM_MAX].
+    //   Bidirectional ESC:  -1 = full reverse, 0 = stop, 1 = full forward
+    //   Unidirectional ESC: -1 = stop (PWM_MIN), 1 = full forward (PWM_MAX)
+    //     so remap [0, 1] → [-1, 1] to keep 0 cmd_vel at PWM_MIN (ESC stop).
     float throttle = 0.0f;
     if (max_speed_ > 0.0f) {
       const float raw = static_cast<float>(cmd.linear.x) / max_speed_;
-      throttle = bidirectional_esc_
-        ? std::clamp(raw, -1.0f, 1.0f)
-        : std::clamp(raw,  0.0f, 1.0f);
+      if (bidirectional_esc_) {
+        throttle = std::clamp(raw, -1.0f, 1.0f);
+      } else {
+        throttle = std::clamp(raw, 0.0f, 1.0f) * 2.0f - 1.0f;
+      }
+    } else if (!bidirectional_esc_) {
+      throttle = -1.0f;  // no speed → ESC stop
     }
 
     // Normalize yaw rate to [-1, 1] and negate (ROS CCW+ → PX4 right+)
@@ -220,6 +231,7 @@ private:
   float max_steering_rate_{1.0f};
   double cmd_vel_timeout_s_{2.0};
   bool bidirectional_esc_{false};
+  float stop_throttle_{0.0f};   // PX4 throttle value for "stop": 0 bidir, -1 unidir
   bool cmd_vel_received_{false};
   bool cmd_vel_timed_out_{false};
 };
