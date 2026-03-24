@@ -79,4 +79,4 @@ fi
 
 # Select the ROS 2 nodes pane and attach
 tmux select-pane -t "${SESSION}:rover.0"
-exec tmux attach-session -t "${SESSION}"
+tmux attach-session -t "${SESSION}"

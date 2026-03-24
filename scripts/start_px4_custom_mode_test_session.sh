@@ -87,4 +87,4 @@ fi
 
 # Select the PX4 bringup pane and attach
 tmux select-pane -t "${SESSION}:px4test.0"
-exec tmux attach-session -t "${SESSION}"
+tmux attach-session -t "${SESSION}"
