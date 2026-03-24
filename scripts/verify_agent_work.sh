@@ -12,6 +12,12 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     exit 0
 fi
 
+# Ensure docker-compose variables are set (normally exported via ~/.bashrc)
+export ARCH="${ARCH:-$(uname -m)}"
+export USERNAME="${USERNAME:-$(id -un)}"
+export USER_UID="${USER_UID:-$(id -u)}"
+export USER_GID="${USER_GID:-$(id -g)}"
+
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -31,17 +37,16 @@ fi
 echo "Using: $DOCKER_COMPOSE"
 
 if [ "$CI" = "true" ]; then
-    echo -e "${GREEN}CI Environment Detected: Modifying docker-compose.yml to remove GPU requirement...${NC}"
-    # Strip the runtime and deploy blocks which strictly require an NVIDIA GPU on host
+    echo -e "${GREEN}CI Environment Detected: Removing GPU runtime requirement for headless build...${NC}"
+    # compose file uses version 2.4 with only 'runtime: nvidia' (no deploy block)
     sed -i '/runtime: nvidia/d' docker/docker-compose.yml
-    sed -i '/deploy:/,/capabilities: \["gpu"\]/d' docker/docker-compose.yml
 fi
 
 echo -e "${GREEN}=== Setting up Docker Environment ===${NC}"
 # Allow local X11 connections for GUI apps (like RViz/Gazebo) inside Docker
 # xhost is not available in headless CI environments — skip it there.
 if [ "$CI" != "true" ]; then
-    xhost +local:root || true
+    xhost +local: || true
 fi
 
 # Bring up Docker container logic

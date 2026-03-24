@@ -5,29 +5,63 @@ Includes Nav2, localization, safety, CI, and AI-assisted workflows.
 
 ## Docker Image Usage
 
-This repo includes a Dockerfile and compose stack under `docker/` for a ROS 2 + Gazebo (gz) dev image. Defaults target ROS 2 Jazzy with Gazebo Harmonic, and all variants are configured via `docker/.env`.
+This repo includes a Dockerfile and compose stack under `docker/` for a ROS 2 + Gazebo (gz) dev image. Defaults target ROS 2 Jazzy with Gazebo Harmonic on Ubuntu 24.04. The same `docker/docker-compose.yml` works on both x86_64 and Jetson (aarch64) — architecture is detected automatically.
 
-1. Edit `docker/.env` if you need different distributions. Set `UBUNTU_VERSION` to the matching base image, `ROS_UBUNTU_CODENAME` to the apt codename for that Ubuntu release, and adjust `ROS_DISTRO` / `GZ_DISTRO` accordingly. (Example: for ROS Iron on Ubuntu 22.04, set `UBUNTU_VERSION=22.04`, `ROS_UBUNTU_CODENAME=jammy`, `ROS_DISTRO=iron`, `GZ_DISTRO=fortress`.)
-2. Build the image using the compose file in `docker/`:
-	- `docker-compose -f docker/docker-compose.yml build ackermann_slam`
+### Prerequisites (one-time host setup)
 
-> Note: The Dockerfile is tuned for ROS 2 Jazzy on Ubuntu 24.04 (Noble). Other distros may require additional tweaks (base image / apt repo codename) and are not guaranteed to work out of the box.
+Add these exports to `~/.bashrc` so docker-compose always picks up the correct values:
 
-Run interactively (recommended during development):
+```bash
+export ARCH=$(uname -m)
+export USERNAME=$(id -un)
+export USER_UID=$(id -u)
+export USER_GID=$(id -g)
+```
 
-- `xhost +local:root` (host, once per session)
-- `docker-compose -f docker/docker-compose.yml run --rm ackermann_slam`
+Then reload: `source ~/.bashrc`
 
-Or keep the container running in the background and exec in:
+> In each new terminal, run `source ~/.bashrc` (or open a fresh terminal) before running docker-compose commands.
 
-- `docker-compose -f docker/docker-compose.yml up -d ackermann_slam`
-- `docker-compose -f docker/docker-compose.yml exec ackermann_slam bash`
+### Configuration
 
-When you're done, stop and clean up the stack with:
+Edit `.env` at the project root to change ROS / Gazebo / Ubuntu versions. For example, for ROS Iron on Ubuntu 22.04: set `UBUNTU_VERSION=22.04`, `ROS_UBUNTU_CODENAME=jammy`, `ROS_DISTRO=iron`, `GZ_DISTRO=fortress`.
 
-- `docker-compose -f docker/docker-compose.yml down`
+### Build
 
-Inside the container, the workspace is mounted at `/workspace` and you can run `colcon build` and `ros2 launch robot_bringup robot_bringup.launch.py ...` as usual.
+```bash
+docker-compose -f docker/docker-compose.yml build ackermann_slam
+```
+
+> The Dockerfile is tuned for ROS 2 Jazzy on Ubuntu 24.04 (Noble). Other distros may require additional tweaks and are not guaranteed to work out of the box.
+
+### Run
+
+Allow X11 forwarding (once per host session):
+
+```bash
+xhost +local:
+```
+
+Keep the container running in the background and exec in:
+
+```bash
+docker-compose -f docker/docker-compose.yml up -d ackermann_slam
+docker-compose -f docker/docker-compose.yml exec ackermann_slam bash
+```
+
+Or run interactively (removed on exit):
+
+```bash
+docker-compose -f docker/docker-compose.yml run --rm ackermann_slam
+```
+
+Stop and clean up:
+
+```bash
+docker-compose -f docker/docker-compose.yml down
+```
+
+Inside the container the workspace is mounted at `/workspace`. The container runs as your host user (not root), so all files created inside are owned by you on the host.
 
 ## Troubleshooting: RViz Crash / TF Time Jump
 

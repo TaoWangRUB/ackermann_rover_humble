@@ -5,9 +5,7 @@ set -e
 : "${ROS_DISTRO:=jazzy}"
 
 # Update apt index and install ROS package dependencies via rosdep
-# Note: this currently scans /workspace/src; adjust to "." if you want
-# rosdep to see bind-mounted packages at /workspace as well.
-apt-get update
+sudo apt-get update -qq
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 rosdep install --from-paths src --ignore-src -r -y || \
   echo "WARNING: rosdep install encountered errors; continuing startup."

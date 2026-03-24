@@ -25,6 +25,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Ensure ARCH is set for docker-compose variable interpolation
+export ARCH="${ARCH:-$(uname -m)}"
+
 # --- Defaults ---
 SESSION="px4test"
 MODE_ID="23"
