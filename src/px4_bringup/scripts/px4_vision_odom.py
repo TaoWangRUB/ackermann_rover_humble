@@ -24,7 +24,7 @@ class VIOPublisher(Node):
         # ── Parameters ────────────────────────────────────────────────────────
         self.declare_parameter('odom_topic', '/odom')
         self.declare_parameter('odom_frame', 'odom')
-        self.declare_parameter('base_frame', 'ackermann/base_link')
+        self.declare_parameter('base_frame', 'cubepilot_link')
 
         odom_topic = self.get_parameter('odom_topic').get_parameter_value().string_value
         odom_frame = self.get_parameter('odom_frame').get_parameter_value().string_value

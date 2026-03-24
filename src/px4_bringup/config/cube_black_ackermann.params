@@ -48,7 +48,14 @@
 
 # ── PWM Actuator Mapping (MAIN outputs) ─────────────────────────────────────
 # MAIN OUT 1 → Throttle (Motor 1)
+#
+# PX4 "Throttle" output maps [-1, 1] → [PWM_MIN, PWM_MAX].
+# rover_manual_mode remaps cmd_vel to this range based on bidirectional_esc param.
+# PWM values are selected by upload_params.sh --reversible-drive flag:
+#   Unidirectional (default): MIN=DIS=1000 so throttle -1 → ESC stop
+#   Bidirectional:            MIN=1100, center (1500) = ESC stop
 1	1	PWM_MAIN_FUNC1	101	6
+1	1	PWM_MAIN_DIS1	1000	6
 
 # MAIN OUT 2 → Steering (Servo 1)
 1	1	PWM_MAIN_FUNC2	201	6
@@ -71,10 +78,12 @@
 # RO_SPEED_LIM: max speed limit
 1	1	RO_SPEED_LIM	2.0	9
 
-# EV position relative to base_link
-1	1	EKF2_EV_POS_X	0.1	9
+# EV position offset from IMU to vision measurement point (body FRD, metres).
+# Since px4_vision_odom.py now feeds cubepilot_link position directly,
+# the vision reference point coincides with the IMU → offset = (0, 0, 0).
+1	1	EKF2_EV_POS_X	0.0	9
 1	1	EKF2_EV_POS_Y	0.0	9
-1	1	EKF2_EV_POS_Z	0.1	9
+1	1	EKF2_EV_POS_Z	0.0	9
 
 # ── EKF2: Disable GPS (indoor / no GPS on rover) ────────────────────────────
 1	1	EKF2_GPS_CTRL	0	6

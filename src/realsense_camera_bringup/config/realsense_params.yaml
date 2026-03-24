@@ -1,0 +1,81 @@
+realsense_camera_node:
+  ros__parameters:
+    # =========================================================================
+    # Identity
+    # =========================================================================
+    camera_name: "camera"
+    serial_no: ""
+    camera_model: "d435i"          # d435i | l515 | t265
+    camera_namespace: ""           # (not yet implemented)
+    device_type: ""                # substring match on device name (e.g. "D435")
+    publish_tf: false              # (not yet implemented)
+
+    # =========================================================================
+    # Stream enables (D435i / L515)
+    # =========================================================================
+    enable_color: true
+    enable_depth: true
+    enable_infra1: false
+    enable_infra2: false
+
+    # =========================================================================
+    # IMU
+    # =========================================================================
+    enable_imu: false              # convenience: enables both accel + gyro
+    enable_accel: false            # independent accelerometer control
+    enable_gyro: false             # independent gyroscope control
+    unite_imu_method: 2            # 1=copy, 2=linear_interpolation
+
+    # =========================================================================
+    # Color stream
+    # =========================================================================
+    color_width: 640
+    color_height: 480
+    color_fps: 60
+
+    # =========================================================================
+    # Depth stream
+    # =========================================================================
+    depth_width: 640
+    depth_height: 480
+    depth_fps: 60
+
+    # =========================================================================
+    # Profile string overrides — format: "WxHxFPS" (e.g. "640x480x60")
+    # If set, overrides the individual width/height/fps above.
+    # =========================================================================
+    rgb_camera.color_profile: ""
+    depth_module.depth_profile: ""
+
+    # =========================================================================
+    # RGB sensor controls
+    # =========================================================================
+    rgb_camera.enable_auto_exposure: false
+    rgb_camera.exposure: 200       # microseconds (e.g. 200 = 0.2ms)
+    rgb_camera.gain: 128
+
+    # =========================================================================
+    # Depth sensor controls
+    # =========================================================================
+    depth_module.enable_auto_exposure: false
+    depth_module.exposure: 7500    # microseconds (e.g. 7500 = 7.5ms)
+    depth_module.gain: 16
+
+    # =========================================================================
+    # Sync / Alignment
+    # =========================================================================
+    enable_sync: true
+    align_depth.enable: true       # align depth to color frame
+    align_depth_to_color: false    # legacy alias for align_depth.enable
+
+    # =========================================================================
+    # Stubs (declared for compatibility, not yet functional)
+    # =========================================================================
+    enable_rgbd: false
+    pointcloud.enable: false
+
+    # =========================================================================
+    # T265 options (ignored for D435i / L515)
+    # =========================================================================
+    enable_fisheye: false          # T265 fisheye streams (default off, odom only)
+    fisheye_fps: 30

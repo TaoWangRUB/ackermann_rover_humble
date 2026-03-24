@@ -573,9 +573,16 @@ ros2 topic pub --once /fmu/in/vehicle_command px4_msgs/msg/VehicleCommand \\
    "{command: 100001, param1: 23.0, target_system: 1, target_component: 1, source_system: 255, source_component: 0, from_external: true}"
 ```
 
-I also added a helper script at `scripts/activate_rover_manual.sh` that
-publishes the vehicle command inside the `ackermann_slam` container and
-then runs `px4-commander arm` from the PX4 build directory.
+A helper script `scripts/activate_rover_manual.sh` manages mode activation
+and arming via ROS 2 VehicleCommand:
+
+```bash
+./scripts/activate_rover_manual.sh              # activate mode 23 + arm (default)
+./scripts/activate_rover_manual.sh 24           # activate mode 24 + arm
+./scripts/activate_rover_manual.sh --arm        # arm only (no mode switch)
+./scripts/activate_rover_manual.sh --disarm     # disarm only
+./scripts/activate_rover_manual.sh --activate   # activate + arm (explicit)
+```
 
 ### VIO-Only Mode (No GPS)
 

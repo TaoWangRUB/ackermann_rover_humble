@@ -300,6 +300,7 @@
       </collision>
   </link>
 
+  <xacro:unless value="$(arg enable_px4_sitl)">
   <ros2_control name="GazeboSimSystem" type="system">
     <hardware>
       <plugin>gz_ros2_control/GazeboSimSystem</plugin>
@@ -331,6 +332,7 @@
       <state_interface name="position" />
     </joint>
   </ros2_control>
+  </xacro:unless>
   
   <!-- SENSORS -->
   <!-- RGBD CAMERA -->
