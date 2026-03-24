@@ -147,7 +147,7 @@ def generate_launch_description() -> LaunchDescription:
         }],
         remappings=[
             ('imu_in', LaunchConfiguration('imu_raw_topic')),
-            ('imu_out', '/l515/imu/raw_transformed'),
+            ('imu_out', '/imu/raw_transformed'),
         ],
     )
 
@@ -161,7 +161,7 @@ def generate_launch_description() -> LaunchDescription:
             'publish_tf': False,
             'use_sim_time': use_sim_time,
         }],
-        remappings=[('imu/data_raw', '/l515/imu/raw_transformed')],
+        remappings=[('imu/data_raw', '/imu/raw_transformed')],
     )
 
     visual_odom_parameters = {
