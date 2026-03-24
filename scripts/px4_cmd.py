@@ -9,13 +9,25 @@ Connects to PX4 via /dev/ttyACM0 using pymavlink SERIAL_CONTROL.
 """
 import sys
 import time
+import serial
 from pymavlink import mavutil
 
 DEVICE = '/dev/ttyACM0'
 BAUD = 57600
 
+def _assert_dtr(device, baud):
+    """Assert DTR to wake PX4's USB MAVLink instance."""
+    try:
+        ser = serial.Serial(device, baud, dsrdtr=True, timeout=0.5)
+        ser.setDTR(True)
+        time.sleep(0.5)
+        ser.close()
+    except Exception:
+        pass  # best-effort; pymavlink may still work without it
+
 def connect_mavlink(retries=3):
     """Connect to PX4 with retry to handle USB CDC flakiness."""
+    _assert_dtr(DEVICE, BAUD)
     for attempt in range(retries):
         try:
             mav = mavutil.mavlink_connection(DEVICE, baud=BAUD, source_system=254)
@@ -37,9 +49,9 @@ def connect_mavlink(retries=3):
     return None
 
 def main():
-    if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <command> [timeout]")
-        sys.exit(1)
+    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
+        print(__doc__.strip())
+        sys.exit(0 if len(sys.argv) >= 2 else 1)
 
     cmd = sys.argv[1]
     timeout = float(sys.argv[2]) if len(sys.argv) > 2 else 5.0

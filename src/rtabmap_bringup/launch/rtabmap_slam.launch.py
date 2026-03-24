@@ -50,6 +50,21 @@ ARGUMENTS = [
     DeclareLaunchArgument(
         'depth_camera_info_topic', default_value='/l515/camera_info',
         description='imu topic from sensor'),
+
+    # odom_tf_relay — re-express an external odom source into ackermann/base_link
+    DeclareLaunchArgument(
+        'enable_odom_relay', default_value='false',
+        choices=['true', 'false'],
+        description='Launch odom_tf_relay to re-express an external odom into base_link frame.'),
+    DeclareLaunchArgument(
+        'relay_input_topic', default_value='/t265/odom',
+        description='Source odometry topic for odom_tf_relay.'),
+    DeclareLaunchArgument(
+        'relay_output_topic', default_value='/t265/odom_base',
+        description='Output odometry topic from odom_tf_relay (child_frame → base_link).'),
+    DeclareLaunchArgument(
+        'relay_base_frame', default_value='ackermann/base_link',
+        description='Target child_frame_id for odom_tf_relay output.'),
 ]
 
 
@@ -247,6 +262,20 @@ def generate_launch_description() -> LaunchDescription:
         'imu0_orientation_covariance': [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01],
     }
 
+    odom_relay_node = Node(
+        condition=IfCondition(LaunchConfiguration('enable_odom_relay')),
+        package='realsense_camera_bringup',
+        executable='odom_tf_relay',
+        name='odom_tf_relay',
+        output='screen',
+        parameters=[{
+            'input_topic':  LaunchConfiguration('relay_input_topic'),
+            'output_topic': LaunchConfiguration('relay_output_topic'),
+            'base_frame':   LaunchConfiguration('relay_base_frame'),
+            'use_sim_time': use_sim_time,
+        }],
+    )
+
     ekf_filter_node = Node(
         package='robot_localization',
         executable='ekf_node',
@@ -340,6 +369,7 @@ def generate_launch_description() -> LaunchDescription:
                     ('ground', '/camera/ground')])
     
     ld = LaunchDescription(ARGUMENTS)
+    ld.add_action(odom_relay_node)
     ld.add_action(rgbd_sync)
     ld.add_action(depth_to_scan)
     ld.add_action(imu_transform_node)

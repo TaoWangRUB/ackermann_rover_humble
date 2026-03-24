@@ -4,14 +4,20 @@
 # source workspaces or type long ros2 launch commands manually.
 #
 # Flags:
+#   --hw                   Hardware mode: real cameras instead of Gazebo (use_gazebo:=false).
+#                          Starts robot_state_publisher + realsense_camera_bringup.
+#   --depth-camera=NAME    Depth camera for RTAB-Map: l515 (default) or d435i.
+#                          Selects which camera node starts (HW), which Gazebo bridge topics
+#                          are exposed (sim), and which RTAB-Map topics are subscribed.
+#   --t265                 [HW mode] Enable T265 tracking camera + odom_tf_relay
 #   --px4              Enable PX4 SITL (disables ros2_control, implies --bridge --vo-bridge)
 #   --rtabmap          Launch RTAB-Map SLAM
 #   --nav2             Launch Nav2 navigation stack
-#   --bridge[=MODE]      Launch PX4 mode node (default: manual; options: speed_steering, trajectory, speed_attitude)
-#   --vo-bridge          Launch VO bridge: px4_vision_odom + px4_vehicle_odometry
-#   --odom-topic=TOPIC   Odometry source for vision odom node (default: /odometry/filtered)
-#   --reversible-drive   Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
-#   --no-rviz            Disable RViz2
+#   --bridge[=MODE]    Launch PX4 mode node (default: manual; options: speed_steering, trajectory, speed_attitude)
+#   --vo-bridge        Launch VO bridge: px4_vision_odom + px4_vehicle_odometry
+#   --odom-topic=TOPIC Odometry source for vision odom node (default: /odometry/filtered)
+#   --reversible-drive Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
+#   --no-rviz          Disable RViz2
 #   --build[=PKG]      Build workspace (or specific pkg) before launching
 #   --build-only[=PKG] Build only, do not launch
 #
@@ -22,6 +28,21 @@
 #   --bridge     without --px4 keeps enable_px4_sitl=false (ros2_control stays active)
 #
 # Usage (from host):
+#
+#   ── Hardware mode (real cameras, L515 default) ──
+#   ./scripts/start_ros2_nodes.sh --hw
+#
+#   ── Hardware mode + RTAB-Map ──
+#   ./scripts/start_ros2_nodes.sh --hw --rtabmap
+#
+#   ── Hardware mode + RTAB-Map + Nav2 ──
+#   ./scripts/start_ros2_nodes.sh --hw --rtabmap --nav2
+#
+#   ── Hardware mode + D435i + T265 + RTAB-Map ──
+#   ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265 --rtabmap
+#
+#   ── Hardware mode + VO bridge to real PX4 ──
+#   ./scripts/start_ros2_nodes.sh --hw --rtabmap --vo-bridge --bridge=speed_steering
 #
 #   ── Gazebo only (ros2_control) ──
 #   ./scripts/start_ros2_nodes.sh
@@ -74,8 +95,9 @@
 #
 # Prerequisites:
 #   1. Docker container must be running (docker-compose up -d)
-#   2. For --bridge / --vo-bridge / --px4: MicroXRCEAgent and PX4 SITL must
-#      already be running (./scripts/start_microxrce_agent.sh + PX4 SITL)
+#   2. For --bridge / --vo-bridge / --px4: MicroXRCEAgent must already be running
+#      (./scripts/start_microxrce_agent.sh); for --px4 also PX4 SITL
+#   3. For --hw: RealSense cameras must be connected and accessible via USB
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -83,6 +105,9 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
 
 # Defaults
+HW="false"
+DEPTH_CAMERA="l515"
+HW_T265="false"
 PX4="false"
 RTABMAP="false"
 NAV2="false"
@@ -99,6 +124,9 @@ BUILD_PKGS=""
 # Parse arguments
 for arg in "$@"; do
     case "$arg" in
+        --hw)              HW="true" ;;
+        --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
+        --t265)            HW_T265="true" ;;
         --px4)          PX4="true" ;;
         --rtabmap)      RTABMAP="true" ;;
         --nav2)         NAV2="true" ;;
@@ -117,7 +145,7 @@ for arg in "$@"; do
             exit 0 ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: $0 [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
+            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
             exit 1
             ;;
     esac
@@ -149,7 +177,15 @@ if [[ "${BUILD}" == "true" ]]; then
 fi
 
 echo "Launching ROS 2 nodes inside Docker container..."
-echo "  PX4 SITL:     ${PX4}"
+if [[ "${HW}" == "true" ]]; then
+    echo "  Mode:         hardware (real cameras)"
+    echo "  Depth camera: ${DEPTH_CAMERA}"
+    echo "  T265:         ${HW_T265}"
+else
+    echo "  Mode:         simulation (Gazebo)"
+    echo "  Depth camera: ${DEPTH_CAMERA}"
+    echo "  PX4 SITL:     ${PX4}"
+fi
 echo "  RTAB-Map:     ${RTABMAP}"
 echo "  Nav2:         ${NAV2}"
 echo "  RViz:         ${RVIZ}"
@@ -165,7 +201,14 @@ echo ""
 # Build the launch command
 LAUNCH_CMD="source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && "
 LAUNCH_CMD+="ros2 launch robot_bringup robot_bringup.launch.py"
-LAUNCH_CMD+=" enable_px4_sitl:=${PX4}"
+LAUNCH_CMD+=" depth_camera:=${DEPTH_CAMERA}"
+if [[ "${HW}" == "true" ]]; then
+    LAUNCH_CMD+=" use_gazebo:=false"
+    LAUNCH_CMD+=" use_sim_time:=false"
+    LAUNCH_CMD+=" hw_enable_t265:=${HW_T265}"
+else
+    LAUNCH_CMD+=" enable_px4_sitl:=${PX4}"
+fi
 LAUNCH_CMD+=" rtabmap:=${RTABMAP}"
 LAUNCH_CMD+=" nav2:=${NAV2}"
 LAUNCH_CMD+=" rviz:=${RVIZ}"
