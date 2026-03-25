@@ -12,11 +12,22 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     exit 0
 fi
 
-# Ensure docker-compose variables are set (normally exported via ~/.bashrc)
+# Load .env so docker compose v2 picks up variables regardless of project-directory
+set -a
+[ -f .env ] && source .env
+set +a
+
+# Ensure runtime vars are set (normally exported via ~/.bashrc on the host)
 export ARCH="${ARCH:-$(uname -m)}"
 export USERNAME="${USERNAME:-$(id -un)}"
 export USER_UID="${USER_UID:-$(id -u)}"
 export USER_GID="${USER_GID:-$(id -g)}"
+
+# In CI, PX4 and RealSense repos are not checked out — use placeholder dirs
+if [ "$CI" = "true" ]; then
+    export PX4_DIR=$(mktemp -d)
+    export REALSENSE_ROS_DIR=$(mktemp -d)
+fi
 
 
 GREEN='\033[0;32m'
