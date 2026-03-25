@@ -20,7 +20,7 @@
 #   ./scripts/start_px4_custom_mode_test_session.sh --no-activate    # skip mode activation
 #
 # To stop everything:
-#   tmux kill-session -t px4test
+#   ./scripts/stop_all.sh --session px4test
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

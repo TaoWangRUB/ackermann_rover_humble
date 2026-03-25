@@ -175,6 +175,7 @@ ARG USER_GID=1000
 RUN userdel -r ubuntu 2>/dev/null || true && \
     groupadd --gid ${USER_GID} ${USERNAME} 2>/dev/null || true && \
     useradd --uid ${USER_UID} --gid ${USER_GID} -m -s /bin/bash ${USERNAME} && \
+    usermod -aG dialout ${USERNAME} && \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
     chmod 0440 /etc/sudoers.d/${USERNAME}
 
