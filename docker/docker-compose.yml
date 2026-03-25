@@ -1,58 +1,53 @@
+version: '2.4'
 services:
   ackermann_slam:
-    image: ${IMAGE_NAME:-ackermann_rover}_${ROS_DISTRO:-jazzy}
+    image: ${IMAGE_NAME}_${ARCH}_${ROS_DISTRO}
     build:
       context: ..
       dockerfile: docker/Dockerfile
       args:
-        UBUNTU_VERSION: ${UBUNTU_VERSION:-24.04}
-        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
-        GZ_DISTRO: ${GZ_DISTRO:-harmonic}
-        ROS_UBUNTU_CODENAME: ${ROS_UBUNTU_CODENAME:-noble}
-    container_name: ${CONTAINER_NAME:-ackermann_slam}
+        UBUNTU_VERSION: ${UBUNTU_VERSION}
+        ROS_DISTRO: ${ROS_DISTRO}
+        GZ_DISTRO: ${GZ_DISTRO}
+        ROS_UBUNTU_CODENAME: ${ROS_UBUNTU_CODENAME}
+        USERNAME: ${USERNAME}
+        USER_UID: ${USER_UID}
+        USER_GID: ${USER_GID}
+    container_name: ${CONTAINER_NAME}_${ARCH}
 
-    # Match your current docker run environment
     env_file:
-      - .env
+      - ../.env
     environment:
-      - __NV_PRIME_RENDER_OFFLOAD=1           # important on hybrid systems, harmless otherwise
-      - __GLX_VENDOR_LIBRARY_NAME=nvidia
-      - __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
+      # ARCH is set automatically from the shell via: export ARCH=$(uname -m)
+      # Results in 'x86_64' on desktop or 'aarch64' on Jetson.
+      - ARCH=${ARCH}
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
       - LIBGL_ALWAYS_INDIRECT=0
       - XDG_RUNTIME_DIR=/tmp
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      - UBUNTU_VERSION=${UBUNTU_VERSION:-24.04}
-      - ROS_DISTRO=${ROS_DISTRO:-jazzy}
-      - GZ_DISTRO=${GZ_DISTRO:-harmonic}
       - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+      # 'all' covers compute + graphics on both x86 NVIDIA and Jetson L4T.
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - UBUNTU_VERSION=${UBUNTU_VERSION}
+      - ROS_DISTRO=${ROS_DISTRO}
+      - GZ_DISTRO=${GZ_DISTRO}
 
-    # Volumes: X11 socket, workspace, Gazebo cache, PX4, full /dev access
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ..:/workspace
       - ../gazebo_cache:/root/.gazebo
-      - ${PX4_DIR:-../../PX4-Autopilot}:/px4
-      - ${REALSENSE_ROS_DIR:-../../realsense-ros}:/realsense-ros
+      - ${PX4_DIR}:/px4
+      - ${REALSENSE_ROS_DIR}:/realsense-ros
       - /dev:/dev
 
-    # Same isolation model as your manual docker run
     network_mode: host
     ipc: host
     pid: host
     privileged: true
     shm_size: 2g
 
-    # GPU access (requires nvidia-container-toolkit)
+    # Works on both x86 (nvidia-container-toolkit) and Jetson (nvidia-container-runtime).
     runtime: nvidia
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              capabilities: ["gpu"]
 
     working_dir: /workspace
     stdin_open: true   # -i

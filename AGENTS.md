@@ -13,13 +13,19 @@ The agent MUST execute the following workflow before declaring a task complete.
 
 Use the compose stack under `docker/` for all container management. Before starting any work:
 
+0. **Prerequisite — shell environment** (required in every new terminal):
+   ```bash
+   source ~/.bashrc
+   ```
+   This exports `ARCH`, `USERNAME`, `USER_UID`, and `USER_GID` which docker-compose needs for image naming and non-root user setup. Without it, docker-compose will warn about unset variables.
+
 1. Check whether the development container is already running:
    - `docker-compose -f docker/docker-compose.yml ps`
    - If it is running, attach with `docker-compose -f docker/docker-compose.yml exec ackermann_slam bash`.
 
 2. If the container is not running, verify whether the image exists:
-   - `docker images | grep ${IMAGE_NAME:-ackermann_rover}`
-   - Inspect configuration via `cat docker/.env` (adjust ROS/Gazebo/Ubuntu versions if needed).
+   - `docker images | grep ackermann_rover`
+   - Inspect configuration via `cat .env` (at project root — adjust ROS/Gazebo/Ubuntu versions if needed).
 
 3. Build or rebuild the image (captures Dockerfile failures early):
    - `docker-compose -f docker/docker-compose.yml build ackermann_slam`
