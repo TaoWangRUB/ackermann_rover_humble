@@ -15,5 +15,5 @@ log/
 *.gv
 *.png
 
-# Local secret env
-.env
+# Local secret env overrides (use .env.local for passwords/tokens, not .env)
+.env.local

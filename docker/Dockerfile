@@ -161,8 +161,29 @@ RUN apt-get update && source /opt/ros/$ROS_DISTRO/setup.bash && \
     colcon build --symlink-install || \
     echo "WARNING: colcon build failed during image build; please run colcon build inside the container after resolving dependencies."
 
+# Additional tools
+RUN apt-get update && apt-get install -y \
+    tmux \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user matching the host user so bind-mounted files have
+# consistent ownership and git does not complain about dubious ownership.
+ARG USERNAME=nvidia
+ARG USER_UID=1000
+ARG USER_GID=1000
+RUN userdel -r ubuntu 2>/dev/null || true && \
+    groupadd --gid ${USER_GID} ${USERNAME} 2>/dev/null || true && \
+    useradd --uid ${USER_UID} --gid ${USER_GID} -m -s /bin/bash ${USERNAME} && \
+    usermod -aG dialout ${USERNAME} && \
+    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
+    chmod 0440 /etc/sudoers.d/${USERNAME}
+
+ENV HOME=/home/${USERNAME}
+USER ${USERNAME}
+
 # Lightweight entrypoint script: provided from the local repo for easy editing
-COPY docker/entrypoint.sh /entrypoint.sh
+COPY --chown=${USERNAME}:${USERNAME} docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 WORKDIR /workspace
