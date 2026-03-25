@@ -12,12 +12,13 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
+ENV_FILE="${PROJECT_DIR}/.env"
 
 echo "Publishing static TFs inside Docker container..."
 echo "  odom -> ackermann/base_link (identity)"
 echo "  ackermann/base_link -> cubepilot_link (x=0.087 z=0.10)"
 
-exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
+exec docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
   source /opt/ros/jazzy/setup.bash
   source /workspace/install/setup.bash
   # Args: x y z yaw pitch roll frame_id child_frame_id

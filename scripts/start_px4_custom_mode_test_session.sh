@@ -82,10 +82,10 @@ tmux send-keys -t "${SESSION}:px4test.0" \
 
 if [[ "$ACTIVATE" == true ]]; then
     tmux send-keys -t "${SESSION}:px4test.4" \
-        "echo 'Waiting 20s for PX4 mode registration...' && sleep 20 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; docker-compose -f ${SCRIPT_DIR}/../docker/docker-compose.yml exec ackermann_slam bash" Enter
+        "echo 'Waiting 20s for PX4 mode registration...' && sleep 20 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; docker-compose --env-file ${SCRIPT_DIR}/../.env -f ${SCRIPT_DIR}/../docker/docker-compose.yml exec ackermann_slam bash" Enter
 else
     tmux send-keys -t "${SESSION}:px4test.4" \
-        "docker-compose -f ${SCRIPT_DIR}/../docker/docker-compose.yml exec ackermann_slam bash" Enter
+        "docker-compose --env-file ${SCRIPT_DIR}/../.env -f ${SCRIPT_DIR}/../docker/docker-compose.yml exec ackermann_slam bash" Enter
 fi
 
 # Select the PX4 bringup pane and attach

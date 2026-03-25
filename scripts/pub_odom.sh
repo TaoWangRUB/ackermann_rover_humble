@@ -10,10 +10,11 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
+ENV_FILE="${PROJECT_DIR}/.env"
 
 echo "Publishing mock Odometry to /odometry/filtered at 10Hz inside Docker container..."
 
-exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
+exec docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
   source /opt/ros/jazzy/setup.bash
   source /workspace/install/setup.bash
   ros2 topic pub -r 10 /odometry/filtered nav_msgs/msg/Odometry '{

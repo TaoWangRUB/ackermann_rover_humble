@@ -12,7 +12,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE_FILE="$(dirname "$SCRIPT_DIR")/docker/docker-compose.yml"
-DC="docker-compose -f ${COMPOSE_FILE}"
+ENV_FILE="$(dirname "$SCRIPT_DIR")/.env"
+DC="docker-compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE}"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
