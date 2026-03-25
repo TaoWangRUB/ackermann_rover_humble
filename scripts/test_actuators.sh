@@ -20,10 +20,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
+ENV_FILE="${PROJECT_DIR}/.env"
 PX4_BIN="/px4/build/px4_sitl_default/bin"
 
 docker_exec() {
-    docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "cd /px4/build/px4_sitl_default && $1"
+    docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "cd /px4/build/px4_sitl_default && $1"
 }
 
 usage() {
@@ -70,7 +71,7 @@ case "$CMD" in
         ;;
     shell)
         echo "Opening interactive shell in PX4 build directory..."
-        exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "cd /px4/build/px4_sitl_default/bin && exec bash"
+        exec docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "cd /px4/build/px4_sitl_default/bin && exec bash"
         ;;
     *)
         usage

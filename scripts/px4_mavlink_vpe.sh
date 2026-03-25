@@ -10,6 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
+ENV_FILE="${PROJECT_DIR}/.env"
 
 # Defaults (match px4_mavlink_vpe.py)
 DEVICE="/dev/ttyACM0"
@@ -62,5 +63,5 @@ if [ ${#EXTRA_ARGS[@]} -gt 0 ]; then
   done
 fi
 
-exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam \
+exec docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam \
   bash -lc "$CMD"

@@ -19,9 +19,10 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMPOSE_FILE="$(dirname "$SCRIPT_DIR")/docker/docker-compose.yml"
+ENV_FILE="$(dirname "$SCRIPT_DIR")/.env"
 export ARCH="${ARCH:-$(uname -m)}"
 
-DC="docker-compose -f ${COMPOSE_FILE}"
+DC="docker-compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE}"
 
 # ── Container cleanup ──────────────────────────────────────────────────────
 if ! ${DC} ps 2>/dev/null | grep -q "Up"; then
