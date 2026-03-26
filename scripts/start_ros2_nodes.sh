@@ -234,4 +234,4 @@ if [[ "${BRIDGE}" == "true" || "${VO_BRIDGE}" == "true" ]]; then
     LAUNCH_CMD+=" wait"
 fi
 
-dcomp exec ackermann_slam bash -c "${LAUNCH_CMD}"
+xdcomp exec ackermann_slam bash -c "${LAUNCH_CMD}"

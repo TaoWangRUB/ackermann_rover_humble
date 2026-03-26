@@ -43,7 +43,7 @@ echo "║  PX4 Rover Firmware Build — Cube Black (FMUv3, 2 MB)     ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
-dcomp exec ackermann_slam bash -c "
+xdcomp exec ackermann_slam bash -c "
 set -euo pipefail
 
 git config --global --add safe.directory '*'

@@ -22,5 +22,5 @@ fi
 CMD="${1:?Usage: $0 <nsh_command> [timeout]}"
 TIMEOUT="${2:-8}"
 
-dcomp exec ackermann_slam \
+xdcomp exec ackermann_slam \
   python3 /workspace/scripts/px4_cmd.py "${CMD}" "${TIMEOUT}"

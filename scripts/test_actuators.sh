@@ -69,7 +69,7 @@ case "$CMD" in
         ;;
     shell)
         echo "Opening interactive shell in PX4 build directory..."
-        dcomp exec ackermann_slam bash -c "cd /px4/build/px4_sitl_default/bin && exec bash"
+        xdcomp exec ackermann_slam bash -c "cd /px4/build/px4_sitl_default/bin && exec bash"
         ;;
     *)
         usage

@@ -38,7 +38,13 @@ export USERNAME="${USERNAME:-$(id -un)}"
 export USER_UID="${USER_UID:-$(id -u)}"
 export USER_GID="${USER_GID:-$(id -g)}"
 
-# ── wrapper ────────────────────────────────────────────────────────────
+# ── wrappers ───────────────────────────────────────────────────────────
+# dcomp  — run docker-compose (returns to caller; safe for multi-call scripts)
+# xdcomp — exec docker-compose (replaces current process; use as last command)
+#           Needed because `exec` only works with external commands, not functions.
 dcomp() {
     docker-compose -f "${COMPOSE_FILE}" "$@"
+}
+xdcomp() {
+    exec docker-compose -f "${COMPOSE_FILE}" "$@"
 }

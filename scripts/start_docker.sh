@@ -23,5 +23,5 @@ if ! dcomp ps --services --filter status=running \
     dcomp up -d ackermann_slam
 fi
 
-dcomp exec ackermann_slam bash -c \
+xdcomp exec ackermann_slam bash -c \
     'source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash && exec bash'

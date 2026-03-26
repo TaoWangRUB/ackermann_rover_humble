@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/dc.sh"
 
 echo "Publishing /cmd_vel: linear.x=${LINEAR_X}, angular.z=${ANGULAR_Z} @ ${RATE} Hz"
-dcomp exec ackermann_slam bash -c "
+xdcomp exec ackermann_slam bash -c "
   source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash &&
   ros2 topic pub -r ${RATE} /cmd_vel geometry_msgs/msg/TwistStamped \
     \"{header: {frame_id: 'ackermann/base_link'}, twist: {linear: {x: ${LINEAR_X}}, angular: {z: ${ANGULAR_Z}}}}\"
