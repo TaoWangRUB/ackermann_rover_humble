@@ -172,4 +172,4 @@ if [[ -n "${SERIAL_T265}" ]]; then LAUNCH_ARGS+=" t265_serial_no:=${SERIAL_T265}
 
 LAUNCH_CMD="${SOURCE} && ros2 launch realsense_camera_bringup realsense_camera.launch.py${LAUNCH_ARGS}"
 
-dcomp exec ackermann_slam bash -c "${LAUNCH_CMD}"
+xdcomp exec ackermann_slam bash -c "${LAUNCH_CMD}"

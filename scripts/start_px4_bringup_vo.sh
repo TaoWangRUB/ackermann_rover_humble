@@ -71,4 +71,4 @@ LAUNCH_CMD+=" odom_topic:=${ODOM_TOPIC}"
 LAUNCH_CMD+=" enable_vehicle_odometry:=${VO_BRIDGE}"
 LAUNCH_CMD+=" reversible_drive:=${REVERSIBLE_DRIVE}"
 
-dcomp exec ackermann_slam bash -c "${LAUNCH_CMD}"
+xdcomp exec ackermann_slam bash -c "${LAUNCH_CMD}"

@@ -66,7 +66,7 @@ fi
 # --- Build subcommand ---
 if [[ "${1:-}" == "build" ]]; then
     echo "Building PX4 SITL inside Docker container..."
-    dcomp exec ackermann_slam bash -c "
+    xdcomp exec ackermann_slam bash -c "
       git config --global --add safe.directory '*'
       export GZ_DISTRO=harmonic
       cd /px4 && make px4_sitl_default
@@ -93,7 +93,7 @@ if [[ "${OFFICIAL_MODEL}" == "1" ]]; then
         echo ""
     fi
 
-    dcomp exec ackermann_slam bash -c "
+    xdcomp exec ackermann_slam bash -c "
       git config --global --add safe.directory '*'
       # Use rootfs/ as working dir — matches SITL_WORKING_DIR used by the make target.
       cd ${PX4_BUILD_DIR}/rootfs
@@ -149,7 +149,7 @@ else
         echo ""
     fi
 
-    dcomp exec ackermann_slam bash -c "
+    xdcomp exec ackermann_slam bash -c "
       git config --global --add safe.directory '*'
       # rootfs/ is the working dir PX4 expects (matches SITL_WORKING_DIR).
       cd ${PX4_BUILD_DIR}/rootfs

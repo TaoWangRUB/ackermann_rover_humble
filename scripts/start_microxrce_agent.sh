@@ -36,7 +36,7 @@ if [[ "${1:-}" == "--serial" ]]; then
     echo "  Baud rate: ${SERIAL_BAUD}"
     echo ""
 
-    dcomp exec ackermann_slam bash -c "
+    xdcomp exec ackermann_slam bash -c "
       export LD_LIBRARY_PATH=/opt/microxrce/lib:\${LD_LIBRARY_PATH:-}
       /opt/microxrce/bin/MicroXRCEAgent serial --dev ${SERIAL_DEV} -b ${SERIAL_BAUD}
     "
@@ -48,7 +48,7 @@ else
     echo "  UDP port: ${AGENT_PORT}"
     echo ""
 
-    dcomp exec ackermann_slam bash -c "
+    xdcomp exec ackermann_slam bash -c "
       export LD_LIBRARY_PATH=/opt/microxrce/lib:\${LD_LIBRARY_PATH:-}
       /opt/microxrce/bin/MicroXRCEAgent udp4 -p ${AGENT_PORT}
     "

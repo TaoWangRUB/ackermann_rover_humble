@@ -61,5 +61,5 @@ if [ ${#EXTRA_ARGS[@]} -gt 0 ]; then
   done
 fi
 
-dcomp exec ackermann_slam \
+xdcomp exec ackermann_slam \
   bash -lc "$CMD"

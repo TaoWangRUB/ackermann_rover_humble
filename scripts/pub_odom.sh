@@ -12,7 +12,7 @@ source "${SCRIPT_DIR}/lib/dc.sh"
 
 echo "Publishing mock Odometry to /odometry/filtered at 10Hz inside Docker container..."
 
-dcomp exec ackermann_slam bash -c "
+xdcomp exec ackermann_slam bash -c "
   source /opt/ros/jazzy/setup.bash
   source /workspace/install/setup.bash
   ros2 topic pub -r 10 /odometry/filtered nav_msgs/msg/Odometry '{

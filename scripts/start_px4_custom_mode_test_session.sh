@@ -81,10 +81,10 @@ tmux send-keys -t "${SESSION}:px4test.0" \
 
 if [[ "$ACTIVATE" == true ]]; then
     tmux send-keys -t "${SESSION}:px4test.4" \
-        "echo 'Waiting 20s for PX4 mode registration...' && sleep 20 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash" Enter
+        "echo 'Waiting 20s for PX4 mode registration...' && sleep 20 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
 else
     tmux send-keys -t "${SESSION}:px4test.4" \
-        "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash" Enter
+        "source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
 fi
 
 # Select the PX4 bringup pane and attach
