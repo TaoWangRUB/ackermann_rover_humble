@@ -57,9 +57,7 @@ if [[ "${BRIDGE}" == "false" && "${VO_BRIDGE}" == "false" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
-ENV_FILE="${PROJECT_DIR}/.env"
+source "${SCRIPT_DIR}/lib/dc.sh"
 
 echo "Launching px4_bringup (mode=${MODE_TYPE}, bridge=${BRIDGE}, vo_bridge=${VO_BRIDGE}, odom_topic=${ODOM_TOPIC}, reversible_drive=${REVERSIBLE_DRIVE})..."
 
@@ -73,4 +71,4 @@ LAUNCH_CMD+=" odom_topic:=${ODOM_TOPIC}"
 LAUNCH_CMD+=" enable_vehicle_odometry:=${VO_BRIDGE}"
 LAUNCH_CMD+=" reversible_drive:=${REVERSIBLE_DRIVE}"
 
-exec docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "${LAUNCH_CMD}"
+dcomp exec ackermann_slam bash -c "${LAUNCH_CMD}"

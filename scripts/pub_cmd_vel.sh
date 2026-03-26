@@ -17,11 +17,10 @@ ANGULAR_Z="${2:-0.5}"
 RATE="${3:-1}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_FILE="${SCRIPT_DIR}/../docker/docker-compose.yml"
-ENV_FILE="${SCRIPT_DIR}/../.env"
+source "${SCRIPT_DIR}/lib/dc.sh"
 
 echo "Publishing /cmd_vel: linear.x=${LINEAR_X}, angular.z=${ANGULAR_Z} @ ${RATE} Hz"
-exec docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
+dcomp exec ackermann_slam bash -c "
   source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash &&
   ros2 topic pub -r ${RATE} /cmd_vel geometry_msgs/msg/TwistStamped \
     \"{header: {frame_id: 'ackermann/base_link'}, twist: {linear: {x: ${LINEAR_X}}, angular: {z: ${ANGULAR_Z}}}}\"

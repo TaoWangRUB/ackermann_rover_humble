@@ -20,8 +20,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_FILE="${SCRIPT_DIR}/../docker/docker-compose.yml"
-ENV_FILE="${SCRIPT_DIR}/../.env"
+source "${SCRIPT_DIR}/lib/dc.sh"
 MODE_ID="23"
 ACTION="activate"  # default: activate mode + arm
 
@@ -40,14 +39,14 @@ PUB_CMD="ros2 topic pub --once /fmu/in/vehicle_command px4_msgs/msg/VehicleComma
 
 if [[ "${ACTION}" == "disarm" ]]; then
     echo "Disarming PX4..."
-    docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -lc \
+    dcomp exec ackermann_slam bash -lc \
       "${SOURCE_CMD} && ${PUB_CMD} \
          '{command: 400, param1: 0.0, target_system: 1, target_component: 1, source_system: 255, source_component: 0, from_external: true}'"
     echo "Disarm request sent."
 
 elif [[ "${ACTION}" == "arm" ]]; then
     echo "Arming PX4 (no mode switch)..."
-    docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -lc \
+    dcomp exec ackermann_slam bash -lc \
       "${SOURCE_CMD} && ${PUB_CMD} \
          '{command: 400, param1: 1.0, target_system: 1, target_component: 1, source_system: 255, source_component: 0, from_external: true}'"
     echo "Arm request sent."
@@ -57,14 +56,14 @@ else
     echo "Activating external mode ${MODE_ID} + arming PX4..."
 
     # 1. Switch to the registered external mode
-    docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -lc \
+    dcomp exec ackermann_slam bash -lc \
       "${SOURCE_CMD} && ${PUB_CMD} \
          '{command: 100001, param1: ${MODE_ID}.0, target_system: 1, target_component: 1, source_system: 255, source_component: 0, from_external: true}'"
 
     sleep 0.5
 
     # 2. Arm
-    docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -lc \
+    dcomp exec ackermann_slam bash -lc \
       "${SOURCE_CMD} && ${PUB_CMD} \
          '{command: 400, param1: 1.0, target_system: 1, target_component: 1, source_system: 255, source_component: 0, from_external: true}'"
 
