@@ -31,9 +31,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
-ENV_FILE="${PROJECT_DIR}/.env"
+source "${SCRIPT_DIR}/lib/dc.sh"
 
 SKIP_DDS="${1:-}"
 PX4_DDS_PATH="src/modules/uxrce_dds_client/dds_topics.yaml"
@@ -45,7 +43,7 @@ echo "║  PX4 Rover Firmware Build — Cube Black (FMUv3, 2 MB)     ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
-exec docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
+dcomp exec ackermann_slam bash -c "
 set -euo pipefail
 
 git config --global --add safe.directory '*'

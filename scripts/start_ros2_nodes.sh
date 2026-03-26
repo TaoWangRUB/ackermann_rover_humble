@@ -101,9 +101,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
-ENV_FILE="${PROJECT_DIR}/.env"
+source "${SCRIPT_DIR}/lib/dc.sh"
 
 # Defaults
 HW="false"
@@ -169,7 +167,7 @@ if [[ "${BUILD}" == "true" ]]; then
     else
         echo "Building all packages..."
     fi
-    docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "${BUILD_CMD}"
+    dcomp exec ackermann_slam bash -c "${BUILD_CMD}"
     echo ""
     if [[ "${BUILD_ONLY}" == "true" ]]; then
         echo "Build complete. Skipping launch (--build-only)."
@@ -236,4 +234,4 @@ if [[ "${BRIDGE}" == "true" || "${VO_BRIDGE}" == "true" ]]; then
     LAUNCH_CMD+=" wait"
 fi
 
-exec docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "${LAUNCH_CMD}"
+dcomp exec ackermann_slam bash -c "${LAUNCH_CMD}"

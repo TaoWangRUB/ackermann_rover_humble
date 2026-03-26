@@ -41,9 +41,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
-ENV_FILE="${PROJECT_DIR}/.env"
+source "${SCRIPT_DIR}/lib/dc.sh"
 
 PX4_BUILD_DIR="/px4/build/px4_sitl_default"
 
@@ -68,7 +66,7 @@ fi
 # --- Build subcommand ---
 if [[ "${1:-}" == "build" ]]; then
     echo "Building PX4 SITL inside Docker container..."
-    exec docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
+    dcomp exec ackermann_slam bash -c "
       git config --global --add safe.directory '*'
       export GZ_DISTRO=harmonic
       cd /px4 && make px4_sitl_default
@@ -95,7 +93,7 @@ if [[ "${OFFICIAL_MODEL}" == "1" ]]; then
         echo ""
     fi
 
-    exec docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
+    dcomp exec ackermann_slam bash -c "
       git config --global --add safe.directory '*'
       # Use rootfs/ as working dir — matches SITL_WORKING_DIR used by the make target.
       cd ${PX4_BUILD_DIR}/rootfs
@@ -151,7 +149,7 @@ else
         echo ""
     fi
 
-    exec docker-compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
+    dcomp exec ackermann_slam bash -c "
       git config --global --add safe.directory '*'
       # rootfs/ is the working dir PX4 expects (matches SITL_WORKING_DIR).
       cd ${PX4_BUILD_DIR}/rootfs

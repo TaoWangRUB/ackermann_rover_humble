@@ -18,11 +18,9 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-COMPOSE_FILE="$(dirname "$SCRIPT_DIR")/docker/docker-compose.yml"
-ENV_FILE="$(dirname "$SCRIPT_DIR")/.env"
-export ARCH="${ARCH:-$(uname -m)}"
+source "${SCRIPT_DIR}/lib/dc.sh"
 
-DC="docker-compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE}"
+DC="dcomp"
 
 # ── Container cleanup ──────────────────────────────────────────────────────
 if ! ${DC} ps 2>/dev/null | grep -q "Up"; then
