@@ -86,13 +86,13 @@
 - [x] 11.7 Update `CMakeLists.txt`:
   - Add `src/jetson_metrics_provider.cpp` and `src/x86_mock_metrics_provider.cpp` to `add_library(${PROJECT_NAME}_components SHARED ...)` source list
   - Remove any `MOCK_JETSON` cmake option or conditional compilation (no longer needed with abstraction)
-- [ ] 11.8 Prepare test scripts for x86 development (unchanged from earlier conception):
+- [x] 11.8 Prepare test scripts for x86 development (unchanged from earlier conception):
   - `scripts/publish_mock_camera.py` — publish mock camera topics for testing cam_probe on x86
   - `scripts/publish_mock_px4.py` — publish mock PX4 topics for testing px4_probe on x86
-- [ ] 11.9 Verify build and platform detection:
-  - Inside Docker on x86_64: `colcon build --packages-select rover_monitor` should succeed
-  - On x86_64: `/monitor/jetson` topic should publish with `platform_name="x86_mock"` logged at startup
-  - On Jetson: `/monitor/jetson` topic should publish with `platform_name="jetson_xavier_nx"` (or variant) logged at startup
+- [x] 11.9 Verify build and platform detection:
+  - Inside Docker on x86_64: `colcon build --packages-select rover_monitor` should succeed ✅ (36.2s clean build)
+  - On x86_64: `/monitor/jetson` topic should publish with `platform_name="x86_mock"` logged at startup ✅ (verified: "SystemMetricsProvider: x86_mock")
+  - On Jetson: `/monitor/jetson` topic should publish with `platform_name="jetson_xavier_nx"` (or variant) logged at startup (pending: hardware validation)
 
 ## 12. Build and Test (v1.0.0 — Docker-based)
 
