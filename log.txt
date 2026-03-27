@@ -1,9 +1,0 @@
-Launching ROS 2 nodes inside Docker container...
-  PX4 SITL:     true
-  RTAB-Map:     true
-  Nav2:         false
-  RViz:         true
-  px4_bridge:   manual
-  VO bridge:    true
-  Odom topic:   /odometry/filtered
-

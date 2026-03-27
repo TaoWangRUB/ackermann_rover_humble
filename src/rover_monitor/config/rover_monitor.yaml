@@ -30,6 +30,9 @@
         xrce_disconnect_timeout_ms: 2000
       jetson:
         publish_rate_hz: 0.5
+        # Platform metrics provider: "" (auto-detect), "jetson", or "x86_mock"
+        metrics_provider: ""
+        # Default thermal zone mappings (for Jetson hardware via JetsonMetricsProvider)
         thermal_zone_cpu: 0
         thermal_zone_gpu: 1
         thermal_zone_board: 2

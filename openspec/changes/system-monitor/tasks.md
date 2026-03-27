@@ -75,15 +75,15 @@
   - **Simulated stable values:** gpu_usage_pct=35.0, temp_cpu_c=52.0, temp_gpu_c=48.0, temp_board_c=45.0, is_thermal_throttled=false, is_power_throttled=false, power_mode="20W"
   - Support ROS 2 parameter overrides for fault injection: `mock.is_thermal_throttled`, `mock.is_power_throttled`, `mock.temp_cpu_c`, etc. (for testing alert rules with abnormal conditions)
   - `platform_name()` returns "x86_mock"
-- [ ] 11.5 Update `src/jetson_probe.cpp` to use SystemMetricsProvider:
+- [x] 11.5 Update `src/jetson_probe.cpp` to use SystemMetricsProvider:
   - Remove all direct sysfs/procfs reads (move to jetson_metrics_provider.cpp)
   - Add member: `std::unique_ptr<SystemMetricsProvider> provider_;`
   - In constructor: `provider_ = SystemMetricsProvider::create(this->get_parameter("probes.jetson.metrics_provider").as_string());`
   - At startup: `RCLCPP_INFO(get_logger(), "SystemMetricsProvider: %s", provider_->platform_name().c_str());`
   - In 0.5 Hz timer callback: `auto status = provider_->read_metrics();` then `pub_->publish(std::make_unique<JetsonStatus>(status));`
-- [ ] 11.6 Update `config/rover_monitor.yaml`:
+- [x] 11.6 Update `config/rover_monitor.yaml`:
   - Add under `probes.jetson`: `metrics_provider: "auto"` (auto-detect, or override with "jetson" or "x86_mock")
-- [ ] 11.7 Update `CMakeLists.txt`:
+- [x] 11.7 Update `CMakeLists.txt`:
   - Add `src/jetson_metrics_provider.cpp` and `src/x86_mock_metrics_provider.cpp` to `add_library(${PROJECT_NAME}_components SHARED ...)` source list
   - Remove any `MOCK_JETSON` cmake option or conditional compilation (no longer needed with abstraction)
 - [ ] 11.8 Prepare test scripts for x86 development (unchanged from earlier conception):
