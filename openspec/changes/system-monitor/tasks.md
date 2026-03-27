@@ -61,16 +61,16 @@
 **Architecture note:** The jetson_probe component uses a SystemMetricsProvider abstraction to support both Jetson hardware (real sysfs reads) and x86_64 development machines (simulated Jetson metrics). This allows the same probe code to work on both platforms without code branches. Platform detection is explicit: check for sentinel file `/sys/devices/gpu.0/load` (Jetson-specific), with config override and x86_mock fallback. Probe logs selected platform at startup for visibility.
 
 - [x] 11.1 Add optional `rover_monitor` launch argument and IncludeLaunchDescription to `src/robot_bringup/launch/robot_bringup.launch.py`
-- [ ] 11.2 Create `include/rover_monitor/system_metrics_provider.hpp` — abstract interface with:
+- [x] 11.2 Create `include/rover_monitor/system_metrics_provider.hpp` — abstract interface with:
   - `virtual JetsonStatus read_metrics() = 0;`
   - `virtual bool is_jetson_hardware() = 0;`
   - `virtual std::string platform_name() = 0;` (returns "jetson_xavier_nx", "jetson_orin_nx", "x86_mock", etc.)
   - `static std::unique_ptr<SystemMetricsProvider> create(const std::string& override = "");` factory with priority: (1) config override, (2) sentinel check `/sys/devices/gpu.0/load`, (3) x86_mock fallback
-- [ ] 11.3 Create `src/jetson_metrics_provider.cpp` — JetsonMetricsProvider implementation:
+- [x] 11.3 Create `src/jetson_metrics_provider.cpp` — JetsonMetricsProvider implementation:
   - Move all sysfs logic from existing jetson_probe.cpp here (/proc/stat, /sys/class/thermal/*, /sys/kernel/debug/bpmp/*, /proc/meminfo, statvfs, /proc/net/wireless, nvpmodel)
   - Graceful error handling: log when sysfs path missing, don't fail silently
   - `platform_name()` reads `/proc/device-tree/model` for exact board string (e.g., "NVIDIA Jetson Xavier NX")
-- [ ] 11.4 Create `src/x86_mock_metrics_provider.cpp` — X86MockMetricsProvider implementation:
+- [x] 11.4 Create `src/x86_mock_metrics_provider.cpp` — X86MockMetricsProvider implementation:
   - **REAL /proc reads:** cpu_usage_pct[], ram_used_mb, swap_used_mb, disk_free_gb, uptime_s, wifi_signal_dbm (for testing alert rules against real x86 machine load)
   - **Simulated stable values:** gpu_usage_pct=35.0, temp_cpu_c=52.0, temp_gpu_c=48.0, temp_board_c=45.0, is_thermal_throttled=false, is_power_throttled=false, power_mode="20W"
   - Support ROS 2 parameter overrides for fault injection: `mock.is_thermal_throttled`, `mock.is_power_throttled`, `mock.temp_cpu_c`, etc. (for testing alert rules with abnormal conditions)

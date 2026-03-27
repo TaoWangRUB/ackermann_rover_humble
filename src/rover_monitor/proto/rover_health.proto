@@ -1,0 +1,59 @@
+syntax = "proto3";
+package rover_monitor_proto;
+
+message CamStatus {
+  string camera_id = 1;
+  bool connected = 2;
+  float frame_delta_ms = 3;
+  float depth_fps = 4;
+  float depth_quality_sampled = 5;
+  bool imu_active = 6;
+  int32 error_code = 7;
+  string error_msg = 8;
+  int64 timestamp = 9;
+}
+
+message Px4Status {
+  bool connected = 1;
+  bool armed = 2;
+  int32 nav_state = 3;
+  string nav_state_label = 4;
+  float battery_voltage_v = 5;
+  float battery_current_a = 6;
+  float battery_remaining_pct = 7;
+  int32 heartbeat_age_ms = 8;
+  int32 error_code = 9;
+  string error_msg = 10;
+  int64 timestamp = 11;
+}
+
+message JetsonStatus {
+  repeated float cpu_usage_pct = 1;
+  float gpu_usage_pct = 2;
+  int32 ram_used_mb = 3;
+  int32 ram_total_mb = 4;
+  int32 swap_used_mb = 5;
+  float disk_free_gb = 6;
+  float temp_cpu_c = 7;
+  float temp_gpu_c = 8;
+  float temp_board_c = 9;
+  bool is_thermal_throttled = 10;
+  bool is_power_throttled = 11;
+  string power_mode = 12;
+  float wifi_signal_dbm = 13;
+  int32 uptime_s = 14;
+  int32 error_code = 15;
+  string error_msg = 16;
+  int64 timestamp = 17;
+}
+
+message RoverHealth {
+  int32 seq = 1;
+  int64 timestamp = 2;
+  CamStatus camera = 3;
+  Px4Status px4 = 4;
+  JetsonStatus jetson = 5;
+  float slam_latency_ms = 6;
+  string overall_health = 7;
+  repeated string active_alerts = 8;
+}
