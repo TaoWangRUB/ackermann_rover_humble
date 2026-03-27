@@ -90,7 +90,7 @@ if [[ "${REVERSIBLE_DRIVE}" == true ]]; then
     echo "ESC mode: bidirectional (PWM_MIN=1100, PWM_MAX=1900, center=1500=stop)"
 else
     PARAMS+=("PWM_MAIN_MIN1 1000 int")
-    PARAMS+=("PWM_MAIN_MAX1 1900 int")
+    PARAMS+=("PWM_MAIN_MAX1 2000 int")
     echo "ESC mode: unidirectional (PWM_MIN=1000=DIS=stop, PWM_MAX=1900)"
 fi
 

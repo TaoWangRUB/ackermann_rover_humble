@@ -1,0 +1,78 @@
+alerts:
+  - id: CAM_STUTTER
+    source: camera.frame_delta_ms
+    condition: "> 66"
+    severity: WARN
+    message: "Camera frame delta exceeds 66 ms (below 15 FPS)"
+
+  - id: CAM_DISCONNECTED
+    source: camera.connected
+    condition: "== false"
+    severity: ERROR
+    message: "RealSense camera disconnected"
+
+  - id: CAM_DEPTH_QUALITY
+    source: camera.depth_quality_sampled
+    condition: "< 0.5"
+    severity: WARN
+    message: "Depth fill ratio below 50% (sampled)"
+
+  - id: PX4_HEARTBEAT_LOST
+    source: px4.heartbeat_age_ms
+    condition: "> 1000"
+    severity: ERROR
+    message: "PX4 uORB heartbeat lost"
+
+  - id: PX4_BATTERY_CRITICAL
+    source: px4.battery_remaining_pct
+    condition: "< 20"
+    severity: ERROR
+    message: "Battery critical — return to base"
+
+  - id: PX4_BATTERY_LOW
+    source: px4.battery_remaining_pct
+    condition: "< 40"
+    severity: WARN
+    message: "Battery low"
+
+  - id: HW_THROTTLE_THERMAL
+    source: jetson.is_thermal_throttled
+    condition: "== true"
+    severity: ERROR
+    message: "Xavier thermal throttling active — check fan/cooling, reduce load"
+
+  - id: HW_THROTTLE_POWER
+    source: jetson.is_power_throttled
+    condition: "== true"
+    severity: ERROR
+    message: "Xavier power throttling active — check battery voltage and regulator"
+
+  - id: JETSON_CPU_HOT
+    source: jetson.temp_cpu_c
+    condition: "> 80"
+    severity: ERROR
+    message: "CPU over-temperature (>80°C)"
+
+  - id: JETSON_RAM_HIGH
+    source: jetson.ram_used_mb / jetson.ram_total_mb
+    condition: "> 0.90"
+    severity: WARN
+    message: "RAM usage above 90%"
+
+  - id: JETSON_DISK_LOW
+    source: jetson.disk_free_gb
+    condition: "< 1.0"
+    severity: ERROR
+    message: "Disk space critical (<1 GB)"
+
+  - id: SLAM_LATE
+    source: slam_latency_ms
+    condition: "> 100"
+    severity: WARN
+    message: "SLAM map→odom transform stale (>100 ms)"
+
+  - id: NET_DROP
+    source: jetson.wifi_signal_dbm
+    condition: "< -75"
+    severity: WARN
+    message: "WiFi signal weak — telemetry may drop"

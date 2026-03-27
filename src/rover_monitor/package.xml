@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>rover_monitor</name>
+  <version>1.1.0</version>
+  <description>Real-time health monitoring for Ackermann rover: camera, PX4, Jetson probes with MQTT telemetry</description>
+  <maintainer email="dev@example.com">Dev</maintainer>
+  <license>Apache-2.0</license>
+
+  <!-- Build tools -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+
+  <!-- Core ROS 2 -->
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+
+  <!-- TF2 for SLAM latency -->
+  <depend>tf2_ros</depend>
+
+  <!-- PX4 messages -->
+  <depend>px4_msgs</depend>
+
+  <!-- Message generation runtime -->
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <!-- External libraries -->
+  <build_depend>protobuf</build_depend>
+  <exec_depend>protobuf</exec_depend>
+  <build_depend>libpaho-mqtt-dev</build_depend>
+  <build_depend>libpaho-mqttpp-dev</build_depend>
+  <exec_depend>libpaho-mqtt</exec_depend>
+  <exec_depend>libpaho-mqttpp</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
