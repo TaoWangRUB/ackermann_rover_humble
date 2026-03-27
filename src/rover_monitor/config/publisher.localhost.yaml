@@ -1,0 +1,10 @@
+/**:
+  ros__parameters:
+    publisher:
+      broker_host: "localhost"
+      broker_port: 1883
+      reconnect_delay_s: 5
+      telemetry_qos: 0
+      alert_qos: 1
+      client_id: "x86_monitor_test"
+      serialization: "protobuf"
