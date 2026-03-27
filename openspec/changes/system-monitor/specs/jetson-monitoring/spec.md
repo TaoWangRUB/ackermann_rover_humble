@@ -1,5 +1,44 @@
 ## ADDED Requirements
 
+### Requirement: Hardware abstraction via SystemMetricsProvider
+The jetson_probe SHALL delegate all system metric reads (sysfs, procfs, GPU load) to a pluggable `SystemMetricsProvider` interface. This allows the same probe code to run on both Jetson hardware (real reads) and x86_64 development machines (mock metrics for Jetson-specific paths).
+
+#### Scenario: Platform auto-detection
+- **WHEN** the jetson_probe starts
+- **THEN** it SHALL instantiate a `SystemMetricsProvider` via explicit priority:
+  1. Config override (if `metrics_provider: "jetson" | "x86_mock"` in config, use that)
+  2. Sentinel file check (if `/sys/devices/gpu.0/load` exists, use JetsonMetricsProvider)
+  3. Fallback (use X86MockMetricsProvider for x86_64 systems)
+- **AND** it SHALL log the selected provider name at startup: `SystemMetricsProvider: jetson_xavier_nx` or `SystemMetricsProvider: x86_mock`
+
+#### Scenario: JetsonMetricsProvider on Jetson hardware
+- **WHEN** `/sys/devices/gpu.0/load` exists (ARM64 Jetson)
+- **THEN** JetsonMetricsProvider reads:
+  - Real CPU usage from `/proc/stat`
+  - Real GPU load from `/sys/devices/gpu.0/load`
+  - Real temperatures from `/sys/class/thermal/thermal_zone*`
+  - Real thermal/power throttle state from sysfs
+  - Real RAM, disk, WiFi from `/proc`
+  - All sysfs reads log errors gracefully without silent failures
+
+#### Scenario: X86MockMetricsProvider on x86_64 development machine
+- **WHEN** `/sys/devices/gpu.0/load` does not exist (x86_64 system)
+- **THEN** X86MockMetricsProvider:
+  - **READS REAL** (from x86 /proc): cpu_usage_pct, ram_used_mb, swap_used_mb, disk_free_gb, uptime_s, wifi_signal_dbm
+  - **SIMULATES STABLE** (fixed values for Jetson-specific metrics):
+    - gpu_usage_pct = 35.0 (representative SLAM load, won't trigger alerts)
+    - temp_cpu_c = 52.0 (safe margin below 80°C threshold)
+    - temp_gpu_c = 48.0 (safe margin below 83°C threshold)
+    - temp_board_c = 45.0
+    - is_thermal_throttled = false
+    - is_power_throttled = false
+    - power_mode = "20W"
+- This split allows x86 development to exercise alert rules with real CPU/memory pressure while avoiding spurious thermal/power alerts
+
+#### Scenario: Config override for testing
+- **WHEN** `metrics_provider: "x86_mock"` is set in config (even on Jetson)
+- **THEN** it SHALL use X86MockMetricsProvider instead of auto-detection (useful for testing alert engine with predictable values)
+
 ### Requirement: CPU usage from procfs
 The jetson_probe component SHALL compute per-core CPU usage by reading `/proc/stat` deltas between consecutive 0.5 Hz timer callbacks.
 
