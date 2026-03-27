@@ -38,6 +38,9 @@ add_library(${PROJECT_NAME}_components SHARED
   src/cam_probe.cpp
   src/px4_probe.cpp
   src/jetson_probe.cpp
+  src/system_metrics_provider.cpp
+  src/jetson_metrics_provider.cpp
+  src/x86_mock_metrics_provider.cpp
   src/aggregator.cpp
   src/telemetry_publisher.cpp
   ${PROTO_SRCS}

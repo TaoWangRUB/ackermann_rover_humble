@@ -1,4 +1,4 @@
-#include "rover_monitor/system_metrics_provider.hpp"
+#include "rover_monitor/x86_mock_metrics_provider.hpp"
 #include <rover_monitor/msg/jetson_status.hpp>
 
 #include <fstream>
@@ -10,42 +10,14 @@
 namespace rover_monitor
 {
 
-/**
- * @brief x86_64 development machine metrics provider (mock Jetson)
- *
- * REAL reads from /proc (for testing alert rules against actual machine load):
- *   - cpu_usage_pct: real per-core CPU usage from /proc/stat delta
- *   - ram_used_mb, ram_total_mb, swap_used_mb: real memory from /proc/meminfo
- *   - disk_free_gb: real disk from statvfs
- *   - uptime_s: real uptime from /proc/uptime
- *   - wifi_signal_dbm: real WiFi from /proc/net/wireless (or nominal -55 dBm if not available)
- *
- * SIMULATED stable values (Jetson-specific metrics):
- *   - gpu_usage_pct: 35.0 (representative SLAM load, won't trigger alerts)
- *   - temp_cpu_c: 52.0 (safe margin below 80°C threshold)
- *   - temp_gpu_c: 48.0 (safe margin below 83°C threshold)
- *   - temp_board_c: 45.0
- *   - is_thermal_throttled: false
- *   - is_power_throttled: false
- *   - power_mode: "20W"
- *
- * Supports ROS parameter overrides for fault injection (testing alert rules):
- *   - mock.is_thermal_throttled: inject thermal throttle alert
- *   - mock.is_power_throttled: inject power throttle alert
- *   - mock.temp_cpu_c: override CPU temp for overheat testing
- *   - mock.temp_gpu_c: override GPU temp for overheat testing
- */
-class X86MockMetricsProvider : public SystemMetricsProvider
+X86MockMetricsProvider::X86MockMetricsProvider(rclcpp::Node * node)
+: node_(node)
 {
-public:
-  explicit X86MockMetricsProvider(rclcpp::Node * node = nullptr)
-  : node_(node)
-  {
-    // Initialize CPU ticks baseline
-    read_cpu_usage();
-  }
+  // Initialize CPU ticks baseline
+  read_cpu_usage();
+}
 
-  rover_monitor::msg::JetsonStatus read_metrics() override
+rover_monitor::msg::JetsonStatus X86MockMetricsProvider::read_metrics()
   {
     auto status = rover_monitor::msg::JetsonStatus();
 
@@ -101,28 +73,9 @@ public:
     }
 
     return status;
-  }
+}
 
-  bool is_jetson_hardware() const override { return false; }
-
-  std::string platform_name() const override { return "x86_mock"; }
-
-private:
-  rclcpp::Node * node_{nullptr};
-
-  struct CpuTicks {
-    uint64_t user{0}, nice{0}, system{0}, idle{0},
-             iowait{0}, irq{0}, softirq{0}, steal{0};
-    uint64_t total() const {
-      return user + nice + system + idle + iowait + irq + softirq + steal;
-    }
-    uint64_t active() const { return total() - idle - iowait; }
-  };
-  std::vector<CpuTicks> prev_cpu_ticks_;
-
-  // === REAL reads from x86 /proc ===
-
-  std::vector<float> read_cpu_usage()
+std::vector<float> X86MockMetricsProvider::read_cpu_usage()
   {
     std::vector<float> usage;
     std::vector<CpuTicks> current_ticks;
@@ -156,8 +109,8 @@ private:
     return usage;
   }
 
-  void read_memory(int32_t & used_mb, int32_t & total_mb, int32_t & swap_mb)
-  {
+void X86MockMetricsProvider::read_memory(int32_t & used_mb, int32_t & total_mb, int32_t & swap_mb)
+{
     used_mb = 0;
     total_mb = 0;
     swap_mb = 0;
@@ -186,16 +139,16 @@ private:
     swap_mb = static_cast<int32_t>((swap_total_kb - swap_free_kb) / 1024);
   }
 
-  float read_disk_free()
-  {
+float X86MockMetricsProvider::read_disk_free()
+{
     struct statvfs stat;
     if (statvfs("/", &stat) != 0) { return -1.0f; }
     return static_cast<float>(stat.f_bavail * stat.f_frsize) /
       (1024.0f * 1024.0f * 1024.0f);
   }
 
-  float read_wifi_signal()
-  {
+float X86MockMetricsProvider::read_wifi_signal()
+{
     std::ifstream f("/proc/net/wireless");
     if (!f.is_open()) { return -55.0f; }  // Nominal signal if not available
 
@@ -214,8 +167,8 @@ private:
     return -55.0f;  // Nominal signal if parse failed
   }
 
-  int32_t read_uptime()
-  {
+int32_t X86MockMetricsProvider::read_uptime()
+{
     std::ifstream f("/proc/uptime");
     if (!f.is_open()) { return 0; }
     double uptime = 0.0;
@@ -223,57 +176,32 @@ private:
     return static_cast<int32_t>(uptime);
   }
 
-  // === Mock parameter helpers (for fault injection in testing) ===
-
-  float get_mock_parameter(const std::string & param_name, float default_value)
-  {
-    if (!node_) { return default_value; }
-    try {
-      std::string full_param = "mock." + param_name;
-      if (!node_->has_parameter(full_param)) {
-        return default_value;
-      }
-      return node_->get_parameter(full_param).as_double();
-    } catch (...) {
-      return default_value;
-    }
-  }
-
-  bool get_mock_parameter(const std::string & param_name, bool default_value)
-  {
-    if (!node_) { return default_value; }
-    try {
-      std::string full_param = "mock." + param_name;
-      if (!node_->has_parameter(full_param)) {
-        return default_value;
-      }
-      return node_->get_parameter(full_param).as_bool();
-    } catch (...) {
-      return default_value;
-    }
-  }
-};
-
-// === Update factory method to use X86MockMetricsProvider ===
-
-std::unique_ptr<SystemMetricsProvider> SystemMetricsProvider::create(
-  const std::string & override)
+float X86MockMetricsProvider::get_mock_parameter(const std::string & param_name, float default_value)
 {
-  // Priority 1: Config override
-  if (override == "jetson") {
-    return std::make_unique<JetsonMetricsProvider>();
+  if (!node_) { return default_value; }
+  try {
+    std::string full_param = "mock." + param_name;
+    if (!node_->has_parameter(full_param)) {
+      return default_value;
+    }
+    return node_->get_parameter(full_param).as_double();
+  } catch (...) {
+    return default_value;
   }
-  if (override == "x86_mock") {
-    return std::make_unique<X86MockMetricsProvider>();
-  }
+}
 
-  // Priority 2: Sentinel file check
-  if (std::filesystem::exists("/sys/devices/gpu.0/load")) {
-    return std::make_unique<JetsonMetricsProvider>();
+bool X86MockMetricsProvider::get_mock_parameter(const std::string & param_name, bool default_value)
+{
+  if (!node_) { return default_value; }
+  try {
+    std::string full_param = "mock." + param_name;
+    if (!node_->has_parameter(full_param)) {
+      return default_value;
+    }
+    return node_->get_parameter(full_param).as_bool();
+  } catch (...) {
+    return default_value;
   }
-
-  // Priority 3: Fallback to x86_mock
-  return std::make_unique<X86MockMetricsProvider>();
 }
 
 }  // namespace rover_monitor
