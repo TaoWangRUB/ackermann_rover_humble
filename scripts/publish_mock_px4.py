@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""
+Mock PX4 topic publisher for testing px4_probe on x86_64 development machines.
+Publishes synthetic PX4 autopilot topics for offline testing without hardware.
+"""
+
+import rclpy
+from rclpy.node import Node
+from builtin_interfaces.msg import Time
+
+
+class MockPx4Publisher(Node):
+    """Publishes mock PX4 vehicle status topics at realistic rates."""
+
+    def __init__(self):
+        super().__init__("mock_px4_publisher")
+
+        # Try to import PX4 messages, fall back gracefully if not available
+        try:
+            from px4_msgs.msg import VehicleStatus, BatteryStatus, VehicleOdometry
+            self.have_px4_msgs = True
+        except ImportError:
+            self.get_logger().warn(
+                "px4_msgs not available - install via: colcon build --packages-select px4_msgs"
+            )
+            self.have_px4_msgs = False
+            return
+
+        # Publishers
+        self.vehicle_status_pub = self.create_publisher(
+            VehicleStatus, "/fmu/out/vehicle_status", 10
+        )
+        self.battery_status_pub = self.create_publisher(
+            BatteryStatus, "/fmu/out/battery_status", 10
+        )
+        self.vehicle_odom_pub = self.create_publisher(
+            VehicleOdometry, "/fmu/out/vehicle_odometry", 10
+        )
+
+        # Timers (typical PX4 rates: 50 Hz vehicle_status, 5 Hz battery, 30 Hz odometry)
+        self.create_timer(1.0 / 50.0, self.publish_vehicle_status)
+        self.create_timer(1.0 / 5.0, self.publish_battery_status)
+        self.create_timer(1.0 / 30.0, self.publish_vehicle_odometry)
+
+        self.status_id = 0
+        self.get_logger().info("Mock PX4 publisher started (50 Hz status, 5 Hz battery, 30 Hz odometry)")
+
+    def publish_vehicle_status(self):
+        """Publish synthetic vehicle status (armed, disarmed, nav_state, etc.)."""
+        if not self.have_px4_msgs:
+            return
+
+        from px4_msgs.msg import VehicleStatus
+
+        msg = VehicleStatus()
+        msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)  # microseconds
+        msg.timestamp_sample = msg.timestamp
+
+        # Simulate armed state (toggle every 30 seconds)
+        self.status_id += 1
+        armed_duration = 30 * 50  # 30 seconds at 50 Hz
+        msg.armed = (self.status_id // armed_duration) % 2 == 1
+
+        # Navigation state: 0 = MANUAL, 1 = ACRO, 10 = AUTO_LOITER, 16 = AUTO_MISSION
+        msg.nav_state = 10 if msg.armed else 0
+        msg.nav_state_timestamp = msg.timestamp
+
+        # Healthy state indicators
+        msg.failsafe = False
+        msg.failure_detector_status = 0
+
+        self.vehicle_status_pub.publish(msg)
+
+    def publish_battery_status(self):
+        """Publish synthetic battery status."""
+        if not self.have_px4_msgs:
+            return
+
+        from px4_msgs.msg import BatteryStatus
+
+        msg = BatteryStatus()
+        msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)  # microseconds
+
+        # Simulate battery drain over time (start at 100%, decrease by ~0.5% per second)
+        elapsed_sec = self.get_clock().now().nanoseconds / 1e9
+        msg.remaining = max(10.0, 100.0 - (elapsed_sec * 0.5))  # Never drop below 10%
+        msg.voltage_v = 11.1 + (msg.remaining / 100.0) * 0.9  # 11.1V at 0%, 12V at 100%
+        msg.current_a = 10.0 if self.status_id % 50 > 25 else 5.0  # Varying current
+        msg.state_of_health = 100  # Perfect health
+
+        self.battery_status_pub.publish(msg)
+
+    def publish_vehicle_odometry(self):
+        """Publish synthetic vehicle odometry (position, velocity)."""
+        if not self.have_px4_msgs:
+            return
+
+        from px4_msgs.msg import VehicleOdometry
+
+        msg = VehicleOdometry()
+        msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)  # microseconds
+        msg.timestamp_sample = msg.timestamp
+
+        # Simulate movement in a circle (odometry frame)
+        elapsed_sec = self.get_clock().now().nanoseconds / 1e9
+        angle = elapsed_sec * 0.5  # Rotate 0.5 rad/sec
+
+        # Position (in odometry frame): circular path with 5m radius
+        msg.position[0] = 5.0 * np.cos(angle)  # x
+        msg.position[1] = 5.0 * np.sin(angle)  # y
+        msg.position[2] = -0.5  # z (altitude: -0.5m AGL)
+
+        # Velocity: tangent to circle
+        speed = 2.5  # m/s
+        msg.velocity[0] = -speed * np.sin(angle)  # vx
+        msg.velocity[1] = speed * np.cos(angle)  # vy
+        msg.velocity[2] = 0.0  # vz
+
+        # Attitude (quaternion): level flight
+        msg.q[0] = 1.0  # w
+        msg.q[1] = 0.0  # x
+        msg.q[2] = 0.0  # y
+        msg.q[3] = 0.0  # z
+
+        self.vehicle_odom_pub.publish(msg)
+
+
+def main(args=None):
+    import numpy as np  # For math functions in methods
+
+    rclpy.init(args=args)
+    node = MockPx4Publisher()
+
+    if not node.have_px4_msgs:
+        node.get_logger().error(
+            "Cannot start mock PX4 publisher without px4_msgs. "
+            "Install with: colcon build --packages-select px4_msgs"
+        )
+        node.destroy_node()
+        rclpy.shutdown()
+        return
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
