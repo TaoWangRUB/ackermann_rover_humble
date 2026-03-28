@@ -6,7 +6,8 @@ Publishes synthetic PX4 autopilot topics for offline testing without hardware.
 
 import rclpy
 from rclpy.node import Node
-from builtin_interfaces.msg import Time
+import numpy as np
+import signal
 
 
 class MockPx4Publisher(Node):
@@ -38,12 +39,12 @@ class MockPx4Publisher(Node):
         )
 
         # Timers (typical PX4 rates: 50 Hz vehicle_status, 5 Hz battery, 30 Hz odometry)
-        self.create_timer(1.0 / 50.0, self.publish_vehicle_status)
+        self.create_timer(1.0 / 10.0, self.publish_vehicle_status)
         self.create_timer(1.0 / 5.0, self.publish_battery_status)
-        self.create_timer(1.0 / 30.0, self.publish_vehicle_odometry)
+        self.create_timer(1.0 / 10.0, self.publish_vehicle_odometry)
 
         self.status_id = 0
-        self.get_logger().info("Mock PX4 publisher started (50 Hz status, 5 Hz battery, 30 Hz odometry)")
+        self.get_logger().info("Mock PX4 publisher started (10 Hz status, 5 Hz battery, 10 Hz odometry)")
 
     def publish_vehicle_status(self):
         """Publish synthetic vehicle status (armed, disarmed, nav_state, etc.)."""
@@ -54,15 +55,23 @@ class MockPx4Publisher(Node):
 
         msg = VehicleStatus()
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)  # microseconds
-        msg.timestamp_sample = msg.timestamp
 
         # Simulate armed state (toggle every 30 seconds)
         self.status_id += 1
-        armed_duration = 30 * 50  # 30 seconds at 50 Hz
-        msg.armed = (self.status_id // armed_duration) % 2 == 1
+        armed_duration = 30 * 10  # 30 seconds at 10 Hz
+        is_armed = (self.status_id // armed_duration) % 2 == 1
+        msg.arming_state = (
+            VehicleStatus.ARMING_STATE_ARMED
+            if is_armed
+            else VehicleStatus.ARMING_STATE_DISARMED
+        )
 
-        # Navigation state: 0 = MANUAL, 1 = ACRO, 10 = AUTO_LOITER, 16 = AUTO_MISSION
-        msg.nav_state = 10 if msg.armed else 0
+        # Navigation state: OFFBOARD while armed, MANUAL while disarmed
+        msg.nav_state = (
+            VehicleStatus.NAVIGATION_STATE_OFFBOARD
+            if is_armed
+            else VehicleStatus.NAVIGATION_STATE_MANUAL
+        )
         msg.nav_state_timestamp = msg.timestamp
 
         # Healthy state indicators
@@ -83,8 +92,10 @@ class MockPx4Publisher(Node):
 
         # Simulate battery drain over time (start at 100%, decrease by ~0.5% per second)
         elapsed_sec = self.get_clock().now().nanoseconds / 1e9
-        msg.remaining = max(10.0, 100.0 - (elapsed_sec * 0.5))  # Never drop below 10%
-        msg.voltage_v = 11.1 + (msg.remaining / 100.0) * 0.9  # 11.1V at 0%, 12V at 100%
+        remaining = max(0.10, 1.0 - (elapsed_sec * 0.005))  # Never drop below 10%
+        msg.remaining = remaining
+        msg.connected = True
+        msg.voltage_v = 11.1 + remaining * 0.9  # 11.1V at 0%, 12V at 100%
         msg.current_a = 10.0 if self.status_id % 50 > 25 else 5.0  # Varying current
         msg.state_of_health = 100  # Perfect health
 
@@ -126,10 +137,15 @@ class MockPx4Publisher(Node):
 
 
 def main(args=None):
-    import numpy as np  # For math functions in methods
-
     rclpy.init(args=args)
     node = MockPx4Publisher()
+    shutdown_requested = False
+
+    def _request_shutdown(signum, frame):  # noqa: ARG001
+        nonlocal shutdown_requested
+        shutdown_requested = True
+        if node.have_px4_msgs:
+            node.get_logger().info("Shutdown requested, stopping mock PX4 publisher...")
 
     if not node.have_px4_msgs:
         node.get_logger().error(
@@ -140,13 +156,16 @@ def main(args=None):
         rclpy.shutdown()
         return
 
+    signal.signal(signal.SIGINT, _request_shutdown)
+    signal.signal(signal.SIGTERM, _request_shutdown)
+
     try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
+        while rclpy.ok() and not shutdown_requested:
+            rclpy.spin_once(node, timeout_sec=0.1)
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

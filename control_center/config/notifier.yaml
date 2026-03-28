@@ -1,0 +1,33 @@
+# Alert notification channel configuration
+# Each channel can be independently enabled/disabled with severity filtering.
+
+channels:
+  terminal:
+    enabled: true
+    min_severity: "WARN"
+
+  sound:
+    enabled: false
+    min_severity: "ERROR"
+    settings:
+      wav_file: "alert.wav"
+
+  desktop:
+    enabled: false
+    min_severity: "ERROR"
+
+  slack:
+    enabled: false
+    min_severity: "ERROR"
+    settings:
+      webhook_url: ""
+      mention: "@oncall"
+
+  email:
+    enabled: false
+    min_severity: "ERROR"
+    settings:
+      smtp_host: ""
+      smtp_port: 587
+      from_addr: ""
+      to_addrs: []

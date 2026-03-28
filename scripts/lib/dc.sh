@@ -38,13 +38,30 @@ export USERNAME="${USERNAME:-$(id -un)}"
 export USER_UID="${USER_UID:-$(id -u)}"
 export USER_GID="${USER_GID:-$(id -g)}"
 
+# ── wrapper command selection ──────────────────────────────────────────
+# Support both Compose v2 (`docker compose`) and Compose v1 (`docker-compose`).
+# Some snap-based Docker installs ship a broken `/snap/bin/docker-compose`
+# wrapper for non-interactive shells while the real v2 plugin binary still
+# exists on disk, so keep a direct-plugin fallback as well.
+if docker compose version >/dev/null 2>&1; then
+    DC_CMD=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1; then
+    DC_CMD=(docker-compose)
+elif [[ -x /snap/docker/current/usr/libexec/docker/cli-plugins/docker-compose ]] \
+    && /snap/docker/current/usr/libexec/docker/cli-plugins/docker-compose version >/dev/null 2>&1; then
+    DC_CMD=(/snap/docker/current/usr/libexec/docker/cli-plugins/docker-compose)
+else
+    echo "No working Compose command found (checked 'docker compose', 'docker-compose', and snap plugin path)." >&2
+    return 1 2>/dev/null || exit 1
+fi
+
 # ── wrappers ───────────────────────────────────────────────────────────
-# dcomp  — run docker-compose (returns to caller; safe for multi-call scripts)
-# xdcomp — exec docker-compose (replaces current process; use as last command)
+# dcomp  — run docker compose (returns to caller; safe for multi-call scripts)
+# xdcomp — exec docker compose (replaces current process; use as last command)
 #           Needed because `exec` only works with external commands, not functions.
 dcomp() {
-    docker-compose -f "${COMPOSE_FILE}" "$@"
+    "${DC_CMD[@]}" -f "${COMPOSE_FILE}" "$@"
 }
 xdcomp() {
-    exec docker-compose -f "${COMPOSE_FILE}" "$@"
+    exec "${DC_CMD[@]}" -f "${COMPOSE_FILE}" "$@"
 }

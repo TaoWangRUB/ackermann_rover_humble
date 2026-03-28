@@ -13,7 +13,7 @@ Px4Probe::Px4Probe(const rclcpp::NodeOptions & options)
   // Parameters
   this->declare_parameter("probes.px4.vehicle_status_topic", "/fmu/out/vehicle_status");
   this->declare_parameter("probes.px4.battery_status_topic", "/fmu/out/battery_status");
-  this->declare_parameter("probes.px4.heartbeat_topic", "/fmu/out/vehicle_global_position");
+  this->declare_parameter("probes.px4.heartbeat_topic", "/fmu/out/vehicle_odometry");
   this->declare_parameter("probes.px4.heartbeat_timeout_ms", 1000);
   this->declare_parameter("probes.px4.xrce_disconnect_timeout_ms", 2000);
 
@@ -46,7 +46,7 @@ Px4Probe::Px4Probe(const rclcpp::NodeOptions & options)
     battery_topic, px4_qos,
     std::bind(&Px4Probe::on_battery_status, this, std::placeholders::_1), sub_opts);
 
-  heartbeat_sub_ = this->create_subscription<px4_msgs::msg::VehicleGlobalPosition>(
+  heartbeat_sub_ = this->create_subscription<px4_msgs::msg::VehicleOdometry>(
     heartbeat_topic, px4_qos,
     std::bind(&Px4Probe::on_heartbeat, this, std::placeholders::_1), sub_opts);
 
@@ -73,7 +73,7 @@ void Px4Probe::on_battery_status(px4_msgs::msg::BatteryStatus::ConstSharedPtr ms
   publish_status();
 }
 
-void Px4Probe::on_heartbeat(px4_msgs::msg::VehicleGlobalPosition::ConstSharedPtr /*msg*/)
+void Px4Probe::on_heartbeat(px4_msgs::msg::VehicleOdometry::ConstSharedPtr /*msg*/)
 {
   last_heartbeat_stamp_ = this->now();
   last_any_msg_stamp_ = this->now();

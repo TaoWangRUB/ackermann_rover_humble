@@ -3,7 +3,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <px4_msgs/msg/vehicle_status.hpp>
 #include <px4_msgs/msg/battery_status.hpp>
-#include <px4_msgs/msg/vehicle_global_position.hpp>
+#include <px4_msgs/msg/vehicle_odometry.hpp>
 #include <rover_monitor/msg/px4_status.hpp>
 
 #include <string>
@@ -19,7 +19,7 @@ public:
 private:
   void on_vehicle_status(px4_msgs::msg::VehicleStatus::ConstSharedPtr msg);
   void on_battery_status(px4_msgs::msg::BatteryStatus::ConstSharedPtr msg);
-  void on_heartbeat(px4_msgs::msg::VehicleGlobalPosition::ConstSharedPtr msg);
+  void on_heartbeat(px4_msgs::msg::VehicleOdometry::ConstSharedPtr msg);
   void publish_status();
 
   std::string nav_state_to_label(uint8_t nav_state);
@@ -30,7 +30,7 @@ private:
   // Subscribers
   rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr vehicle_status_sub_;
   rclcpp::Subscription<px4_msgs::msg::BatteryStatus>::SharedPtr battery_sub_;
-  rclcpp::Subscription<px4_msgs::msg::VehicleGlobalPosition>::SharedPtr heartbeat_sub_;
+  rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr heartbeat_sub_;
 
   // Callback group
   rclcpp::CallbackGroup::SharedPtr cb_group_;

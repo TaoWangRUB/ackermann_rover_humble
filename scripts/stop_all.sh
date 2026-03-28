@@ -49,14 +49,28 @@ else
         " 2>/dev/null || true
     }
 
+    # Extra sweep for long-running Python helpers started from /workspace/scripts.
+    # Keep this narrow so we do not kill unrelated system Python processes.
+    sweep_python_helpers() {
+        ${DC} exec -T ackermann_slam bash -c "
+            ps aux --no-headers \
+              | grep -E 'python3 /workspace/scripts/' \
+              | grep -v 'docker\|grep' \
+              | awk '{print \$2}' \
+              | xargs -r kill -9 2>/dev/null || true
+        " 2>/dev/null || true
+    }
+
     sweep
+    sweep_python_helpers
     sleep 1
     sweep   # second pass catches orphans that re-parented after first kill
+    sweep_python_helpers
 
     # Verify
     REMAINING=$(${DC} exec -T ackermann_slam bash -c "
         ps aux --no-headers \
-          | grep -E '/opt/ros|/opt/microxrce|/workspace/install' \
+          | grep -E '/opt/ros|/opt/microxrce|/workspace/install|python3 /workspace/scripts/' \
           | grep -v 'docker\|grep' \
           | wc -l
     " 2>/dev/null || echo "0")
@@ -67,7 +81,7 @@ else
         echo "WARNING: ${REMAINING} process(es) still running:"
         ${DC} exec -T ackermann_slam bash -c "
             ps aux --no-headers \
-              | grep -E '/opt/ros|/opt/microxrce|/workspace/install' \
+              | grep -E '/opt/ros|/opt/microxrce|/workspace/install|python3 /workspace/scripts/' \
               | grep -v 'docker\|grep'
         " 2>/dev/null || true
     fi
