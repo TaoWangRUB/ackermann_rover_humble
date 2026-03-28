@@ -2,6 +2,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
@@ -11,15 +12,25 @@ def generate_launch_description():
     pkg_dir = get_package_share_directory('rover_monitor')
 
     config_file = os.path.join(pkg_dir, 'config', 'rover_monitor.yaml')
-    publisher_config = os.path.join(pkg_dir, 'config', 'publisher.yaml')
+    default_publisher_config = os.path.join(pkg_dir, 'config', 'publisher.yaml')
 
     use_sim_time = LaunchConfiguration('use_sim_time')
+    enable_telemetry = LaunchConfiguration('enable_telemetry')
+    publisher_config_file = LaunchConfiguration('publisher_config_file')
 
     return LaunchDescription([
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
             description='Use simulation clock'),
+        DeclareLaunchArgument(
+            'enable_telemetry',
+            default_value='true',
+            description='Load TelemetryPublisher component (requires reachable MQTT broker)'),
+        DeclareLaunchArgument(
+            'publisher_config_file',
+            default_value=default_publisher_config,
+            description='TelemetryPublisher YAML config path'),
 
         ComposableNodeContainer(
             name='monitor_container',
@@ -81,12 +92,13 @@ def generate_launch_description():
                     name='telemetry_publisher',
                     parameters=[
                         config_file,
-                        publisher_config,
+                        publisher_config_file,
                         {'use_sim_time': use_sim_time},
                     ],
                     extra_arguments=[
                         {'use_intra_process_comms': True},
                     ],
+                    condition=IfCondition(enable_telemetry),
                 ),
             ],
             output='screen',

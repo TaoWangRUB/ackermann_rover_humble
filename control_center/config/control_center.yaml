@@ -1,0 +1,68 @@
+mqtt:
+  broker_host: "localhost"
+  broker_port: 1883
+  client_id: "control_center_01"
+  reconnect_min_s: 1
+  reconnect_max_s: 30
+  subscriptions:
+    - topic: "rover/health/#"
+      qos: 0
+    - topic: "rover/alerts"
+      qos: 1
+    - topic: "rover/cmd/ack"
+      qos: 1
+
+telemetry_cache:
+  stale_threshold_s: 5.0
+
+dashboard:
+  host: "0.0.0.0"
+  port: 8080
+  ws_health_rate_hz: 2.0
+
+influxdb:
+  url: "http://localhost:8086"
+  token: "rover-dev-token"
+  org: "rover"
+  bucket: "rover_telemetry"
+  batch_size: 50
+  flush_interval_ms: 2000
+  max_retries: 3
+
+cmd_gateway:
+  ack_timeout_s: 5.0
+  publish_qos: 2
+  topics:
+    goal: "rover/cmd/goal"
+    arm: "rover/cmd/arm"
+    disarm: "rover/cmd/disarm"
+    mode: "rover/cmd/mode"
+    estop: "rover/cmd/estop"
+    cancel_goal: "rover/cmd/cancel_goal"
+    ack: "rover/cmd/ack"
+
+notifier:
+  default_cooldown_s: 60
+  channels:
+    terminal:
+      enabled: true
+      min_severity: "WARN"
+    sound:
+      enabled: false
+      min_severity: "ERROR"
+      wav_file: "alert.wav"
+    desktop:
+      enabled: false
+      min_severity: "ERROR"
+    slack:
+      enabled: false
+      min_severity: "ERROR"
+      webhook_url: ""
+      mention: "@oncall"
+    email:
+      enabled: false
+      min_severity: "ERROR"
+      smtp_host: ""
+      smtp_port: 587
+      from_addr: ""
+      to_addrs: []

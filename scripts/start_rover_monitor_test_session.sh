@@ -61,7 +61,7 @@ PANE_HEALTH="$(tmux split-window -v -P -F "#{pane_id}" -t "${PANE_LAUNCH}")"
 PANE_PX4_TOPIC="$(tmux split-window -v -P -F "#{pane_id}" -t "${PANE_PX4_MOCK}" -l 10)"
 
 tmux send-keys -t "${PANE_LAUNCH}" \
-    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash && if [[ \"${ENABLE_TELEMETRY}\" == true ]]; then if ! command -v mosquitto >/dev/null 2>&1; then echo \"mosquitto is not installed in the container\"; exit 1; fi; pkill -x mosquitto || true; mosquitto -d -p 1883; fi; ros2 launch rover_monitor monitor.launch.py use_sim_time:=false ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG}'" Enter
+    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash && if [[ \"${ENABLE_TELEMETRY}\" == true ]]; then if ! command -v mosquitto >/dev/null 2>&1; then echo \"mosquitto is not installed in the container\"; exit 1; fi; pkill -x mosquitto || true; mosquitto -d -p 1883; for _ in \$(seq 1 20); do python3 -c \"import socket; s=socket.create_connection((\\\"127.0.0.1\\\", 1883), 0.5); s.close()\" >/dev/null 2>&1 && break; sleep 0.5; done; fi; ros2 launch rover_monitor monitor.launch.py use_sim_time:=false ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG}'" Enter
 
 tmux send-keys -t "${PANE_CAMERA}" \
     "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash && python3 /workspace/scripts/publish_mock_camera.py'" Enter
@@ -74,7 +74,7 @@ tmux send-keys -t "${PANE_PX4_MOCK}" \
 
 if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     tmux send-keys -t "${PANE_PX4_TOPIC}" \
-        "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'if ! command -v mosquitto_sub >/dev/null 2>&1; then echo \"mosquitto_sub is not installed in the container\"; exit 1; fi; if ! python3 -c \"import google.protobuf\" >/dev/null 2>&1; then echo \"python3-protobuf is not installed in the container\"; exit 1; fi; cd /tmp && protoc --python_out=/tmp -I /workspace/src/rover_monitor/proto /workspace/src/rover_monitor/proto/rover_health.proto >/dev/null 2>&1 || true; until mosquitto_sub -h localhost -t \"rover/health/#\" | python3 /workspace/scripts/decode_rover_health_mqtt.py; do echo \"waiting for local mosquitto...\"; sleep 2; done'" Enter
+        "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'if ! command -v mosquitto_sub >/dev/null 2>&1; then echo \"mosquitto_sub is not installed in the container\"; exit 1; fi; if ! python3 -c \"import google.protobuf\" >/dev/null 2>&1; then echo \"python3-protobuf is not installed in the container\"; exit 1; fi; cd /tmp && protoc --python_out=/tmp -I /workspace/src/rover_monitor/proto /workspace/src/rover_monitor/proto/rover_health.proto >/dev/null 2>&1 || true; while true; do if ! mosquitto_sub -h localhost -t \"rover/health/#\" -C 1 | python3 /workspace/scripts/decode_rover_health_mqtt.py; then echo \"waiting for local mosquitto...\"; sleep 2; fi; done'" Enter
 else
     tmux send-keys -t "${PANE_PX4_TOPIC}" \
         "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash && sleep 4 && ros2 topic echo /monitor/px4'" Enter

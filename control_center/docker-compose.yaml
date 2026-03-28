@@ -1,0 +1,42 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    network_mode: host
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    restart: unless-stopped
+
+  influxdb:
+    image: influxdb:2
+    network_mode: host
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: rover
+      DOCKER_INFLUXDB_INIT_PASSWORD: rover-password
+      DOCKER_INFLUXDB_INIT_ORG: rover
+      DOCKER_INFLUXDB_INIT_BUCKET: rover_telemetry
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: rover-dev-token
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    restart: unless-stopped
+
+  control_center:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+    depends_on:
+      - mosquitto
+      - influxdb
+    volumes:
+      - ./config:/app/config:ro
+    environment:
+      CC_CONFIG: /app/config/control_center.yaml
+    restart: unless-stopped
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
+  influxdb_data:

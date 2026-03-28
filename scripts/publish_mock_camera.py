@@ -7,10 +7,9 @@ Publishes synthetic RealSense camera topics for offline testing without hardware
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image, Imu
-from builtin_interfaces.msg import Time
 import cv2
 import numpy as np
-from datetime import datetime
+import signal
 
 
 class MockCameraPublisher(Node):
@@ -94,13 +93,23 @@ class MockCameraPublisher(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = MockCameraPublisher()
+    shutdown_requested = False
+
+    def _request_shutdown(signum, frame):  # noqa: ARG001
+        nonlocal shutdown_requested
+        shutdown_requested = True
+        node.get_logger().info("Shutdown requested, stopping mock camera publisher...")
+
+    signal.signal(signal.SIGINT, _request_shutdown)
+    signal.signal(signal.SIGTERM, _request_shutdown)
+
     try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
+        while rclpy.ok() and not shutdown_requested:
+            rclpy.spin_once(node, timeout_sec=0.1)
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
