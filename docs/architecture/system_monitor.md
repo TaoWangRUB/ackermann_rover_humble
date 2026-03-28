@@ -341,18 +341,19 @@ Requires the [Control Center stack](control_center.md#4-verification-and-test-in
 
 ```bash
 # From host:
-./scripts/start_rover_monitor_test_session.sh --with-telemetry
+./scripts/start_system_monitor_session.sh --with-telemetry
 ```
 
-This creates a tmux session `monitorx86` with 5 panes:
+This creates a tmux session `sysmon` with 6 panes:
 
 | Pane | Content |
 |---|---|
 | Top-left | rover_monitor launch (telemetry enabled, localhost broker) |
 | Top-right | Mock camera publisher |
-| Mid-right | Mock PX4 publisher |
-| Bottom-left | `/monitor/health` ROS topic echo |
-| Bottom-right | MQTT `rover/health/#` decoded output |
+| Mid-right top | Mock PX4 publisher |
+| Mid-left | `/monitor/health` ROS topic echo |
+| Mid-right bottom | MQTT decoded / PX4 topic echo |
+| Bottom | Control Center stack (docker compose + dashboard setup) |
 
 ### 5.5 Verify Telemetry Flow
 
@@ -372,10 +373,13 @@ Expected: all keys show `stale=False, has_data=True`.
 
 ```bash
 # Kill tmux session
-tmux kill-session -t monitorx86
+tmux kill-session -t sysmon
 
 # Stop all ROS processes in container
 ./scripts/stop_all.sh
+
+# Stop Control Center stack
+docker compose -f control_center/docker-compose.yaml down
 ```
 
 ## 6. Related Documents

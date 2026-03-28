@@ -82,6 +82,8 @@ control_center/
 │   └── ack_tracker.py         # CC-7: Future-based ACK matching with timeout
 ├── proto/                     # Generated Python Protobuf stubs
 │   └── rover_health_pb2.py
+├── scripts/
+│   └── setup_influxdb_dashboard.py  # Idempotent InfluxDB dashboard provisioning
 ├── config/
 │   ├── control_center.yaml    # Master config (all component settings)
 │   └── mosquitto.conf         # Mosquitto broker config
@@ -311,10 +313,10 @@ curl -s http://localhost:8080/api/status
 **Option A — tmux session (recommended):**
 
 ```bash
-./scripts/start_rover_monitor_test_session.sh --with-telemetry
+./scripts/start_system_monitor_session.sh --with-telemetry
 ```
 
-Creates a 5-pane tmux session. See [system_monitor.md](system_monitor.md#54-run-with-telemetry-mqtt-to-host) for pane layout.
+Creates a 6-pane tmux session (includes CC stack in bottom pane). See [system_monitor.md](system_monitor.md#54-run-with-telemetry-mqtt-to-host) for pane layout.
 
 **Option B — manual launch:**
 
@@ -338,7 +340,19 @@ docker exec -it jazzy_slam_x86_64 bash -c '
   python3 /workspace/scripts/publish_mock_px4.py'
 ```
 
-### 4.4 Verify Telemetry Flow
+### 4.4 Automated Test
+
+Run the full verification suite:
+
+```bash
+./scripts/test_control_center.sh
+```
+
+This tests telemetry flow, command dispatch (ESTOP, DISARM, ARM rejection, CANCEL_GOAL), ACK tracking, and post-command telemetry continuity. Override the CC URL with `CC_URL=http://host:8080`.
+
+### 4.5 Manual Verification
+
+**Telemetry flow:**
 
 ```bash
 # All 4 keys should show stale=False
@@ -351,13 +365,7 @@ for k in ['health','cam','px4','jetson']:
 "
 ```
 
-Full health payload:
-
-```bash
-curl -s http://localhost:8080/api/status | python3 -m json.tool
-```
-
-### 4.5 Test Commands
+**Commands:**
 
 ```bash
 # ESTOP — always allowed
@@ -381,7 +389,7 @@ curl -s -X POST http://localhost:8080/api/command \
   -d '{"cmd_type": "cancel_goal", "params": {}}' | python3 -m json.tool
 ```
 
-### 4.6 Check Command History + ACK
+**Command history + ACK:**
 
 ```bash
 curl -s http://localhost:8080/api/command/history | python3 -m json.tool
@@ -389,7 +397,7 @@ curl -s http://localhost:8080/api/command/history | python3 -m json.tool
 
 Each sent command shows `ack_status`, `message`, and `round_trip_ms` (typically 30-60ms).
 
-### 4.7 Verify Telemetry Continues After Commands
+**Post-command telemetry:**
 
 ```bash
 # Should still show stale=False after E-stop/disarm commands
@@ -405,19 +413,29 @@ Open in browser: **http://localhost:8080**
 
 The React SPA shows live health panels for Camera, PX4, and Jetson subsystems.
 
-### 4.9 InfluxDB UI
+### 4.9 InfluxDB Dashboard Provisioning
+
+The "Rover Health Monitor" dashboard (6 panels) is auto-provisioned when using `start_system_monitor_session.sh --with-telemetry`. To provision manually:
+
+```bash
+python3 control_center/scripts/setup_influxdb_dashboard.py
+```
+
+Panels: PX4 Battery %, PX4 Battery Voltage, Camera Depth FPS, Jetson Temperatures (°C), Jetson GPU %, Active Alerts.
+
+### 4.10 InfluxDB UI
 
 Open in browser: **http://localhost:8086**
 
 Login: `rover` / `rover-password`
 
-Navigate to **Data Explorer** → bucket `rover_telemetry` to query stored telemetry.
+Navigate to **Dashboards** → "Rover Health Monitor" for the provisioned panels, or **Data Explorer** → bucket `rover_telemetry` for ad-hoc queries.
 
-### 4.10 Stop Everything
+### 4.11 Stop Everything
 
 ```bash
 # Kill tmux session (if using Option A)
-tmux kill-session -t monitorx86
+tmux kill-session -t sysmon
 
 # Stop all ROS processes in rover container
 ./scripts/stop_all.sh
