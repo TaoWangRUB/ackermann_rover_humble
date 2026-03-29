@@ -167,6 +167,61 @@ ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering enable_v
 
 `px4_vision_odom.py` converts `nav_msgs/Odometry` (ENU/FLU) to PX4 `VehicleOdometry` (NED/FRD). `px4_vehicle_odometry.py` does the inverse — PX4 EKF2 output back to ROS 2 frames for diagnostics. See [Architecture Overview](docs/architecture/overview.md) for the full coordinate conversion reference.
 
+## System Monitor & Control Center
+
+Real-time health monitoring and remote command interface for the rover. The `rover_monitor` ROS 2 package runs on the Jetson, aggregating camera/PX4/platform metrics. The Control Center runs on a host machine providing a web dashboard, InfluxDB storage, and bidirectional MQTT command gateway.
+
+See [System Monitor Architecture](docs/architecture/system_monitor.md) and [Control Center Architecture](docs/architecture/control_center.md) for full details.
+
+### Quick Start — Jetson (rover)
+
+```bash
+# Start Docker container
+./scripts/start_docker.sh
+
+# Build rover_monitor (first time or after changes)
+./scripts/start_ros2_nodes.sh --build-only=rover_monitor
+
+# Launch everything: XRCE agent + cameras + SLAM + PX4 + monitor
+./scripts/start_jetson_session.sh --depth-camera=d435i --t265 --with-telemetry
+
+# With Nav2:
+./scripts/start_jetson_session.sh --depth-camera=d435i --t265 --nav2 --with-telemetry
+```
+
+### Quick Start — Host (base station)
+
+```bash
+# Launch Control Center stack (Mosquitto + InfluxDB + dashboard)
+./scripts/start_host_session.sh
+
+# Run e2e verification tests
+./scripts/test_control_center.sh
+```
+
+- Dashboard: `http://localhost:8080`
+- InfluxDB: `http://localhost:8086` (rover / rover-password)
+
+### x86 Development (no hardware)
+
+```bash
+# Mock mode with localhost broker:
+./scripts/start_system_monitor_session.sh --mock --with-telemetry
+```
+
+### Stop
+
+```bash
+# Jetson:
+./scripts/stop_all.sh --session=jetson
+
+# Host:
+docker compose -f control_center/docker-compose.yaml down
+tmux kill-session -t host
+```
+
+> **Note:** Edit `src/rover_monitor/config/publisher.yaml` to set `broker_host` to the host machine IP before deploying to Jetson.
+
 ## Architecture Blueprints
 
 The full system architecture (Gazebo ↔ RTAB-Map interfaces, topic contracts, and node graph) lives in the `docs/architecture` directory:
