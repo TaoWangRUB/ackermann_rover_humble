@@ -233,9 +233,10 @@ message CommandAck {
 
 | Argument | Default | Description |
 |---|---|---|
-| `use_sim_time` | `true` | Use simulation clock |
-| `enable_telemetry` | `false` | Load TelemetryPublisher node |
+| `use_sim_time` | `false` | Use simulation clock |
+| `enable_telemetry` | `true` | Load TelemetryPublisher node |
 | `publisher_config_file` | `publisher.yaml` | MQTT broker config path |
+| `depth_camera` | `d435i` | Camera name — sets cam topic prefix (`d435i`, `l515`) |
 
 ### 2.6 ROS Topics Published
 

@@ -32,6 +32,7 @@ SESSION="sysmon"
 ENABLE_TELEMETRY=false
 ATTACH=true
 MODE="hw"
+DEPTH_CAMERA="d435i"
 
 for arg in "$@"; do
     case "${arg}" in
@@ -40,6 +41,7 @@ for arg in "$@"; do
         --with-telemetry)  ENABLE_TELEMETRY=true ;;
         --no-attach)       ATTACH=false ;;
         --session=*)       SESSION="${arg#--session=}" ;;
+        --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
         -h|--help)
             sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
             exit 0 ;;
@@ -77,7 +79,7 @@ PANE_CC="$(tmux split-window -v -P -F "#{pane_id}" -t "${PANE_HEALTH}" -l 8)"
 
 # ── Pane 0: rover_monitor launch ──────────────────────────────────────
 tmux send-keys -t "${PANE_LAUNCH}" \
-    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ros2 launch rover_monitor monitor.launch.py use_sim_time:=false ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG}'" Enter
+    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ros2 launch rover_monitor monitor.launch.py use_sim_time:=false depth_camera:=${DEPTH_CAMERA} ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG}'" Enter
 
 # ── Pane 1: Camera ────────────────────────────────────────────────────
 if [[ "${MODE}" == "mock" ]]; then
