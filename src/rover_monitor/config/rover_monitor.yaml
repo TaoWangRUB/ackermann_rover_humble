@@ -14,11 +14,14 @@
       slam_child_frame_id: "odom"
 
     # --- Probes ---
+    # Camera topics are overridden by monitor.launch.py based on the
+    # depth_camera launch argument (d435i, l515).  The values below are
+    # fallback defaults and match d435i.
     probes:
       cam:
-        color_topic: "/camera/color/image_raw"
-        depth_topic: "/camera/depth/image_rect_raw"
-        imu_topic: "/camera/imu"
+        color_topic: "/d435i/color/image_raw"
+        depth_topic: "/d435i/depth/image_rect_raw"
+        imu_topic: "/d435i/imu"
         depth_quality_sample_interval: 10
         imu_timeout_ms: 500
         frame_stutter_threshold_ms: 66.0

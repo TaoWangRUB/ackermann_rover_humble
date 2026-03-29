@@ -18,10 +18,14 @@ class MockCameraPublisher(Node):
     def __init__(self):
         super().__init__("mock_camera_publisher")
 
-        # Publishers
-        self.color_pub = self.create_publisher(Image, "/camera/color/image_raw", 10)
-        self.depth_pub = self.create_publisher(Image, "/camera/depth/image_rect_raw", 10)
-        self.imu_pub = self.create_publisher(Imu, "/camera/imu", 10)
+        # Camera name (matches depth_camera launch arg: d435i, l515)
+        self.declare_parameter("camera_name", "d435i")
+        cam = self.get_parameter("camera_name").get_parameter_value().string_value
+
+        # Publishers — topic prefix matches real RealSense driver output
+        self.color_pub = self.create_publisher(Image, "/{}/color/image_raw".format(cam), 10)
+        self.depth_pub = self.create_publisher(Image, "/{}/depth/image_rect_raw".format(cam), 10)
+        self.imu_pub = self.create_publisher(Imu, "/{}/imu".format(cam), 10)
 
         # Timers (D435i spec: 30 Hz color, 30 Hz depth, 200 Hz IMU)
         self.create_timer(1.0 / 30.0, self.publish_color)
