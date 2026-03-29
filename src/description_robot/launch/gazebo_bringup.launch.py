@@ -23,7 +23,6 @@ from launch.event_handlers import OnProcessExit
 def generate_launch_description() -> LaunchDescription:
     pkg_share = get_package_share_directory('description_robot')
     gz_share = get_package_share_directory('ros_gz_sim')
-    realsense_share = get_package_share_directory('realsense2_description')
     default_world = os.path.join(pkg_share, 'worlds', 'warehouse.sdf')
     xacro_file = os.path.join(pkg_share, 'models', 'ackermann_rover', 'ackermann_rover.urdf')
 
@@ -43,8 +42,6 @@ def generate_launch_description() -> LaunchDescription:
         os.path.dirname(pkg_share),  # .../share
         pkg_share,
         os.path.join(pkg_share, 'models'),
-        os.path.dirname(realsense_share),
-        realsense_share,
     ]
     existing_resource_entries = [
         os.environ.get('GZ_SIM_RESOURCE_PATH', ''),

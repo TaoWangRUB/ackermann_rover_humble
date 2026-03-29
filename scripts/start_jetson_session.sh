@@ -91,6 +91,7 @@ ROS_SRC="source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bas
 
 TELEMETRY_ARG="enable_telemetry:=false"
 PUBLISHER_CONFIG_ARG=""
+BROKER_HOST_ARG=""
 if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     TELEMETRY_ARG="enable_telemetry:=true"
     PUBLISHER_CONFIG_ARG="publisher_config_file:=${PUBLISHER_CONFIG_FILE}"
@@ -111,6 +112,9 @@ if [[ -z "${BROKER_HOST}" ]]; then
 fi
 
 BROKER_HOST="${BROKER_HOST:-localhost}"
+if [[ "${ENABLE_TELEMETRY}" == true ]]; then
+    BROKER_HOST_ARG="broker_host:=${BROKER_HOST}"
+fi
 
 # ── Create tmux session ──────────────────────────────────────────────
 tmux kill-session -t "${SESSION}" 2>/dev/null || true
@@ -136,7 +140,7 @@ tmux send-keys -t "${PANE_XRCE}" \
 
 # ── Pane: System Monitor (immediate, independent) ────────────────────
 tmux send-keys -t "${PANE_MONITOR}" \
-    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ros2 launch rover_monitor monitor.launch.py use_sim_time:=false depth_camera:=${DEPTH_CAMERA} ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG}'" Enter
+    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ros2 launch rover_monitor monitor.launch.py use_sim_time:=false depth_camera:=${DEPTH_CAMERA} ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG} ${BROKER_HOST_ARG}'" Enter
 
 # ── Pane: ROS 2 Nodes (wait for XRCE) ────────────────────────────────
 tmux send-keys -t "${PANE_ROS2}" \

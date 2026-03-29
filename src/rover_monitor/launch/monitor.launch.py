@@ -16,6 +16,7 @@ def _build_container(context):
     use_sim_time = LaunchConfiguration('use_sim_time')
     enable_telemetry = LaunchConfiguration('enable_telemetry')
     publisher_config_file = LaunchConfiguration('publisher_config_file')
+    broker_host = LaunchConfiguration('broker_host').perform(context)
 
     depth_camera = LaunchConfiguration('depth_camera').perform(context)
 
@@ -24,6 +25,9 @@ def _build_container(context):
         'probes.cam.depth_topic': '/{}/depth/image_rect_raw'.format(depth_camera),
         'probes.cam.imu_topic': '/{}/imu'.format(depth_camera),
     }
+    telemetry_overrides = [{'use_sim_time': use_sim_time}]
+    if broker_host:
+        telemetry_overrides.append({'publisher.broker_host': broker_host})
 
     return [ComposableNodeContainer(
         name='monitor_container',
@@ -87,7 +91,7 @@ def _build_container(context):
                 parameters=[
                     config_file,
                     publisher_config_file,
-                    {'use_sim_time': use_sim_time},
+                    *telemetry_overrides,
                 ],
                 extra_arguments=[
                     {'use_intra_process_comms': True},
@@ -116,6 +120,10 @@ def generate_launch_description():
             'publisher_config_file',
             default_value=default_publisher_config,
             description='TelemetryPublisher YAML config path'),
+        DeclareLaunchArgument(
+            'broker_host',
+            default_value='',
+            description='Optional MQTT broker host override for TelemetryPublisher'),
         DeclareLaunchArgument(
             'depth_camera',
             default_value='d435i',
