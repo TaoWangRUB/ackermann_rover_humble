@@ -46,6 +46,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/lib/dc.sh"
 
 SESSION="jetson"
@@ -56,6 +57,8 @@ ACTIVATE=true
 MODE_ID="23"
 ATTACH=true
 DEPTH_CAMERA="d435i"
+BROKER_HOST=""
+PUBLISHER_CONFIG_FILE="/workspace/src/rover_monitor/config/publisher.yaml"
 
 for arg in "$@"; do
     case "${arg}" in
@@ -65,6 +68,8 @@ for arg in "$@"; do
         --no-activate)     ACTIVATE=false ;;
         --mode-id=*)       MODE_ID="${arg#--mode-id=}" ;;
         --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
+        --broker-host=*)   BROKER_HOST="${arg#--broker-host=}" ;;
+        --publisher-config=*) PUBLISHER_CONFIG_FILE="${arg#--publisher-config=}" ;;
         --no-attach)       ATTACH=false ;;
         --session=*)       SESSION="${arg#--session=}" ;;
         -h|--help)
@@ -88,8 +93,24 @@ TELEMETRY_ARG="enable_telemetry:=false"
 PUBLISHER_CONFIG_ARG=""
 if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     TELEMETRY_ARG="enable_telemetry:=true"
-    # hw mode: uses default publisher.yaml (broker_host from config)
+    PUBLISHER_CONFIG_ARG="publisher_config_file:=${PUBLISHER_CONFIG_FILE}"
 fi
+
+HOST_PUBLISHER_CONFIG_FILE="${PUBLISHER_CONFIG_FILE}"
+if [[ "${HOST_PUBLISHER_CONFIG_FILE}" == /workspace/* ]]; then
+    HOST_PUBLISHER_CONFIG_FILE="${PROJECT_DIR}/${HOST_PUBLISHER_CONFIG_FILE#/workspace/}"
+fi
+
+if [[ -z "${BROKER_HOST}" ]]; then
+    if [[ -f "${HOST_PUBLISHER_CONFIG_FILE}" ]]; then
+        BROKER_HOST="$(
+            awk -F'"' '/broker_host:/ { print $2; exit }' \
+            "${HOST_PUBLISHER_CONFIG_FILE}"
+        )"
+    fi
+fi
+
+BROKER_HOST="${BROKER_HOST:-localhost}"
 
 # ── Create tmux session ──────────────────────────────────────────────
 tmux kill-session -t "${SESSION}" 2>/dev/null || true
@@ -137,7 +158,7 @@ fi
 # ── Pane: MQTT verify (only with telemetry) ───────────────────────────
 if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     tmux send-keys -t "${PANE_MQTT}" \
-        "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'if ! command -v mosquitto_sub >/dev/null 2>&1; then echo \"mosquitto_sub not installed\"; exit 1; fi; if ! python3 -c \"import google.protobuf\" >/dev/null 2>&1; then echo \"protobuf not installed\"; exit 1; fi; cd /tmp && protoc --python_out=/tmp -I /workspace/src/rover_monitor/proto /workspace/src/rover_monitor/proto/rover_health.proto >/dev/null 2>&1 || true; while true; do if ! mosquitto_sub -h localhost -t \"rover/health/#\" -C 1 | python3 /workspace/scripts/decode_rover_health_mqtt.py; then echo \"waiting for mosquitto...\"; sleep 2; fi; done'" Enter
+        "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'if ! command -v mosquitto_sub >/dev/null 2>&1; then echo \"mosquitto_sub not installed\"; exit 1; fi; if ! python3 -c \"import google.protobuf\" >/dev/null 2>&1; then echo \"protobuf not installed\"; exit 1; fi; cd /tmp && protoc --python_out=/tmp -I /workspace/src/rover_monitor/proto /workspace/src/rover_monitor/proto/rover_health.proto >/dev/null 2>&1 || true; echo \"Subscribing to MQTT broker ${BROKER_HOST}...\"; while true; do if ! mosquitto_sub -h ${BROKER_HOST} -t \"rover/health/#\" -C 1 | python3 /workspace/scripts/decode_rover_health_mqtt.py; then echo \"waiting for broker ${BROKER_HOST}...\"; sleep 2; fi; done'" Enter
 fi
 
 tmux select-pane -t "${PANE_ROS2}"
