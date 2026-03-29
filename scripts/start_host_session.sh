@@ -49,6 +49,21 @@ done
 
 CC_COMPOSE="${PROJECT_DIR}/control_center/docker-compose.yaml"
 
+CONFLICTING_MOSQUITTO_CONTAINERS="$(
+    docker ps --format '{{.Names}} {{.Image}}' \
+    | awk '$2 == "eclipse-mosquitto:2" && $1 != "control_center-mosquitto-1" { print $1 }'
+)"
+
+if [[ -n "${CONFLICTING_MOSQUITTO_CONTAINERS}" ]]; then
+    echo "Cannot start Control Center: MQTT port 1883 is likely already occupied."
+    echo "Running Mosquitto containers detected on this host:"
+    printf '  %s\n' "${CONFLICTING_MOSQUITTO_CONTAINERS}"
+    echo ""
+    echo "Stop those containers first, then rerun:"
+    echo "  docker stop ${CONFLICTING_MOSQUITTO_CONTAINERS//$'\n'/ }"
+    exit 1
+fi
+
 tmux kill-session -t "${SESSION}" 2>/dev/null || true
 
 tmux new-session -d -s "${SESSION}" -n "host"

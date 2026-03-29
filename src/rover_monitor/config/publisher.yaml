@@ -1,7 +1,7 @@
 /**:
   ros__parameters:
     publisher:
-      broker_host: "192.168.0.179"
+      broker_host: "192.168.0.225"
       broker_port: 1883
       reconnect_delay_s: 5
       telemetry_qos: 0
