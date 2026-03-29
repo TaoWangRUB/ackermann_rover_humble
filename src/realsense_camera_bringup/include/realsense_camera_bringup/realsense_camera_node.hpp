@@ -11,6 +11,8 @@
 #include <librealsense2/rs.hpp>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
+#include <queue>
 #include <memory>
 
 namespace realsense_camera_bringup
@@ -32,6 +34,7 @@ private:
   void start_imu_sensor(rs2::device device);
   void on_frame(rs2::frame frame);
   void apply_sensor_options(rs2::pipeline_profile & profile);
+  void align_worker();
 
   sensor_msgs::msg::CameraInfo build_camera_info(const rs2::video_stream_profile& profile, const std::string& frame_id) const;
   static bool parse_profile_string(const std::string & profile_str, int & width, int & height, int & fps);
@@ -97,6 +100,13 @@ private:
   // Cached CameraInfo
   sensor_msgs::msg::CameraInfo color_info_msg_, depth_info_msg_, fisheye1_info_msg_, fisheye2_info_msg_;
   sensor_msgs::msg::CameraInfo infra1_info_msg_, infra2_info_msg_;
+
+  // Async alignment worker (offloads rs2::align::process() off the pipeline callback)
+  std::queue<rs2::frameset> align_queue_;
+  std::mutex align_mutex_;
+  std::condition_variable align_cv_;
+  std::thread align_thread_;
+  static constexpr size_t ALIGN_QUEUE_MAX = 2;  // drop oldest if consumer falls behind
 
   // Shutdown flag + cached accel frame for IMU pairing
   std::atomic<bool> running_{false};
