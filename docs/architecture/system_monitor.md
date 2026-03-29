@@ -340,20 +340,20 @@ ros2 topic echo /monitor/health
 Requires the [Control Center stack](control_center.md#4-verification-and-test-instructions) running on the host.
 
 ```bash
-# From host:
+# Real hardware (default) — probes read live sensors, right panes echo probe topics:
 ./scripts/start_system_monitor_session.sh --with-telemetry
+
+# x86 dev — starts mock camera/PX4 publishers, uses localhost broker:
+./scripts/start_system_monitor_session.sh --mock --with-telemetry
 ```
 
-This creates a tmux session `sysmon` with 6 panes:
+This creates a tmux session `sysmon` with a 3×2 grid:
 
-| Pane | Content |
-|---|---|
-| Top-left | rover_monitor launch (telemetry enabled, localhost broker) |
-| Top-right | Mock camera publisher |
-| Mid-right top | Mock PX4 publisher |
-| Mid-left | `/monitor/health` ROS topic echo |
-| Mid-right bottom | MQTT decoded / PX4 topic echo |
-| Bottom | Control Center stack (docker compose + dashboard setup) |
+| Pane | Left | Right (--hw default) | Right (--mock) |
+|---|---|---|---|
+| Row 1 | rover_monitor launch | `/monitor/cam` echo | Mock camera publisher |
+| Row 2 | `/monitor/health` echo | `/monitor/px4` echo | Mock PX4 publisher |
+| Row 3 | Control Center stack | MQTT decoded / PX4 topic | MQTT decoded / PX4 topic |
 
 ### 5.5 Verify Telemetry Flow
 
