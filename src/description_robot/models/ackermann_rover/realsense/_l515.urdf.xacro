@@ -10,8 +10,8 @@ aluminum peripherial evaluation case.
 
 <robot name="sensor_l515" xmlns:xacro="http://ros.org/wiki/xacro">
   <!-- Includes -->
-  <xacro:include filename="$(find realsense2_description)/urdf/_materials.urdf.xacro" />
-  <xacro:include filename="$(find realsense2_description)/urdf/_usb_plug.urdf.xacro" /> <!-- this specific plug does not apply to L515 -->
+  <xacro:include filename="$(find description_robot)/models/ackermann_rover/realsense/urdf/_materials.urdf.xacro" />
+  <xacro:include filename="$(find description_robot)/models/ackermann_rover/realsense/urdf/_usb_plug.urdf.xacro" /> <!-- this specific plug does not apply to L515 -->
   <xacro:include filename="$(find description_robot)/models/ackermann_rover/realsense/_l515_sensors.urdf.xacro"/>
 
   <xacro:macro name="sensor_l515" params="parent *origin name:=camera use_nominal_extrinsics:=false add_plug:=false use_mesh:=true add_sensors:=true">
