@@ -313,7 +313,11 @@ curl -s http://localhost:8080/api/status
 **Option A — tmux session (recommended):**
 
 ```bash
+# Real hardware (default):
 ./scripts/start_system_monitor_session.sh --with-telemetry
+
+# x86 dev with mock publishers:
+./scripts/start_system_monitor_session.sh --mock --with-telemetry
 ```
 
 Creates a 6-pane tmux session (includes CC stack in bottom pane). See [system_monitor.md](system_monitor.md#54-run-with-telemetry-mqtt-to-host) for pane layout.

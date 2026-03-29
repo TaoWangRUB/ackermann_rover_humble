@@ -11,7 +11,15 @@
 # Usage:
 #   ./scripts/test_control_center.sh
 #   CC_URL=http://192.168.1.10:8080 ./scripts/test_control_center.sh
-set -euo pipefail
+set -uo pipefail
+
+for arg in "$@"; do
+    case "${arg}" in
+        -h|--help)
+            sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
+            exit 0 ;;
+    esac
+done
 
 CC_URL="${CC_URL:-http://localhost:8080}"
 PASS=0
@@ -25,33 +33,16 @@ check() {
     local desc="$1" ok="$2"
     if [[ "${ok}" == "true" ]]; then
         green "  ✓ ${desc}"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         red "  ✗ ${desc}"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 }
 
 # ── 1. Telemetry flow ─────────────────────────────────────────────────
 header "Telemetry Flow"
 
-STATUS=$(curl -sf "${CC_URL}/api/status" 2>/dev/null || echo "{}")
-for key in health cam px4 jetson; do
-    stale=$(echo "${STATUS}" | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-e = d.get('${key}', {})
-print(str(e.get('stale', True)).lower())
-" 2>/dev/null || echo "true")
-    check "${key}: stale=${stale}" "${stale/false/true}"
-    # Invert: stale=false means pass
-    if [[ "${stale}" == "false" ]]; then
-        true  # already counted above as pass
-    fi
-done
-
-# Re-check with correct logic
-PASS=0; FAIL=0
 STATUS=$(curl -sf "${CC_URL}/api/status" 2>/dev/null || echo "{}")
 for key in health cam px4 jetson; do
     stale=$(echo "${STATUS}" | python3 -c "
