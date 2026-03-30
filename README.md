@@ -183,10 +183,10 @@ See [System Monitor Architecture](docs/architecture/system_monitor.md) and [Cont
 ./scripts/start_ros2_nodes.sh --build-only=rover_monitor
 
 # Launch everything: XRCE agent + cameras + SLAM + PX4 + monitor
-./scripts/start_jetson_session.sh --depth-camera=d435i --t265 --with-telemetry
+./scripts/start_jetson_session.sh --depth-camera=d435i --t265 --with-telemetry --broker-host=192.168.0.225
 
 # With Nav2:
-./scripts/start_jetson_session.sh --depth-camera=d435i --t265 --nav2 --with-telemetry
+./scripts/start_jetson_session.sh --depth-camera=d435i --t265 --nav2 --with-telemetry --broker-host=192.168.0.225
 ```
 
 ### Quick Start — Host (base station)
