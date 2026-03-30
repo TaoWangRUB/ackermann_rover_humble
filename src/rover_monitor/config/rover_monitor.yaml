@@ -26,8 +26,6 @@
         imu_timeout_ms: 500
         frame_stutter_threshold_ms: 99.0
       px4:
-        vehicle_status_topic: "/fmu/out/vehicle_status"
-        battery_status_topic: "/fmu/out/battery_status"
         heartbeat_topic: "/fmu/out/vehicle_odometry"
         heartbeat_timeout_ms: 1000
         xrce_disconnect_timeout_ms: 2000
