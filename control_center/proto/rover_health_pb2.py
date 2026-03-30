@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='rover_monitor_proto',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x12rover_health.proto\x12\x13rover_monitor_proto\"\xc9\x01\n\tCamStatus\x12\x11\n\tcamera_id\x18\x01 \x01(\t\x12\x11\n\tconnected\x18\x02 \x01(\x08\x12\x16\n\x0e\x66rame_delta_ms\x18\x03 \x01(\x02\x12\x11\n\tdepth_fps\x18\x04 \x01(\x02\x12\x1d\n\x15\x64\x65pth_quality_sampled\x18\x05 \x01(\x02\x12\x12\n\nimu_active\x18\x06 \x01(\x08\x12\x12\n\nerror_code\x18\x07 \x01(\x05\x12\x11\n\terror_msg\x18\x08 \x01(\t\x12\x11\n\ttimestamp\x18\t \x01(\x03\"\x93\x02\n\tPx4Status\x12\x11\n\tconnected\x18\x01 \x01(\x08\x12\r\n\x05\x61rmed\x18\x02 \x01(\x08\x12\x0f\n\x07\x61rmable\x18\x03 \x01(\x08\x12\x11\n\tnav_state\x18\x04 \x01(\x05\x12\x17\n\x0fnav_state_label\x18\x05 \x01(\t\x12\x19\n\x11\x62\x61ttery_voltage_v\x18\x06 \x01(\x02\x12\x19\n\x11\x62\x61ttery_current_a\x18\x07 \x01(\x02\x12\x1d\n\x15\x62\x61ttery_remaining_pct\x18\x08 \x01(\x02\x12\x18\n\x10heartbeat_age_ms\x18\t \x01(\x05\x12\x12\n\nerror_code\x18\n \x01(\x05\x12\x11\n\terror_msg\x18\x0b \x01(\t\x12\x11\n\ttimestamp\x18\x0c \x01(\x03\"\x84\x03\n\x0cJetsonStatus\x12\x15\n\rcpu_usage_pct\x18\x01 \x03(\x02\x12\x15\n\rgpu_usage_pct\x18\x02 \x01(\x02\x12\x13\n\x0bram_used_mb\x18\x03 \x01(\x05\x12\x14\n\x0cram_total_mb\x18\x04 \x01(\x05\x12\x14\n\x0cswap_used_mb\x18\x05 \x01(\x05\x12\x14\n\x0c\x64isk_free_gb\x18\x06 \x01(\x02\x12\x12\n\ntemp_cpu_c\x18\x07 \x01(\x02\x12\x12\n\ntemp_gpu_c\x18\x08 \x01(\x02\x12\x14\n\x0ctemp_board_c\x18\t \x01(\x02\x12\x1c\n\x14is_thermal_throttled\x18\n \x01(\x08\x12\x1a\n\x12is_power_throttled\x18\x0b \x01(\x08\x12\x12\n\npower_mode\x18\x0c \x01(\t\x12\x17\n\x0fwifi_signal_dbm\x18\r \x01(\x02\x12\x10\n\x08uptime_s\x18\x0e \x01(\x05\x12\x12\n\nerror_code\x18\x0f \x01(\x05\x12\x11\n\terror_msg\x18\x10 \x01(\t\x12\x11\n\ttimestamp\x18\x11 \x01(\x03\"\x85\x02\n\x0bRoverHealth\x12\x0b\n\x03seq\x18\x01 \x01(\x05\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12.\n\x06\x63\x61mera\x18\x03 \x01(\x0b\x32\x1e.rover_monitor_proto.CamStatus\x12+\n\x03px4\x18\x04 \x01(\x0b\x32\x1e.rover_monitor_proto.Px4Status\x12\x31\n\x06jetson\x18\x05 \x01(\x0b\x32!.rover_monitor_proto.JetsonStatus\x12\x17\n\x0fslam_latency_ms\x18\x06 \x01(\x02\x12\x16\n\x0eoverall_health\x18\x07 \x01(\t\x12\x15\n\ractive_alerts\x18\x08 \x03(\t\"Q\n\x07NavGoal\x12\x10\n\x08latitude\x18\x01 \x01(\x01\x12\x11\n\tlongitude\x18\x02 \x01(\x01\x12\x10\n\x08\x61ltitude\x18\x03 \x01(\x01\x12\x0f\n\x07yaw_deg\x18\x04 \x01(\x02\"\x1c\n\x07SetMode\x12\x11\n\tmode_name\x18\x01 \x01(\t\"3\n\x08SetParam\x12\x12\n\nparam_name\x18\x01 \x01(\t\x12\x13\n\x0bparam_value\x18\x02 \x01(\t\"\x8a\x02\n\x0cRoverCommand\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\t\x12\x32\n\x08\x63md_type\x18\x02 \x01(\x0e\x32 .rover_monitor_proto.CommandType\x12\x11\n\ttimestamp\x18\x03 \x01(\x03\x12\x11\n\tissued_by\x18\x04 \x01(\t\x12.\n\x08nav_goal\x18\x05 \x01(\x0b\x32\x1c.rover_monitor_proto.NavGoal\x12.\n\x08set_mode\x18\x06 \x01(\x0b\x32\x1c.rover_monitor_proto.SetMode\x12\x30\n\tset_param\x18\x07 \x01(\x0b\x32\x1d.rover_monitor_proto.SetParam\"\xbb\x01\n\nCommandAck\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\t\x12\x32\n\x08\x63md_type\x18\x02 \x01(\x0e\x32 .rover_monitor_proto.CommandType\x12.\n\x06status\x18\x03 \x01(\x0e\x32\x1e.rover_monitor_proto.AckStatus\x12\x0f\n\x07message\x18\x04 \x01(\t\x12\x11\n\ttimestamp\x18\x05 \x01(\x03\x12\x15\n\rround_trip_ms\x18\x06 \x01(\x05*\x96\x01\n\x0b\x43ommandType\x12\x0f\n\x0b\x43MD_UNKNOWN\x10\x00\x12\x10\n\x0c\x43MD_NAV_GOAL\x10\x01\x12\x0b\n\x07\x43MD_ARM\x10\x02\x12\x0e\n\nCMD_DISARM\x10\x03\x12\x10\n\x0c\x43MD_SET_MODE\x10\x04\x12\r\n\tCMD_ESTOP\x10\x05\x12\x13\n\x0f\x43MD_CANCEL_GOAL\x10\x06\x12\x11\n\rCMD_SET_PARAM\x10\x07*d\n\tAckStatus\x12\x10\n\x0c\x41\x43K_RECEIVED\x10\x00\x12\x10\n\x0c\x41\x43K_ACCEPTED\x10\x01\x12\x10\n\x0c\x41\x43K_REJECTED\x10\x02\x12\x11\n\rACK_COMPLETED\x10\x03\x12\x0e\n\nACK_FAILED\x10\x04\x62\x06proto3')
+  serialized_pb=_b('\n\x12rover_health.proto\x12\x13rover_monitor_proto\"\xc9\x01\n\tCamStatus\x12\x11\n\tcamera_id\x18\x01 \x01(\t\x12\x11\n\tconnected\x18\x02 \x01(\x08\x12\x16\n\x0e\x66rame_delta_ms\x18\x03 \x01(\x02\x12\x11\n\tdepth_fps\x18\x04 \x01(\x02\x12\x1d\n\x15\x64\x65pth_quality_sampled\x18\x05 \x01(\x02\x12\x12\n\nimu_active\x18\x06 \x01(\x08\x12\x12\n\nerror_code\x18\x07 \x01(\x05\x12\x11\n\terror_msg\x18\x08 \x01(\t\x12\x11\n\ttimestamp\x18\t \x01(\x03\"\x93\x02\n\tPx4Status\x12\x11\n\tconnected\x18\x01 \x01(\x08\x12\r\n\x05\x61rmed\x18\x02 \x01(\x08\x12\x0f\n\x07\x61rmable\x18\x03 \x01(\x08\x12\x11\n\tnav_state\x18\x04 \x01(\x05\x12\x17\n\x0fnav_state_label\x18\x05 \x01(\t\x12\x19\n\x11\x62\x61ttery_voltage_v\x18\x06 \x01(\x02\x12\x19\n\x11\x62\x61ttery_current_a\x18\x07 \x01(\x02\x12\x1d\n\x15\x62\x61ttery_remaining_pct\x18\x08 \x01(\x02\x12\x18\n\x10heartbeat_age_ms\x18\t \x01(\x05\x12\x12\n\nerror_code\x18\n \x01(\x05\x12\x11\n\terror_msg\x18\x0b \x01(\t\x12\x11\n\ttimestamp\x18\x0c \x01(\x03\"\x84\x03\n\x0cJetsonStatus\x12\x15\n\rcpu_usage_pct\x18\x01 \x03(\x02\x12\x15\n\rgpu_usage_pct\x18\x02 \x01(\x02\x12\x13\n\x0bram_used_mb\x18\x03 \x01(\x05\x12\x14\n\x0cram_total_mb\x18\x04 \x01(\x05\x12\x14\n\x0cswap_used_mb\x18\x05 \x01(\x05\x12\x14\n\x0c\x64isk_free_gb\x18\x06 \x01(\x02\x12\x12\n\ntemp_cpu_c\x18\x07 \x01(\x02\x12\x12\n\ntemp_gpu_c\x18\x08 \x01(\x02\x12\x14\n\x0ctemp_board_c\x18\t \x01(\x02\x12\x1c\n\x14is_thermal_throttled\x18\n \x01(\x08\x12\x1a\n\x12is_power_throttled\x18\x0b \x01(\x08\x12\x12\n\npower_mode\x18\x0c \x01(\t\x12\x17\n\x0fwifi_signal_dbm\x18\r \x01(\x02\x12\x10\n\x08uptime_s\x18\x0e \x01(\x05\x12\x12\n\nerror_code\x18\x0f \x01(\x05\x12\x11\n\terror_msg\x18\x10 \x01(\t\x12\x11\n\ttimestamp\x18\x11 \x01(\x03\"\x85\x02\n\x0bRoverHealth\x12\x0b\n\x03seq\x18\x01 \x01(\x05\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12.\n\x06\x63\x61mera\x18\x03 \x01(\x0b\x32\x1e.rover_monitor_proto.CamStatus\x12+\n\x03px4\x18\x04 \x01(\x0b\x32\x1e.rover_monitor_proto.Px4Status\x12\x31\n\x06jetson\x18\x05 \x01(\x0b\x32!.rover_monitor_proto.JetsonStatus\x12\x17\n\x0fslam_latency_ms\x18\x06 \x01(\x02\x12\x16\n\x0eoverall_health\x18\x07 \x01(\t\x12\x15\n\ractive_alerts\x18\x08 \x03(\t\".\n\x08\x44riveCmd\x12\x10\n\x08speed_ms\x18\x01 \x01(\x02\x12\x10\n\x08steering\x18\x02 \x01(\x02\"Q\n\x07NavGoal\x12\x10\n\x08latitude\x18\x01 \x01(\x01\x12\x11\n\tlongitude\x18\x02 \x01(\x01\x12\x10\n\x08\x61ltitude\x18\x03 \x01(\x01\x12\x0f\n\x07yaw_deg\x18\x04 \x01(\x02\"\x1c\n\x07SetMode\x12\x11\n\tmode_name\x18\x01 \x01(\t\"3\n\x08SetParam\x12\x12\n\nparam_name\x18\x01 \x01(\t\x12\x13\n\x0bparam_value\x18\x02 \x01(\t\"\xb8\x02\n\x0cRoverCommand\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\t\x12\x32\n\x08\x63md_type\x18\x02 \x01(\x0e\x32 .rover_monitor_proto.CommandType\x12\x11\n\ttimestamp\x18\x03 \x01(\x03\x12\x11\n\tissued_by\x18\x04 \x01(\t\x12.\n\x08nav_goal\x18\x05 \x01(\x0b\x32\x1c.rover_monitor_proto.NavGoal\x12.\n\x08set_mode\x18\x06 \x01(\x0b\x32\x1c.rover_monitor_proto.SetMode\x12\x30\n\tset_param\x18\x07 \x01(\x0b\x32\x1d.rover_monitor_proto.SetParam\x12,\n\x05\x64rive\x18\x08 \x01(\x0b\x32\x1d.rover_monitor_proto.DriveCmd\"\xbb\x01\n\nCommandAck\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\t\x12\x32\n\x08\x63md_type\x18\x02 \x01(\x0e\x32 .rover_monitor_proto.CommandType\x12.\n\x06status\x18\x03 \x01(\x0e\x32\x1e.rover_monitor_proto.AckStatus\x12\x0f\n\x07message\x18\x04 \x01(\t\x12\x11\n\ttimestamp\x18\x05 \x01(\x03\x12\x15\n\rround_trip_ms\x18\x06 \x01(\x05*\xa5\x01\n\x0b\x43ommandType\x12\x0f\n\x0b\x43MD_UNKNOWN\x10\x00\x12\x10\n\x0c\x43MD_NAV_GOAL\x10\x01\x12\x0b\n\x07\x43MD_ARM\x10\x02\x12\x0e\n\nCMD_DISARM\x10\x03\x12\x10\n\x0c\x43MD_SET_MODE\x10\x04\x12\r\n\tCMD_ESTOP\x10\x05\x12\x13\n\x0f\x43MD_CANCEL_GOAL\x10\x06\x12\x11\n\rCMD_SET_PARAM\x10\x07\x12\r\n\tCMD_DRIVE\x10\x08*d\n\tAckStatus\x12\x10\n\x0c\x41\x43K_RECEIVED\x10\x00\x12\x10\n\x0c\x41\x43K_ACCEPTED\x10\x01\x12\x10\n\x0c\x41\x43K_REJECTED\x10\x02\x12\x11\n\rACK_COMPLETED\x10\x03\x12\x0e\n\nACK_FAILED\x10\x04\x62\x06proto3')
 )
 
 _COMMANDTYPE = _descriptor.EnumDescriptor(
@@ -61,11 +61,15 @@ _COMMANDTYPE = _descriptor.EnumDescriptor(
       name='CMD_SET_PARAM', index=7, number=7,
       serialized_options=None,
       type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CMD_DRIVE', index=8, number=8,
+      serialized_options=None,
+      type=None),
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=1806,
-  serialized_end=1956,
+  serialized_start=1900,
+  serialized_end=2065,
 )
 _sym_db.RegisterEnumDescriptor(_COMMANDTYPE)
 
@@ -99,8 +103,8 @@ _ACKSTATUS = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=1958,
-  serialized_end=2058,
+  serialized_start=2067,
+  serialized_end=2167,
 )
 _sym_db.RegisterEnumDescriptor(_ACKSTATUS)
 
@@ -113,6 +117,7 @@ CMD_SET_MODE = 4
 CMD_ESTOP = 5
 CMD_CANCEL_GOAL = 6
 CMD_SET_PARAM = 7
+CMD_DRIVE = 8
 ACK_RECEIVED = 0
 ACK_ACCEPTED = 1
 ACK_REJECTED = 2
@@ -539,6 +544,44 @@ _ROVERHEALTH = _descriptor.Descriptor(
 )
 
 
+_DRIVECMD = _descriptor.Descriptor(
+  name='DriveCmd',
+  full_name='rover_monitor_proto.DriveCmd',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='speed_ms', full_name='rover_monitor_proto.DriveCmd.speed_ms', index=0,
+      number=1, type=2, cpp_type=6, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='steering', full_name='rover_monitor_proto.DriveCmd.steering', index=1,
+      number=2, type=2, cpp_type=6, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=1180,
+  serialized_end=1226,
+)
+
+
 _NAVGOAL = _descriptor.Descriptor(
   name='NavGoal',
   full_name='rover_monitor_proto.NavGoal',
@@ -586,8 +629,8 @@ _NAVGOAL = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1180,
-  serialized_end=1261,
+  serialized_start=1228,
+  serialized_end=1309,
 )
 
 
@@ -617,8 +660,8 @@ _SETMODE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1263,
-  serialized_end=1291,
+  serialized_start=1311,
+  serialized_end=1339,
 )
 
 
@@ -655,8 +698,8 @@ _SETPARAM = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1293,
-  serialized_end=1344,
+  serialized_start=1341,
+  serialized_end=1392,
 )
 
 
@@ -716,6 +759,13 @@ _ROVERCOMMAND = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='drive', full_name='rover_monitor_proto.RoverCommand.drive', index=7,
+      number=8, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -728,8 +778,8 @@ _ROVERCOMMAND = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1347,
-  serialized_end=1613,
+  serialized_start=1395,
+  serialized_end=1707,
 )
 
 
@@ -794,8 +844,8 @@ _COMMANDACK = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1616,
-  serialized_end=1803,
+  serialized_start=1710,
+  serialized_end=1897,
 )
 
 _ROVERHEALTH.fields_by_name['camera'].message_type = _CAMSTATUS
@@ -805,12 +855,14 @@ _ROVERCOMMAND.fields_by_name['cmd_type'].enum_type = _COMMANDTYPE
 _ROVERCOMMAND.fields_by_name['nav_goal'].message_type = _NAVGOAL
 _ROVERCOMMAND.fields_by_name['set_mode'].message_type = _SETMODE
 _ROVERCOMMAND.fields_by_name['set_param'].message_type = _SETPARAM
+_ROVERCOMMAND.fields_by_name['drive'].message_type = _DRIVECMD
 _COMMANDACK.fields_by_name['cmd_type'].enum_type = _COMMANDTYPE
 _COMMANDACK.fields_by_name['status'].enum_type = _ACKSTATUS
 DESCRIPTOR.message_types_by_name['CamStatus'] = _CAMSTATUS
 DESCRIPTOR.message_types_by_name['Px4Status'] = _PX4STATUS
 DESCRIPTOR.message_types_by_name['JetsonStatus'] = _JETSONSTATUS
 DESCRIPTOR.message_types_by_name['RoverHealth'] = _ROVERHEALTH
+DESCRIPTOR.message_types_by_name['DriveCmd'] = _DRIVECMD
 DESCRIPTOR.message_types_by_name['NavGoal'] = _NAVGOAL
 DESCRIPTOR.message_types_by_name['SetMode'] = _SETMODE
 DESCRIPTOR.message_types_by_name['SetParam'] = _SETPARAM
@@ -847,6 +899,13 @@ RoverHealth = _reflection.GeneratedProtocolMessageType('RoverHealth', (_message.
   # @@protoc_insertion_point(class_scope:rover_monitor_proto.RoverHealth)
   ))
 _sym_db.RegisterMessage(RoverHealth)
+
+DriveCmd = _reflection.GeneratedProtocolMessageType('DriveCmd', (_message.Message,), dict(
+  DESCRIPTOR = _DRIVECMD,
+  __module__ = 'rover_health_pb2'
+  # @@protoc_insertion_point(class_scope:rover_monitor_proto.DriveCmd)
+  ))
+_sym_db.RegisterMessage(DriveCmd)
 
 NavGoal = _reflection.GeneratedProtocolMessageType('NavGoal', (_message.Message,), dict(
   DESCRIPTOR = _NAVGOAL,

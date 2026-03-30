@@ -95,6 +95,89 @@ function AlertsPanel({ alerts }) {
   );
 }
 
+function DrivePanel() {
+  const [enabled, setEnabled] = useState(false);
+  const [speed, setSpeed] = useState(0);
+  const [steering, setSteering] = useState(0);
+  const intervalRef = useRef(null);
+  const speedRef = useRef(0);
+  const steeringRef = useRef(0);
+
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { steeringRef.current = steering; }, [steering]);
+
+  const sendDrive = async (s, st) => {
+    try {
+      await fetch('/api/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cmd_type: 'drive',
+          params: { speed_ms: s, steering: st },
+          issued_by: 'dashboard',
+        }),
+      });
+    } catch { /* fire-and-forget */ }
+  };
+
+  // When enabled: publish at 2 Hz. When disabled: stop publishing.
+  useEffect(() => {
+    if (enabled) {
+      intervalRef.current = setInterval(() => {
+        sendDrive(speedRef.current, steeringRef.current);
+      }, 500);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      // Reset sliders and send a final zero on disable
+      setSpeed(0);
+      setSteering(0);
+      sendDrive(0, 0);
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [enabled]);
+
+  const disabledStyle = { opacity: enabled ? 1 : 0.4, pointerEvents: enabled ? 'auto' : 'none' };
+  const sliderStyle = { width: '100%', margin: '4px 0' };
+  const valStyle = { fontSize: 12, color: '#6b7280', textAlign: 'right', minWidth: 48, display: 'inline-block' };
+
+  return (
+    <Panel title="Drive Control">
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer' }}>
+        <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+        <span style={{ fontSize: 13, fontWeight: 600 }}>Enable</span>
+      </label>
+      <div style={disabledStyle}>
+        <div>
+          <label style={{ fontSize: 12 }}>
+            Speed (m/s)
+            <span style={valStyle}>{speed.toFixed(1)}</span>
+          </label>
+          <input type="range" min={-2} max={2} step={0.1} value={speed}
+            onChange={e => setSpeed(parseFloat(e.target.value))}
+            style={sliderStyle} />
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <label style={{ fontSize: 12 }}>
+            Steering
+            <span style={valStyle}>{steering.toFixed(2)}</span>
+          </label>
+          <input type="range" min={-1} max={1} step={0.05} value={steering}
+            onChange={e => setSteering(parseFloat(e.target.value))}
+            style={sliderStyle} />
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
 function CommandPanel() {
   const [log, setLog] = useState([]);
   const ackData = useWebSocket('/ws/cmd_ack');
@@ -159,6 +242,7 @@ export default function App() {
         <Px4Panel px4={health?.px4} />
         <JetsonPanel jetson={health?.jetson} />
         <AlertsPanel alerts={health?.activeAlerts} />
+        <DrivePanel />
         <CommandPanel />
       </div>
     </div>
