@@ -86,6 +86,19 @@ private:
   std::queue<PendingAck> ack_queue_;
   rclcpp::TimerBase::SharedPtr cmd_drain_timer_;
 
+  // Heartbeat timer for periodic metrics publishing
+  rclcpp::TimerBase::SharedPtr heartbeat_timer_;
+  void on_heartbeat_timer();
+
+  // Serialise a RoverHealth ROS message into a Protobuf string
+  std::string serialise_health(const rover_monitor::msg::RoverHealth & msg) const;
+
+  // Cached latest health message for heartbeat publishing
+  rover_monitor::msg::RoverHealth::ConstSharedPtr latest_health_;
+
+  // Alert edge detection — previous set of active alerts
+  std::vector<std::string> prev_alerts_;
+
   // Config
   std::string broker_host_{"192.168.1.100"};
   int broker_port_{1883};
@@ -95,6 +108,7 @@ private:
   int cmd_qos_{2};
   std::string client_id_{"xavier_rover_01"};
   int dedup_eviction_s_{30};
+  double heartbeat_interval_s_{5.0};
 
   bool mqtt_connected_{false};
 };

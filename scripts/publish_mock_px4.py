@@ -29,7 +29,7 @@ class MockPx4Publisher(Node):
 
         # Publishers
         self.vehicle_status_pub = self.create_publisher(
-            VehicleStatus, "/fmu/out/vehicle_status", 10
+            VehicleStatus, "/fmu/out/vehicle_status_v2", 10
         )
         self.battery_status_pub = self.create_publisher(
             BatteryStatus, "/fmu/out/battery_status", 10
@@ -67,11 +67,13 @@ class MockPx4Publisher(Node):
         )
 
         # Navigation state: OFFBOARD while armed, MANUAL while disarmed
-        msg.nav_state = (
+        nav = (
             VehicleStatus.NAVIGATION_STATE_OFFBOARD
             if is_armed
             else VehicleStatus.NAVIGATION_STATE_MANUAL
         )
+        msg.nav_state = nav
+        msg.nav_state_display = nav
         msg.nav_state_timestamp = msg.timestamp
 
         # Healthy state indicators
