@@ -4,6 +4,20 @@
 namespace rover_monitor
 {
 
+namespace
+{
+
+template<typename MessageT>
+std::string versioned_px4_topic(const std::string & base_topic)
+{
+  if constexpr (MessageT::MESSAGE_VERSION == 0) {
+    return base_topic;
+  }
+  return base_topic + "_v" + std::to_string(MessageT::MESSAGE_VERSION);
+}
+
+}  // namespace
+
 Px4Probe::Px4Probe(const rclcpp::NodeOptions & options)
 : Node("px4_probe", options)
 {
@@ -11,8 +25,12 @@ Px4Probe::Px4Probe(const rclcpp::NodeOptions & options)
     rclcpp::CallbackGroupType::MutuallyExclusive);
 
   // Parameters
-  this->declare_parameter("probes.px4.vehicle_status_topic", "/fmu/out/vehicle_status");
-  this->declare_parameter("probes.px4.battery_status_topic", "/fmu/out/battery_status");
+  this->declare_parameter(
+    "probes.px4.vehicle_status_topic",
+    versioned_px4_topic<px4_msgs::msg::VehicleStatus>("/fmu/out/vehicle_status"));
+  this->declare_parameter(
+    "probes.px4.battery_status_topic",
+    versioned_px4_topic<px4_msgs::msg::BatteryStatus>("/fmu/out/battery_status"));
   this->declare_parameter("probes.px4.heartbeat_topic", "/fmu/out/vehicle_odometry");
   this->declare_parameter("probes.px4.heartbeat_timeout_ms", 1000);
   this->declare_parameter("probes.px4.xrce_disconnect_timeout_ms", 2000);

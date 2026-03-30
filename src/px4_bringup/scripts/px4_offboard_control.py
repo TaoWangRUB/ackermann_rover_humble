@@ -34,6 +34,12 @@ FLAG_MAPPING = {
     OffboardControlFlag.DIRECT_ACTUATOR: "direct_actuator"
 }
 
+
+def px4_topic(base_topic, msg_type):
+    if msg_type.MESSAGE_VERSION == 0:
+        return base_topic
+    return f"{base_topic}_v{msg_type.MESSAGE_VERSION}"
+
 class PX4OffboardControl(Node):
     def __init__(self):
         super().__init__('px4_offboard_control')
@@ -73,7 +79,10 @@ class PX4OffboardControl(Node):
         
         # subscribe to vehicle status
         self.status_sub = self.create_subscription(
-            VehicleStatus, '/fmu/out/vehicle_status', self.vehicle_status_callback, qos_profile)
+            VehicleStatus,
+            px4_topic('/fmu/out/vehicle_status', VehicleStatus),
+            self.vehicle_status_callback,
+            qos_profile)
 
         # ── cmd_vel topic / frame parameters ────────────────────────────────
         self.declare_parameter('cmd_vel_topic',         '/cmd_vel')
