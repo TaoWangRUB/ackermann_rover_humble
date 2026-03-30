@@ -90,7 +90,7 @@ tmux send-keys -t "${PANE_TEST}" \
 
 # ── Pane 3: MQTT monitor (subscribe + decode Protobuf) ────────────────
 tmux send-keys -t "${PANE_MQTT}" \
-    "sleep 8 && echo '--- MQTT monitor (rover/health/#) ---' && cd /tmp && python3 -c 'import google.protobuf' 2>/dev/null || pip3 install --quiet protobuf; protoc --python_out=/tmp -I ${PROJECT_DIR}/src/rover_monitor/proto ${PROJECT_DIR}/src/rover_monitor/proto/rover_health.proto 2>/dev/null; if command -v mosquitto_sub >/dev/null 2>&1; then mosquitto_sub -h localhost -t 'rover/health/#' | python3 ${PROJECT_DIR}/scripts/decode_rover_health_mqtt.py; else docker run --rm -i --network host eclipse-mosquitto:2 mosquitto_sub -h localhost -t 'rover/health/#' | python3 ${PROJECT_DIR}/scripts/decode_rover_health_mqtt.py; fi" Enter
+    "sleep 8 && echo '--- MQTT monitor (rover/health/#) ---' && cd /tmp && python3 -c 'import google.protobuf' 2>/dev/null || pip3 install --quiet protobuf; protoc --python_out=/tmp -I ${PROJECT_DIR}/src/rover_monitor/proto ${PROJECT_DIR}/src/rover_monitor/proto/rover_health.proto 2>/dev/null; if command -v mosquitto_sub >/dev/null 2>&1; then mosquitto_sub -h localhost -t 'rover/health/#' -F '%x' | python3 ${PROJECT_DIR}/scripts/decode_rover_health_mqtt.py --hex; else docker run --rm -i --network host eclipse-mosquitto:2 mosquitto_sub -h localhost -t 'rover/health/#' -F '%x' | python3 ${PROJECT_DIR}/scripts/decode_rover_health_mqtt.py --hex; fi" Enter
 
 tmux select-pane -t "${PANE_CC}"
 
