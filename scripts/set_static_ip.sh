@@ -46,8 +46,8 @@ fi
 # Set method and address in one call so NetworkManager never sees an
 # invalid "manual with no address" intermediate state.
 nmcli connection modify "${CONN_NAME}" ipv4.method manual ipv4.addresses "${IP_CIDR}"
-nmcli connection modify "${CONN_NAME}" -ipv4.gateway
-nmcli connection modify "${CONN_NAME}" -ipv4.dns
+nmcli connection modify "${CONN_NAME}" ipv4.gateway ""
+nmcli connection modify "${CONN_NAME}" ipv4.dns ""
 
 nmcli connection modify "${CONN_NAME}" ipv6.method ignore
 
