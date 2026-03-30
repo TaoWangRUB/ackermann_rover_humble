@@ -106,7 +106,7 @@ fi
 # ── Pane 4: MQTT decoded / PX4 topic ─────────────────────────────────
 if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     tmux send-keys -t "${PANE_MQTT}" \
-        "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'if ! command -v mosquitto_sub >/dev/null 2>&1; then echo \"mosquitto_sub is not installed in the container\"; exit 1; fi; if ! python3 -c \"import google.protobuf\" >/dev/null 2>&1; then echo \"python3-protobuf is not installed in the container\"; exit 1; fi; cd /tmp && protoc --python_out=/tmp -I /workspace/src/rover_monitor/proto /workspace/src/rover_monitor/proto/rover_health.proto >/dev/null 2>&1 || true; while true; do if ! mosquitto_sub -h localhost -t \"rover/health/#\" -C 1 | python3 /workspace/scripts/decode_rover_health_mqtt.py; then echo \"waiting for local mosquitto...\"; sleep 2; fi; done'" Enter
+        "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'if ! command -v mosquitto_sub >/dev/null 2>&1; then echo \"mosquitto_sub is not installed in the container\"; exit 1; fi; if ! python3 -c \"import google.protobuf\" >/dev/null 2>&1; then echo \"python3-protobuf is not installed in the container\"; exit 1; fi; cd /tmp && protoc --python_out=/tmp -I /workspace/src/rover_monitor/proto /workspace/src/rover_monitor/proto/rover_health.proto >/dev/null 2>&1 || true; mosquitto_sub -h localhost -t \"rover/health/#\" | python3 /workspace/scripts/decode_rover_health_mqtt.py'" Enter
 else
     tmux send-keys -t "${PANE_MQTT}" \
         "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && sleep 4 && ros2 topic echo /monitor/px4'" Enter

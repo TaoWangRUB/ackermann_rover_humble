@@ -1,33 +1,29 @@
 #!/usr/bin/env python3
+"""Decode Protobuf RoverHealth messages from mosquitto_sub.
+
+Works in two modes:
+  - One-shot: mosquitto_sub -C 1 | python3 decode_rover_health_mqtt.py
+  - Streaming: mosquitto_sub | python3 decode_rover_health_mqtt.py
+"""
 
 import sys
 
 
-def main() -> int:
-    sys.path.insert(0, "/tmp")
-
-    try:
-        import rover_health_pb2
-    except ImportError as exc:
-        print(f"failed to import rover_health_pb2: {exc}", file=sys.stderr, flush=True)
-        return 1
-
-    data = sys.stdin.buffer.read()
+def decode_one(rover_health_pb2, data):
+    """Try to decode a single RoverHealth message from binary data."""
     if not data:
-        print("no MQTT payload received", file=sys.stderr, flush=True)
-        return 1
+        return
     if data.endswith(b"\n"):
         data = data[:-1]
     if not data:
-        print("empty MQTT payload received", file=sys.stderr, flush=True)
-        return 1
+        return
 
     msg = rover_health_pb2.RoverHealth()
     try:
         msg.ParseFromString(data)
     except Exception as exc:
-        print(f"failed to decode RoverHealth payload: {exc}", file=sys.stderr, flush=True)
-        return 1
+        print(f"decode error: {exc}", file=sys.stderr, flush=True)
+        return
 
     print(
         "seq={seq} overall={overall} cam={cam} fps={fps:.1f} px4={px4} "
@@ -44,6 +40,24 @@ def main() -> int:
         ),
         flush=True,
     )
+
+
+def main():
+    sys.path.insert(0, "/tmp")
+
+    try:
+        import rover_health_pb2
+    except ImportError as exc:
+        print(f"failed to import rover_health_pb2: {exc}", file=sys.stderr, flush=True)
+        return 1
+
+    # Read line-by-line for streaming mode (mosquitto_sub outputs one
+    # message per line).  Falls back to read-all for piped one-shot mode.
+    try:
+        for line in sys.stdin.buffer:
+            decode_one(rover_health_pb2, line)
+    except KeyboardInterrupt:
+        pass
     return 0
 
 
