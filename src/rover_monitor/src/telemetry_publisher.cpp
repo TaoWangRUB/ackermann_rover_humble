@@ -35,6 +35,7 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   this->declare_parameter("publisher.cmd_qos", 2);
   this->declare_parameter("publisher.client_id", "xavier_rover_01");
   this->declare_parameter("publisher.dedup_eviction_s", 30);
+  this->declare_parameter("publisher.heartbeat_interval_s", 5.0);
 
   broker_host_ = this->get_parameter("publisher.broker_host").as_string();
   broker_port_ = this->get_parameter("publisher.broker_port").as_int();
@@ -44,6 +45,7 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   cmd_qos_ = this->get_parameter("publisher.cmd_qos").as_int();
   client_id_ = this->get_parameter("publisher.client_id").as_string();
   dedup_eviction_s_ = this->get_parameter("publisher.dedup_eviction_s").as_int();
+  heartbeat_interval_s_ = this->get_parameter("publisher.heartbeat_interval_s").as_double();
 
   // ROS subscriber for health telemetry
   rclcpp::SubscriptionOptions sub_opts;
@@ -102,6 +104,12 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
         cmds.pop();
       }
     }, cb_group_);
+
+  // Periodic heartbeat timer — publishes cached health at a low rate for dashboards
+  heartbeat_timer_ = this->create_wall_timer(
+    std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::duration<double>(heartbeat_interval_s_)),
+    std::bind(&TelemetryPublisher::on_heartbeat_timer, this), cb_group_);
 
   // MQTT client
   std::string broker_uri = "tcp://" + broker_host_ + ":" + std::to_string(broker_port_);
@@ -423,94 +431,119 @@ void TelemetryPublisher::send_ack(const std::string & cmd_id, int cmd_type,
   }
 }
 
-// --- Outbound telemetry (unchanged) ---
+// --- Outbound telemetry ---
 
-void TelemetryPublisher::on_health(rover_monitor::msg::RoverHealth::ConstSharedPtr msg)
+std::string TelemetryPublisher::serialise_health(
+  const rover_monitor::msg::RoverHealth & msg) const
 {
-  if (!mqtt_connected_ && mqtt_client_ && !mqtt_client_->is_connected()) {
-    return;
-  }
-
-  // Update connected state from paho's auto-reconnect
-  mqtt_connected_ = mqtt_client_->is_connected();
-  if (!mqtt_connected_) { return; }
-
-  // Serialize to Protobuf
   rover_monitor_proto::RoverHealth pb;
-  pb.set_seq(msg->seq);
-  pb.set_timestamp(msg->timestamp);
-  pb.set_slam_latency_ms(msg->slam_latency_ms);
-  pb.set_overall_health(msg->overall_health);
-  for (const auto & alert : msg->active_alerts) {
+  pb.set_seq(msg.seq);
+  pb.set_timestamp(msg.timestamp);
+  pb.set_slam_latency_ms(msg.slam_latency_ms);
+  pb.set_overall_health(msg.overall_health);
+  for (const auto & alert : msg.active_alerts) {
     pb.add_active_alerts(alert);
   }
 
   // Camera
   auto * cam = pb.mutable_camera();
-  cam->set_camera_id(msg->camera.camera_id);
-  cam->set_connected(msg->camera.connected);
-  cam->set_frame_delta_ms(msg->camera.frame_delta_ms);
-  cam->set_depth_fps(msg->camera.depth_fps);
-  cam->set_depth_quality_sampled(msg->camera.depth_quality_sampled);
-  cam->set_imu_active(msg->camera.imu_active);
-  cam->set_error_code(msg->camera.error_code);
-  cam->set_error_msg(msg->camera.error_msg);
-  cam->set_timestamp(msg->camera.timestamp);
+  cam->set_camera_id(msg.camera.camera_id);
+  cam->set_connected(msg.camera.connected);
+  cam->set_frame_delta_ms(msg.camera.frame_delta_ms);
+  cam->set_depth_fps(msg.camera.depth_fps);
+  cam->set_depth_quality_sampled(msg.camera.depth_quality_sampled);
+  cam->set_imu_active(msg.camera.imu_active);
+  cam->set_error_code(msg.camera.error_code);
+  cam->set_error_msg(msg.camera.error_msg);
+  cam->set_timestamp(msg.camera.timestamp);
 
   // PX4
   auto * px4 = pb.mutable_px4();
-  px4->set_connected(msg->px4.connected);
-  px4->set_armed(msg->px4.armed);
-  px4->set_armable(msg->px4.armable);
-  px4->set_nav_state(msg->px4.nav_state);
-  px4->set_nav_state_label(msg->px4.nav_state_label);
-  px4->set_battery_voltage_v(msg->px4.battery_voltage_v);
-  px4->set_battery_current_a(msg->px4.battery_current_a);
-  px4->set_battery_remaining_pct(msg->px4.battery_remaining_pct);
-  px4->set_heartbeat_age_ms(msg->px4.heartbeat_age_ms);
-  px4->set_error_code(msg->px4.error_code);
-  px4->set_error_msg(msg->px4.error_msg);
-  px4->set_timestamp(msg->px4.timestamp);
+  px4->set_connected(msg.px4.connected);
+  px4->set_armed(msg.px4.armed);
+  px4->set_armable(msg.px4.armable);
+  px4->set_nav_state(msg.px4.nav_state);
+  px4->set_nav_state_label(msg.px4.nav_state_label);
+  px4->set_battery_voltage_v(msg.px4.battery_voltage_v);
+  px4->set_battery_current_a(msg.px4.battery_current_a);
+  px4->set_battery_remaining_pct(msg.px4.battery_remaining_pct);
+  px4->set_heartbeat_age_ms(msg.px4.heartbeat_age_ms);
+  px4->set_error_code(msg.px4.error_code);
+  px4->set_error_msg(msg.px4.error_msg);
+  px4->set_timestamp(msg.px4.timestamp);
 
   // Jetson
   auto * jetson = pb.mutable_jetson();
-  for (const auto & cpu : msg->jetson.cpu_usage_pct) {
+  for (const auto & cpu : msg.jetson.cpu_usage_pct) {
     jetson->add_cpu_usage_pct(cpu);
   }
-  jetson->set_gpu_usage_pct(msg->jetson.gpu_usage_pct);
-  jetson->set_ram_used_mb(msg->jetson.ram_used_mb);
-  jetson->set_ram_total_mb(msg->jetson.ram_total_mb);
-  jetson->set_swap_used_mb(msg->jetson.swap_used_mb);
-  jetson->set_disk_free_gb(msg->jetson.disk_free_gb);
-  jetson->set_temp_cpu_c(msg->jetson.temp_cpu_c);
-  jetson->set_temp_gpu_c(msg->jetson.temp_gpu_c);
-  jetson->set_temp_board_c(msg->jetson.temp_board_c);
-  jetson->set_is_thermal_throttled(msg->jetson.is_thermal_throttled);
-  jetson->set_is_power_throttled(msg->jetson.is_power_throttled);
-  jetson->set_power_mode(msg->jetson.power_mode);
-  jetson->set_wifi_signal_dbm(msg->jetson.wifi_signal_dbm);
-  jetson->set_uptime_s(msg->jetson.uptime_s);
-  jetson->set_error_code(msg->jetson.error_code);
-  jetson->set_error_msg(msg->jetson.error_msg);
-  jetson->set_timestamp(msg->jetson.timestamp);
+  jetson->set_gpu_usage_pct(msg.jetson.gpu_usage_pct);
+  jetson->set_ram_used_mb(msg.jetson.ram_used_mb);
+  jetson->set_ram_total_mb(msg.jetson.ram_total_mb);
+  jetson->set_swap_used_mb(msg.jetson.swap_used_mb);
+  jetson->set_disk_free_gb(msg.jetson.disk_free_gb);
+  jetson->set_temp_cpu_c(msg.jetson.temp_cpu_c);
+  jetson->set_temp_gpu_c(msg.jetson.temp_gpu_c);
+  jetson->set_temp_board_c(msg.jetson.temp_board_c);
+  jetson->set_is_thermal_throttled(msg.jetson.is_thermal_throttled);
+  jetson->set_is_power_throttled(msg.jetson.is_power_throttled);
+  jetson->set_power_mode(msg.jetson.power_mode);
+  jetson->set_wifi_signal_dbm(msg.jetson.wifi_signal_dbm);
+  jetson->set_uptime_s(msg.jetson.uptime_s);
+  jetson->set_error_code(msg.jetson.error_code);
+  jetson->set_error_msg(msg.jetson.error_msg);
+  jetson->set_timestamp(msg.jetson.timestamp);
 
-  // Serialize
   std::string payload;
   pb.SerializeToString(&payload);
+  return payload;
+}
 
-  try {
-    // Routine telemetry (QoS 0)
-    mqtt_client_->publish("rover/health/overall", payload.data(), payload.size(),
-      telemetry_qos_, false);
+void TelemetryPublisher::on_health(rover_monitor::msg::RoverHealth::ConstSharedPtr msg)
+{
+  // Always cache the latest health for the heartbeat timer
+  latest_health_ = msg;
 
-    // Alerts (QoS 1) if any active
-    if (!msg->active_alerts.empty()) {
+  // Alert edge detection: publish immediately when alerts change
+  std::vector<std::string> current_alerts(msg->active_alerts.begin(),
+    msg->active_alerts.end());
+
+  if (current_alerts != prev_alerts_) {
+    prev_alerts_ = current_alerts;
+
+    mqtt_connected_ = mqtt_client_ && mqtt_client_->is_connected();
+    if (!mqtt_connected_) { return; }
+
+    std::string payload = serialise_health(*msg);
+    try {
+      // Alert state changed — publish with QoS 1 for reliable delivery
       mqtt_client_->publish("rover/alerts", payload.data(), payload.size(),
         alert_qos_, false);
+
+      RCLCPP_INFO(this->get_logger(), "Alert state changed: %zu active alert(s)",
+        current_alerts.size());
+    } catch (const mqtt::exception & e) {
+      RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+        "MQTT alert publish failed: %s", e.what());
+      mqtt_connected_ = false;
     }
+  }
+}
+
+void TelemetryPublisher::on_heartbeat_timer()
+{
+  if (!latest_health_) { return; }
+
+  mqtt_connected_ = mqtt_client_ && mqtt_client_->is_connected();
+  if (!mqtt_connected_) { return; }
+
+  std::string payload = serialise_health(*latest_health_);
+  try {
+    mqtt_client_->publish("rover/health/overall", payload.data(), payload.size(),
+      telemetry_qos_, false);
   } catch (const mqtt::exception & e) {
     RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-      "MQTT publish failed: %s", e.what());
+      "MQTT heartbeat publish failed: %s", e.what());
     mqtt_connected_ = false;
   }
 }
