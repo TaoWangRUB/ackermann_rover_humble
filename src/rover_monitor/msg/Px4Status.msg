@@ -1,0 +1,12 @@
+bool connected
+bool armed
+bool armable
+int32 nav_state
+string nav_state_label
+float32 battery_voltage_v
+float32 battery_current_a
+float32 battery_remaining_pct
+int32 heartbeat_age_ms
+int32 error_code
+string error_msg
+int64 timestamp

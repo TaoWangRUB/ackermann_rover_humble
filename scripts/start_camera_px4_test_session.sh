@@ -74,7 +74,7 @@ tmux send-keys -t "${SESSION}:rover.1" \
 if [[ "$VERIFY" == true ]]; then
     tmux split-window -v -t "${SESSION}:rover.1" -l 12
     tmux send-keys -t "${SESSION}:rover.2" \
-        "sleep 30 && ${SCRIPT_DIR}/verify_odom.sh --loop; docker-compose -f ${SCRIPT_DIR}/../docker/docker-compose.yml exec ackermann_slam bash" Enter
+        "sleep 30 && ${SCRIPT_DIR}/verify_odom.sh --loop; source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
 fi
 
 # Select the ROS 2 nodes pane and attach

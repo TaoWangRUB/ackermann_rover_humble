@@ -78,6 +78,11 @@ RealsenseCameraNode::~RealsenseCameraNode()
   RCLCPP_INFO(get_logger(), "Shutting down — stopping pipeline...");
   running_ = false;
 
+  // Wake and join the alignment worker before stopping the pipeline so it
+  // doesn't try to process frames after pipe_.stop() frees them.
+  align_cv_.notify_all();
+  if (align_thread_.joinable()) align_thread_.join();
+
   // Watchdog: if shutdown blocks for more than 5 s, force-exit the process.
   std::thread watchdog([]{
     std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -434,7 +439,9 @@ void RealsenseCameraNode::start_pipeline()
     }
   }
 
-  // Depth alignment
+  // Depth alignment — rs2::align::process() is CPU-intensive (especially on ARM).
+  // Publishers are created here; the worker thread is started so alignment runs
+  // off the pipeline callback, keeping raw color/depth at full sensor fps.
   if (align_depth_enable_ && enable_depth_ && enable_color_) {
     align_to_color_ = std::make_shared<rs2::align>(RS2_STREAM_COLOR);
     const auto qos = rclcpp::QoS(10);
@@ -442,7 +449,8 @@ void RealsenseCameraNode::start_pipeline()
       camera_name_ + "/aligned_depth_to_color/image_raw", qos);
     aligned_depth_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>(
       camera_name_ + "/aligned_depth_to_color/camera_info", qos);
-    RCLCPP_INFO(get_logger(), "Depth alignment to color enabled.");
+    align_thread_ = std::thread(&RealsenseCameraNode::align_worker, this);
+    RCLCPP_INFO(get_logger(), "Depth alignment to color enabled (async worker thread).");
   }
 
   // Log USB connection type; warn if USB 2.x (bandwidth may be insufficient for full resolution)
@@ -595,25 +603,15 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
   try {
     // Pipeline sync module delivers color+depth as a composite frameset — unpack explicitly
     if (auto fs = frame.as<rs2::frameset>()) {
-      // Apply depth alignment if enabled
-      rs2::frameset processed = fs;
-      if (align_to_color_) {
-        processed = align_to_color_->process(fs);
-      }
-
+      // Publish raw color and depth immediately so they run at full sensor fps
+      // regardless of how long alignment takes (alignment is offloaded to align_worker).
       if (enable_color_) {
-        if (auto color = processed.get_color_frame())
+        if (auto color = fs.get_color_frame())
           publish_video_frame(color, color_image_pub_, color_info_pub_, color_info_msg_);
       }
       if (enable_depth_) {
-        // Publish raw depth from original frameset
         if (auto depth = fs.get_depth_frame())
           publish_video_frame(depth, depth_image_pub_, depth_info_pub_, depth_info_msg_);
-        // Publish aligned depth (uses color intrinsics)
-        if (align_to_color_) {
-          if (auto aligned = processed.get_depth_frame())
-            publish_video_frame(aligned, aligned_depth_image_pub_, aligned_depth_info_pub_, color_info_msg_);
-        }
       }
 
       // Infrared frames
@@ -642,6 +640,17 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
             }
           }
         });
+      }
+
+      // Hand off to async alignment worker (if enabled). Drop oldest frame if
+      // the worker is behind to bound queue memory usage.
+      if (align_to_color_) {
+        std::lock_guard<std::mutex> lock(align_mutex_);
+        if (align_queue_.size() >= ALIGN_QUEUE_MAX) {
+          align_queue_.pop();
+        }
+        align_queue_.push(fs);
+        align_cv_.notify_one();
       }
       return;
     }
@@ -685,6 +694,33 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
     }
   } catch (const std::exception & e) {
     if (running_) RCLCPP_WARN(get_logger(), "Frame callback error: %s", e.what());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// align_worker — runs on a dedicated thread to keep rs2::align::process()
+// off the pipeline callback. On Jetson ARM, alignment at 640x480 takes ~250ms,
+// which would otherwise throttle all streams to ~4 Hz. With this worker the
+// pipeline callback returns immediately so raw color/depth publish at full fps.
+// ---------------------------------------------------------------------------
+void RealsenseCameraNode::align_worker()
+{
+  while (true) {
+    rs2::frameset fs;
+    {
+      std::unique_lock<std::mutex> lock(align_mutex_);
+      align_cv_.wait(lock, [this] { return !align_queue_.empty() || !running_; });
+      if (!running_ && align_queue_.empty()) break;
+      fs = align_queue_.front();
+      align_queue_.pop();
+    }
+    try {
+      rs2::frameset processed = align_to_color_->process(fs);
+      if (auto aligned = processed.get_depth_frame())
+        publish_video_frame(aligned, aligned_depth_image_pub_, aligned_depth_info_pub_, color_info_msg_);
+    } catch (const std::exception & e) {
+      if (running_) RCLCPP_WARN(get_logger(), "Align worker error: %s", e.what());
+    }
   }
 }
 

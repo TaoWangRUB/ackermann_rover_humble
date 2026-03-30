@@ -19,8 +19,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-COMPOSE_FILE="${PROJECT_DIR}/docker/docker-compose.yml"
+source "${SCRIPT_DIR}/lib/dc.sh"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
@@ -37,7 +36,7 @@ if [[ "${1:-}" == "--serial" ]]; then
     echo "  Baud rate: ${SERIAL_BAUD}"
     echo ""
 
-    exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
+    xdcomp exec ackermann_slam bash -c "
       export LD_LIBRARY_PATH=/opt/microxrce/lib:\${LD_LIBRARY_PATH:-}
       /opt/microxrce/bin/MicroXRCEAgent serial --dev ${SERIAL_DEV} -b ${SERIAL_BAUD}
     "
@@ -49,7 +48,7 @@ else
     echo "  UDP port: ${AGENT_PORT}"
     echo ""
 
-    exec docker-compose -f "${COMPOSE_FILE}" exec ackermann_slam bash -c "
+    xdcomp exec ackermann_slam bash -c "
       export LD_LIBRARY_PATH=/opt/microxrce/lib:\${LD_LIBRARY_PATH:-}
       /opt/microxrce/bin/MicroXRCEAgent udp4 -p ${AGENT_PORT}
     "
