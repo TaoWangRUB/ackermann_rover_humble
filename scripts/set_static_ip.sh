@@ -2,29 +2,29 @@
 # Set a static IPv4 address on a selected NetworkManager-managed interface.
 #
 # Usage:
-#   ./scripts/set_static_ip.sh <interface> <ip/cidr> [gateway] [dns]
+#   ./scripts/set_static_ip.sh <interface> <ip> [prefix]
 #
 # Examples:
-#   ./scripts/set_static_ip.sh enxa0cec8a55c8d 10.42.0.1/24
-#   ./scripts/set_static_ip.sh eth0 10.42.0.2/24 10.42.0.1
-#   ./scripts/set_static_ip.sh eth0 10.42.0.2/24 10.42.0.1 "8.8.8.8 1.1.1.1"
+#   ./scripts/set_static_ip.sh enxa0cec8a55c8d 10.42.0.1
+#   ./scripts/set_static_ip.sh eth0 10.42.0.2
+#   ./scripts/set_static_ip.sh eth0 192.168.1.50 16
 set -euo pipefail
 
-if [[ $# -lt 2 || $# -gt 4 ]]; then
+if [[ $# -lt 2 || $# -gt 3 ]]; then
     echo "Usage:"
-    echo "  $0 <interface> <ip/cidr> [gateway] [dns]"
+    echo "  $0 <interface> <ip> [prefix]"
     echo ""
     echo "Examples:"
-    echo "  $0 enxa0cec8a55c8d 10.42.0.1/24"
-    echo "  $0 eth0 10.42.0.2/24 10.42.0.1"
-    echo "  $0 eth0 10.42.0.2/24 10.42.0.1 \"8.8.8.8 1.1.1.1\""
+    echo "  $0 enxa0cec8a55c8d 10.42.0.1"
+    echo "  $0 eth0 10.42.0.2"
+    echo "  $0 eth0 192.168.1.50 16"
     exit 1
 fi
 
 IFACE="$1"
-IP_CIDR="$2"
-GATEWAY="${3:-}"
-DNS_SERVERS="${4:-}"
+IP_ADDR="$2"
+PREFIX="${3:-24}"
+IP_CIDR="${IP_ADDR}/${PREFIX}"
 
 if ! command -v nmcli >/dev/null 2>&1; then
     echo "Error: nmcli not found. This script requires NetworkManager."
@@ -46,18 +46,8 @@ fi
 # Set method and address in one call so NetworkManager never sees an
 # invalid "manual with no address" intermediate state.
 nmcli connection modify "${CONN_NAME}" ipv4.method manual ipv4.addresses "${IP_CIDR}"
-
-if [[ -n "${GATEWAY}" ]]; then
-    nmcli connection modify "${CONN_NAME}" ipv4.gateway "${GATEWAY}"
-else
-    nmcli connection modify "${CONN_NAME}" -ipv4.gateway
-fi
-
-if [[ -n "${DNS_SERVERS}" ]]; then
-    nmcli connection modify "${CONN_NAME}" ipv4.dns "${DNS_SERVERS}"
-else
-    nmcli connection modify "${CONN_NAME}" -ipv4.dns
-fi
+nmcli connection modify "${CONN_NAME}" -ipv4.gateway
+nmcli connection modify "${CONN_NAME}" -ipv4.dns
 
 nmcli connection modify "${CONN_NAME}" ipv6.method ignore
 
@@ -69,8 +59,6 @@ echo "Applied static IP:"
 echo "  Interface:  ${IFACE}"
 echo "  Connection: ${CONN_NAME}"
 echo "  Address:    ${IP_CIDR}"
-[[ -n "${GATEWAY}" ]] && echo "  Gateway:    ${GATEWAY}"
-[[ -n "${DNS_SERVERS}" ]] && echo "  DNS:        ${DNS_SERVERS}"
 
 echo ""
 ip addr show "${IFACE}"
