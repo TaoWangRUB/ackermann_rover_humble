@@ -62,7 +62,7 @@ DEPTH_CAMERA="d435i"
 BROKER_HOST=""
 PUBLISHER_CONFIG_FILE="/workspace/src/rover_monitor/config/publisher.yaml"
 PX4_MODE_TYPE="manual"
-REVERSIBLE_DRIVE=false
+REVERSIBLE_DRIVE=true
 
 for arg in "$@"; do
     case "${arg}" in
