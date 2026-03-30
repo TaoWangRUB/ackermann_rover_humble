@@ -1,4 +1,5 @@
-version: '2.4'
+version: '2.3'
+
 services:
   ackermann_slam:
     image: ${IMAGE_NAME}_${ARCH}_${ROS_DISTRO}

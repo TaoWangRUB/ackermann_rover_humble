@@ -25,8 +25,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Ensure ARCH is set for docker-compose variable interpolation
-export ARCH="${ARCH:-$(uname -m)}"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/dc.sh"
 
 # --- Defaults ---
 SESSION="px4test"
@@ -82,10 +81,10 @@ tmux send-keys -t "${SESSION}:px4test.0" \
 
 if [[ "$ACTIVATE" == true ]]; then
     tmux send-keys -t "${SESSION}:px4test.4" \
-        "echo 'Waiting 20s for PX4 mode registration...' && sleep 20 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; docker-compose -f ${SCRIPT_DIR}/../docker/docker-compose.yml exec ackermann_slam bash" Enter
+        "echo 'Waiting 20s for PX4 mode registration...' && sleep 20 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
 else
     tmux send-keys -t "${SESSION}:px4test.4" \
-        "docker-compose -f ${SCRIPT_DIR}/../docker/docker-compose.yml exec ackermann_slam bash" Enter
+        "source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
 fi
 
 # Select the PX4 bringup pane and attach

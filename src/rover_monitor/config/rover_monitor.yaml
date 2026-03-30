@@ -1,0 +1,57 @@
+/**:
+  ros__parameters:
+    # --- Container ---
+    container:
+      executor: static_single_threaded
+
+    # --- Aggregator ---
+    aggregator:
+      publish_rate_hz: 2.0
+      cam_stale_timeout_ms: 1000
+      px4_stale_timeout_ms: 1000
+      jetson_stale_timeout_ms: 4000
+      slam_frame_id: "map"
+      slam_child_frame_id: "odom"
+
+    # --- Probes ---
+    # Camera topics are overridden by monitor.launch.py based on the
+    # depth_camera launch argument (d435i, l515).  The values below are
+    # fallback defaults and match d435i.
+    probes:
+      cam:
+        color_topic: "/d435i/color/image_raw"
+        depth_topic: "/d435i/depth/image_rect_raw"
+        imu_topic: "/d435i/imu"
+        depth_quality_sample_interval: 10
+        imu_timeout_ms: 500
+        frame_stutter_threshold_ms: 99.0
+      px4:
+        heartbeat_topic: "/fmu/out/vehicle_odometry"
+        heartbeat_timeout_ms: 1000
+        xrce_disconnect_timeout_ms: 2000
+      jetson:
+        publish_rate_hz: 0.5
+        # Platform metrics provider: "" (auto-detect), "jetson", or "x86_mock"
+        metrics_provider: ""
+        # Default thermal zone mappings (for Jetson hardware via JetsonMetricsProvider)
+        thermal_zone_cpu: 0
+        thermal_zone_gpu: 1
+        thermal_zone_board: 2
+        throttle_cooling_device_filter:
+          - "CPU-therm"
+          - "GPU-therm"
+        gpu_load_path: "/sys/devices/gpu.0/load"
+
+    # --- Alert thresholds ---
+    alerts:
+      cam_stutter_delta_ms: 99.0
+      cam_depth_quality_warn: 0.5
+      px4_heartbeat_error_ms: 1000
+      px4_battery_warn_pct: 40.0
+      px4_battery_error_pct: 20.0
+      jetson_cpu_temp_error_c: 80.0
+      jetson_gpu_temp_error_c: 83.0
+      jetson_ram_warn_pct: 0.90
+      jetson_disk_error_gb: 1.0
+      slam_latency_warn_ms: 100.0
+      wifi_signal_warn_dbm: -75.0

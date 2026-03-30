@@ -16,7 +16,6 @@
   <exec_depend>joint_state_publisher</exec_depend>
   <exec_depend>joint_state_publisher_gui</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>realsense2_description</exec_depend>
   <exec_depend>turtlebot4_simulator</exec_depend>
   <exec_depend>irobot_create_nodes</exec_depend>
 

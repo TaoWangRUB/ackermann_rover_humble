@@ -1,0 +1,17 @@
+float32[] cpu_usage_pct
+float32 gpu_usage_pct
+int32 ram_used_mb
+int32 ram_total_mb
+int32 swap_used_mb
+float32 disk_free_gb
+float32 temp_cpu_c
+float32 temp_gpu_c
+float32 temp_board_c
+bool is_thermal_throttled
+bool is_power_throttled
+string power_mode
+float32 wifi_signal_dbm
+int32 uptime_s
+int32 error_code
+string error_msg
+int64 timestamp

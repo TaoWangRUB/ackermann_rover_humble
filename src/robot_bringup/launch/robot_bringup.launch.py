@@ -183,6 +183,12 @@ ARGUMENTS = [
         choices=['true', 'false'],
         description='[HW mode] Enable T265 tracking camera and odom_tf_relay.',
     ),
+    DeclareLaunchArgument(
+        'rover_monitor',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Launch the rover_monitor health monitoring system.',
+    ),
 ]
 
 
@@ -379,6 +385,19 @@ def generate_launch_description() -> LaunchDescription:
         actions=[rviz_node]
     )
 
+    # --- Rover Monitor (optional) ---
+    rover_monitor_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('rover_monitor'),
+                'launch',
+                'monitor.launch.py'
+            )
+        ),
+        launch_arguments={'use_sim_time': use_sim_time}.items(),
+        condition=IfCondition(LaunchConfiguration('rover_monitor')),
+    )
+
     ld = LaunchDescription(ARGUMENTS)
     # Simulation
     ld.add_action(gazebo_launch)
@@ -390,5 +409,6 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(rtabmap_launch)
     ld.add_action(nav2_launch)
     ld.add_action(rviz_delayed)
+    ld.add_action(rover_monitor_launch)
 
     return ld

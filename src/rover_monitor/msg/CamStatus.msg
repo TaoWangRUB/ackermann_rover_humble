@@ -1,0 +1,9 @@
+string camera_id
+bool connected
+float32 frame_delta_ms
+float32 depth_fps
+float32 depth_quality_sampled
+bool imu_active
+int32 error_code
+string error_msg
+int64 timestamp

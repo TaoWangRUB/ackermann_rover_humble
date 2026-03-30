@@ -1,0 +1,9 @@
+paho-mqtt>=1.6,<2.0
+protobuf>=4.21
+pyyaml>=6.0
+fastapi>=0.100
+uvicorn[standard]>=0.22
+websockets>=11.0
+influxdb-client[async]>=1.36
+plyer>=2.1
+aiohttp>=3.9

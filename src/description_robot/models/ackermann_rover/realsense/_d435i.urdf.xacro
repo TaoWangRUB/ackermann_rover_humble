@@ -8,7 +8,7 @@ aluminum peripherial evaluation case.
 -->
 
 <robot name="sensor_d435i" xmlns:xacro="http://ros.org/wiki/xacro">
-  <xacro:include filename="$(find realsense2_description)/urdf/_d435.urdf.xacro"/>
+  <xacro:include filename="$(find description_robot)/models/ackermann_rover/realsense/_d435.urdf.xacro"/>
   <xacro:include filename="$(find description_robot)/models/ackermann_rover/realsense/_d435i_imu_modules.urdf.xacro"/>
   <xacro:include filename="$(find description_robot)/models/ackermann_rover/realsense/_d435i_sensors.urdf.xacro"/>
 

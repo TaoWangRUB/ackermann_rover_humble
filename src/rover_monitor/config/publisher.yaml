@@ -1,0 +1,13 @@
+/**:
+  ros__parameters:
+    publisher:
+      broker_host: "192.168.0.225"
+      broker_port: 1883
+      reconnect_delay_s: 5
+      telemetry_qos: 0
+      alert_qos: 1
+      cmd_qos: 2
+      client_id: "xavier_rover_01"
+      dedup_eviction_s: 30
+      heartbeat_interval_s: 5.0
+      serialization: "protobuf"

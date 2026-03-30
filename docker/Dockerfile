@@ -163,6 +163,11 @@ RUN apt-get update && source /opt/ros/$ROS_DISTRO/setup.bash && \
 
 # Additional tools
 RUN apt-get update && apt-get install -y \
+    libpaho-mqtt-dev \
+    libpaho-mqttpp-dev \
+    mosquitto \
+    mosquitto-clients \
+    python3-protobuf \
     tmux \
     sudo \
     && rm -rf /var/lib/apt/lists/*
