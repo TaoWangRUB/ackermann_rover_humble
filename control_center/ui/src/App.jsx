@@ -60,6 +60,7 @@ function Px4Panel({ px4 }) {
     <Panel title="PX4">
       <p>Connected: {px4.connected ? 'Yes' : 'No'}</p>
       <p>Armed: {px4.armed ? 'Yes' : 'No'}</p>
+      <p>Armable: {px4.armable ? 'Yes' : 'No'}</p>
       <p>Nav State: {px4.navStateLabel}</p>
       <p>Battery: {px4.batteryRemainingPct?.toFixed(0)}% ({px4.batteryVoltageV?.toFixed(1)}V)</p>
       <p>Heartbeat Age: {px4.heartbeatAgeMs} ms</p>

@@ -6,6 +6,20 @@
 namespace rover_monitor
 {
 
+namespace
+{
+
+template<typename MessageT>
+std::string versioned_px4_topic(const std::string & base_topic)
+{
+  if constexpr (MessageT::MESSAGE_VERSION == 0) {
+    return base_topic;
+  }
+  return base_topic + "_v" + std::to_string(MessageT::MESSAGE_VERSION);
+}
+
+}  // namespace
+
 TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
 : Node("telemetry_publisher", options)
 {
@@ -41,7 +55,7 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
 
   // PX4 vehicle command publisher
   vehicle_cmd_pub_ = this->create_publisher<px4_msgs::msg::VehicleCommand>(
-    "/fmu/in/vehicle_command", 10);
+    versioned_px4_topic<px4_msgs::msg::VehicleCommand>("/fmu/in/vehicle_command"), 10);
 
   // E-stop twist publisher (zero velocity)
   twist_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(
@@ -447,6 +461,7 @@ void TelemetryPublisher::on_health(rover_monitor::msg::RoverHealth::ConstSharedP
   auto * px4 = pb.mutable_px4();
   px4->set_connected(msg->px4.connected);
   px4->set_armed(msg->px4.armed);
+  px4->set_armable(msg->px4.armable);
   px4->set_nav_state(msg->px4.nav_state);
   px4->set_nav_state_label(msg->px4.nav_state_label);
   px4->set_battery_voltage_v(msg->px4.battery_voltage_v);

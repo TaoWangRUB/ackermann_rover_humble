@@ -31,7 +31,9 @@ Px4Probe::Px4Probe(const rclcpp::NodeOptions & options)
   this->declare_parameter(
     "probes.px4.battery_status_topic",
     versioned_px4_topic<px4_msgs::msg::BatteryStatus>("/fmu/out/battery_status"));
-  this->declare_parameter("probes.px4.heartbeat_topic", "/fmu/out/vehicle_odometry");
+  this->declare_parameter(
+    "probes.px4.heartbeat_topic",
+    versioned_px4_topic<px4_msgs::msg::VehicleOdometry>("/fmu/out/vehicle_odometry"));
   this->declare_parameter("probes.px4.heartbeat_timeout_ms", 1000);
   this->declare_parameter("probes.px4.xrce_disconnect_timeout_ms", 2000);
 
@@ -77,6 +79,7 @@ Px4Probe::Px4Probe(const rclcpp::NodeOptions & options)
 void Px4Probe::on_vehicle_status(px4_msgs::msg::VehicleStatus::ConstSharedPtr msg)
 {
   armed_ = (msg->arming_state == px4_msgs::msg::VehicleStatus::ARMING_STATE_ARMED);
+  armable_ = msg->pre_flight_checks_pass;
   nav_state_ = msg->nav_state;
   nav_state_display_ = msg->nav_state_display;
   last_any_msg_stamp_ = this->now();
@@ -141,6 +144,7 @@ void Px4Probe::publish_status()
 
   status->connected = connected;
   status->armed = armed_;
+  status->armable = armable_;
   // nav_state_display is the user-visible active mode in PX4. This is the
   // field that reflects custom/external modes instead of the internal fallback.
   status->nav_state = nav_state_display_;

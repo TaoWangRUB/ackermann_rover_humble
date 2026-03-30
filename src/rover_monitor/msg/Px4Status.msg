@@ -1,5 +1,6 @@
 bool connected
 bool armed
+bool armable
 int32 nav_state
 string nav_state_label
 float32 battery_voltage_v
