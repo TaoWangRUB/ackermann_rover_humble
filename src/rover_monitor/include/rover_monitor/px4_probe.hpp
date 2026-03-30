@@ -38,6 +38,7 @@ private:
   // Vehicle state
   bool armed_{false};
   uint8_t nav_state_{0};
+  uint8_t nav_state_display_{0};
 
   // Battery state
   float battery_voltage_v_{0.0f};

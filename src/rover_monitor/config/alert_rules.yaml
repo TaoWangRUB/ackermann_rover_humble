@@ -1,9 +1,9 @@
 alerts:
   - id: CAM_STUTTER
     source: camera.frame_delta_ms
-    condition: "> 66"
+    condition: "> 99"
     severity: WARN
-    message: "Camera frame delta exceeds 66 ms (below 15 FPS)"
+    message: "Camera frame delta exceeds 99 ms (below about 10 FPS)"
 
   - id: CAM_DISCONNECTED
     source: camera.connected

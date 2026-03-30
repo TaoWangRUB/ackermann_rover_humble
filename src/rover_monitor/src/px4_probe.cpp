@@ -60,6 +60,7 @@ void Px4Probe::on_vehicle_status(px4_msgs::msg::VehicleStatus::ConstSharedPtr ms
 {
   armed_ = (msg->arming_state == px4_msgs::msg::VehicleStatus::ARMING_STATE_ARMED);
   nav_state_ = msg->nav_state;
+  nav_state_display_ = msg->nav_state_display;
   last_any_msg_stamp_ = this->now();
   publish_status();
 }
@@ -93,6 +94,18 @@ std::string Px4Probe::nav_state_to_label(uint8_t nav_state)
     case 14: return "OFFBOARD";
     case 17: return "AUTO_TAKEOFF";
     case 18: return "AUTO_LAND";
+    case 19: return "AUTO_FOLLOW_TARGET";
+    case 20: return "AUTO_PRECLAND";
+    case 21: return "ORBIT";
+    case 22: return "AUTO_VTOL_TAKEOFF";
+    case 23: return "EXTERNAL1";
+    case 24: return "EXTERNAL2";
+    case 25: return "EXTERNAL3";
+    case 26: return "EXTERNAL4";
+    case 27: return "EXTERNAL5";
+    case 28: return "EXTERNAL6";
+    case 29: return "EXTERNAL7";
+    case 30: return "EXTERNAL8";
     default: return "UNKNOWN(" + std::to_string(nav_state) + ")";
   }
 }
@@ -110,8 +123,10 @@ void Px4Probe::publish_status()
 
   status->connected = connected;
   status->armed = armed_;
-  status->nav_state = nav_state_;
-  status->nav_state_label = nav_state_to_label(nav_state_);
+  // nav_state_display is the user-visible active mode in PX4. This is the
+  // field that reflects custom/external modes instead of the internal fallback.
+  status->nav_state = nav_state_display_;
+  status->nav_state_label = nav_state_to_label(nav_state_display_);
   status->battery_voltage_v = battery_voltage_v_;
   status->battery_current_a = battery_current_a_;
   status->battery_remaining_pct = battery_remaining_pct_;

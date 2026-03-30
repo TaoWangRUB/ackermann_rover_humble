@@ -13,14 +13,14 @@ Aggregator::Aggregator(const rclcpp::NodeOptions & options)
 
   // Parameters
   this->declare_parameter("aggregator.publish_rate_hz", 2.0);
-  this->declare_parameter("aggregator.cam_stale_timeout_ms", 500);
+  this->declare_parameter("aggregator.cam_stale_timeout_ms", 1000);
   this->declare_parameter("aggregator.px4_stale_timeout_ms", 1000);
   this->declare_parameter("aggregator.jetson_stale_timeout_ms", 4000);
   this->declare_parameter("aggregator.slam_frame_id", "map");
   this->declare_parameter("aggregator.slam_child_frame_id", "odom");
 
   // Alert thresholds
-  this->declare_parameter("alerts.cam_stutter_delta_ms", 66.0);
+  this->declare_parameter("alerts.cam_stutter_delta_ms", 99.0);
   this->declare_parameter("alerts.cam_depth_quality_warn", 0.5);
   this->declare_parameter("alerts.px4_heartbeat_error_ms", 1000);
   this->declare_parameter("alerts.px4_battery_warn_pct", 40.0);

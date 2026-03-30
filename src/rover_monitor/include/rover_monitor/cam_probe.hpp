@@ -57,7 +57,7 @@ private:
   std::string camera_id_{"realsense"};
 
   // Thresholds
-  float frame_stutter_threshold_ms_{66.0f};
+  float frame_stutter_threshold_ms_{99.0f};
 };
 
 }  // namespace rover_monitor
