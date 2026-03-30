@@ -17,7 +17,7 @@ CamProbe::CamProbe(const rclcpp::NodeOptions & options)
   this->declare_parameter("probes.cam.imu_topic", "/camera/imu");
   this->declare_parameter("probes.cam.depth_quality_sample_interval", 10);
   this->declare_parameter("probes.cam.imu_timeout_ms", 500);
-  this->declare_parameter("probes.cam.frame_stutter_threshold_ms", 66.0);
+  this->declare_parameter("probes.cam.frame_stutter_threshold_ms", 99.0);
 
   depth_quality_sample_interval_ =
     this->get_parameter("probes.cam.depth_quality_sample_interval").as_int();
@@ -131,7 +131,7 @@ void CamProbe::publish_status()
     status->error_msg = "Device disconnected";
   } else if (frame_delta_ms_ > frame_stutter_threshold_ms_ && !first_color_frame_) {
     status->error_code = 2;
-    status->error_msg = "Camera frame delta exceeds 66 ms (below 15 FPS)";
+    status->error_msg = "Camera frame delta exceeds 99 ms (below about 10 FPS)";
   } else if (depth_quality_sampled_ < 0.5f) {
     status->error_code = 3;
     status->error_msg = "Depth fill ratio below 50% (sampled)";

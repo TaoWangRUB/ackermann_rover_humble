@@ -59,7 +59,7 @@ private:
   rclcpp::Time jetson_stamp_;
 
   // Config
-  int cam_stale_timeout_ms_{500};
+  int cam_stale_timeout_ms_{1000};
   int px4_stale_timeout_ms_{1000};
   int jetson_stale_timeout_ms_{4000};
   std::string slam_frame_id_{"map"};
