@@ -25,6 +25,7 @@
 #   ./scripts/start_host_session.sh
 #   ./scripts/start_host_session.sh --no-attach
 #   ./scripts/start_host_session.sh --session=basestation
+#   ./scripts/start_host_session.sh --keep-conflicting-mosquitto
 #
 # To stop everything:
 #   docker compose -f control_center/docker-compose.yaml down
@@ -36,11 +37,13 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 SESSION="host"
 ATTACH=true
+STOP_CONFLICTING_MOSQUITTO=true
 
 for arg in "$@"; do
     case "${arg}" in
-        --no-attach)   ATTACH=false ;;
-        --session=*)   SESSION="${arg#--session=}" ;;
+        --no-attach)                  ATTACH=false ;;
+        --session=*)                  SESSION="${arg#--session=}" ;;
+        --keep-conflicting-mosquitto) STOP_CONFLICTING_MOSQUITTO=false ;;
         -h|--help)
             sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
             exit 0 ;;
@@ -55,13 +58,23 @@ CONFLICTING_MOSQUITTO_CONTAINERS="$(
 )"
 
 if [[ -n "${CONFLICTING_MOSQUITTO_CONTAINERS}" ]]; then
-    echo "Cannot start Control Center: MQTT port 1883 is likely already occupied."
-    echo "Running Mosquitto containers detected on this host:"
+    echo "Conflicting Mosquitto containers detected on this host:"
     printf '  %s\n' "${CONFLICTING_MOSQUITTO_CONTAINERS}"
     echo ""
-    echo "Stop those containers first, then rerun:"
-    echo "  docker stop ${CONFLICTING_MOSQUITTO_CONTAINERS//$'\n'/ }"
-    exit 1
+    if [[ "${STOP_CONFLICTING_MOSQUITTO}" == true ]]; then
+        echo "Stopping conflicting Mosquitto containers so Control Center can claim host port 1883..."
+        while IFS= read -r container_name; do
+            [[ -z "${container_name}" ]] && continue
+            docker stop "${container_name}" >/dev/null
+            echo "  stopped ${container_name}"
+        done <<< "${CONFLICTING_MOSQUITTO_CONTAINERS}"
+        echo ""
+    else
+        echo "Cannot start Control Center: MQTT port 1883 is likely already occupied."
+        echo "Stop those containers first, then rerun:"
+        echo "  docker stop ${CONFLICTING_MOSQUITTO_CONTAINERS//$'\n'/ }"
+        exit 1
+    fi
 fi
 
 tmux kill-session -t "${SESSION}" 2>/dev/null || true

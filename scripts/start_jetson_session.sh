@@ -37,6 +37,8 @@
 #   ./scripts/start_jetson_session.sh --nav2
 #   ./scripts/start_jetson_session.sh --nav2 --with-telemetry
 #   ./scripts/start_jetson_session.sh --mode-id=24
+#   ./scripts/start_jetson_session.sh --mode-type=speed_steering
+#   ./scripts/start_jetson_session.sh --reversible-drive
 #   ./scripts/start_jetson_session.sh --no-activate
 #   ./scripts/start_jetson_session.sh --no-attach
 #   ./scripts/start_jetson_session.sh --session=mytest
@@ -59,6 +61,8 @@ ATTACH=true
 DEPTH_CAMERA="d435i"
 BROKER_HOST=""
 PUBLISHER_CONFIG_FILE="/workspace/src/rover_monitor/config/publisher.yaml"
+PX4_MODE_TYPE="manual"
+REVERSIBLE_DRIVE=false
 
 for arg in "$@"; do
     case "${arg}" in
@@ -67,6 +71,8 @@ for arg in "$@"; do
         --t265)            ENABLE_T265=true ;;
         --no-activate)     ACTIVATE=false ;;
         --mode-id=*)       MODE_ID="${arg#--mode-id=}" ;;
+        --mode-type=*)     PX4_MODE_TYPE="${arg#--mode-type=}" ;;
+        --reversible-drive) REVERSIBLE_DRIVE=true ;;
         --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
         --broker-host=*)   BROKER_HOST="${arg#--broker-host=}" ;;
         --publisher-config=*) PUBLISHER_CONFIG_FILE="${arg#--publisher-config=}" ;;
@@ -116,6 +122,11 @@ if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     BROKER_HOST_ARG="broker_host:=${BROKER_HOST}"
 fi
 
+PX4_BRINGUP_ARGS=(--bridge --vo-bridge --mode-type "${PX4_MODE_TYPE}")
+if [[ "${REVERSIBLE_DRIVE}" == true ]]; then
+    PX4_BRINGUP_ARGS+=(--reversible-drive)
+fi
+
 # ── Create tmux session ──────────────────────────────────────────────
 tmux kill-session -t "${SESSION}" 2>/dev/null || true
 
@@ -148,7 +159,7 @@ tmux send-keys -t "${PANE_ROS2}" \
 
 # ── Pane: PX4 Bringup (wait for ROS nodes) ───────────────────────────
 tmux send-keys -t "${PANE_PX4}" \
-    "sleep 8 && ${SCRIPT_DIR}/start_px4_bringup_vo.sh --bridge --vo-bridge" Enter
+    "sleep 8 && ${SCRIPT_DIR}/start_px4_bringup_vo.sh ${PX4_BRINGUP_ARGS[*]}" Enter
 
 # ── Pane: Mode Activation (wait for PX4 registration) ────────────────
 if [[ "${ACTIVATE}" == true ]]; then
