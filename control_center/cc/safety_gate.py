@@ -43,6 +43,8 @@ class SafetyGate:
         px4 = health.px4
         if not px4.connected:
             return False, "PX4 not connected — cannot arm"
+        if not px4.armable:
+            return False, "PX4 preflight checks failed — cannot arm"
         if px4.battery_remaining_pct < 20.0:
             return False, f"Battery too low ({px4.battery_remaining_pct:.0f}%) — cannot arm"
 

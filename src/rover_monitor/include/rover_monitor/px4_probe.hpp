@@ -37,6 +37,7 @@ private:
 
   // Vehicle state
   bool armed_{false};
+  bool armable_{false};
   uint8_t nav_state_{0};
   uint8_t nav_state_display_{0};
 

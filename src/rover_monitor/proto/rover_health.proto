@@ -16,15 +16,16 @@ message CamStatus {
 message Px4Status {
   bool connected = 1;
   bool armed = 2;
-  int32 nav_state = 3;
-  string nav_state_label = 4;
-  float battery_voltage_v = 5;
-  float battery_current_a = 6;
-  float battery_remaining_pct = 7;
-  int32 heartbeat_age_ms = 8;
-  int32 error_code = 9;
-  string error_msg = 10;
-  int64 timestamp = 11;
+  bool armable = 3;
+  int32 nav_state = 4;
+  string nav_state_label = 5;
+  float battery_voltage_v = 6;
+  float battery_current_a = 7;
+  float battery_remaining_pct = 8;
+  int32 heartbeat_age_ms = 9;
+  int32 error_code = 10;
+  string error_msg = 11;
+  int64 timestamp = 12;
 }
 
 message JetsonStatus {
