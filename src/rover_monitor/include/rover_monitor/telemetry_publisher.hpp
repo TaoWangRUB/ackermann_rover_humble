@@ -43,6 +43,7 @@ private:
   void handle_set_mode(const std::string & cmd_id, const std::string & payload);
   void handle_estop(const std::string & cmd_id);
   void handle_cancel_goal(const std::string & cmd_id);
+  void handle_drive(const std::string & cmd_id, const std::string & payload);
 
   // Dedup
   bool is_duplicate(const std::string & cmd_id);

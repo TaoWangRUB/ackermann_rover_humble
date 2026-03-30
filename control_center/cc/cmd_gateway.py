@@ -22,6 +22,7 @@ CMD_TYPE_MAP = {
     "estop": 5,     # CMD_ESTOP
     "cancel_goal": 6,  # CMD_CANCEL_GOAL
     "set_param": 7,  # CMD_SET_PARAM
+    "drive": 8,     # CMD_DRIVE
 }
 
 TOPIC_MAP = {
@@ -31,6 +32,7 @@ TOPIC_MAP = {
     "set_mode": "rover/cmd/mode",
     "estop": "rover/cmd/estop",
     "cancel_goal": "rover/cmd/cancel_goal",
+    "drive": "rover/cmd/drive",
 }
 
 
@@ -76,11 +78,19 @@ class CommandGateway:
         elif cmd_type == "set_param":
             cmd.set_param.param_name = params.get("param_name", "")
             cmd.set_param.param_value = params.get("param_value", "")
+        elif cmd_type == "drive":
+            cmd.drive.speed_ms = float(params.get("speed_ms", 0.0))
+            cmd.drive.steering = float(params.get("steering", 0.0))
 
         # Serialize and publish
         payload = cmd.SerializeToString()
         topic = self._topics.get(cmd_type, f"rover/cmd/{cmd_type}")
-        self._mqtt.publish(topic, payload, qos=self._qos)
+        qos = 0 if cmd_type == "drive" else self._qos
+        self._mqtt.publish(topic, payload, qos=qos)
+
+        # Drive is high-frequency fire-and-forget — skip logging and ACK tracking
+        if cmd_type == "drive":
+            return cmd_id
 
         logger.info("Command sent: cmd_id=%s type=%s topic=%s by=%s",
                      cmd_id, cmd_type, topic, issued_by)

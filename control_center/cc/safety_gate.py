@@ -33,6 +33,8 @@ class SafetyGate:
             return await self._check_set_mode(health_data, health_stale)
         elif cmd_type == "cancel_goal":
             return True, "Cancel goal always allowed"
+        elif cmd_type == "drive":
+            return await self._check_drive(health_data, health_stale)
 
         return False, f"Unknown command type: {cmd_type}"
 
@@ -72,3 +74,15 @@ class SafetyGate:
             return False, "PX4 not connected — cannot change mode"
 
         return True, "Set mode preconditions met"
+
+    async def _check_drive(self, health: Any, stale: bool) -> tuple[bool, str]:
+        if stale or health is None:
+            return False, "Telemetry stale — cannot drive"
+
+        px4 = health.px4
+        if not px4.connected:
+            return False, "PX4 not connected — cannot drive"
+        if not px4.armed:
+            return False, "Not armed — cannot drive"
+
+        return True, "Drive preconditions met"
