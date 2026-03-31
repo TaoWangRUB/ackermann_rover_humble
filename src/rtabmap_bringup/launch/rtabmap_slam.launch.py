@@ -186,6 +186,7 @@ def generate_launch_description() -> LaunchDescription:
         'Odom/Holonomic': 'false',
         'Odom/ImageDecimation': '2',
         'Reg/Force3DoF': 'true',
+        'Optimizer/GravitySigma': '0.0'
     }
 
     visual_odom = Node(
