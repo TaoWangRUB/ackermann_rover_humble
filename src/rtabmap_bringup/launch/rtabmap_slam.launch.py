@@ -369,7 +369,7 @@ def generate_launch_description() -> LaunchDescription:
                     ('ground', '/camera/ground')])
     
     ld = LaunchDescription(ARGUMENTS)
-    ld.add_action(odom_relay_node)
+    #ld.add_action(odom_relay_node)
     ld.add_action(rgbd_sync)
     ld.add_action(depth_to_scan)
     ld.add_action(imu_transform_node)
