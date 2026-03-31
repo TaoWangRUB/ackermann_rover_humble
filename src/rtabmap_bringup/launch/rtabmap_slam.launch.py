@@ -168,21 +168,23 @@ def generate_launch_description() -> LaunchDescription:
         'frame_id': 'ackermann/base_link',
         'odom_frame_id': 'odom',
         'publish_tf': False,
-        'wait_for_imu_to_init': True,
+        'wait_imu_to_init': True,
         'use_sim_time': use_sim_time,
         'approx_sync': True,
-        'queue_size': 30,
+        'queue_size': 10,
         'approx_sync_max_interval': 0.02,
         'Odom/Strategy': '0',
         'Vis/MinInliers': '15',
         'Vis/FeatureType': '6',
-        'Vis/MaxFeatures': '1000',
+        'Vis/MaxFeatures': '800',
         'Vis/EstimationType': '1',
         'Vis/CorType': '0',
         'Vis/CorGuessWinSize': '15',
-        'Vis/MaxDepth': '20.0',
+        'Vis/MaxDepth': '10.0',
         'Odom/GuessMotion': 'true',
         'Odom/GuessSmoothingDelay': '0.1',
+        'Odom/Holonomic': 'false',
+        'Odom/ImageDecimation': '2',
         'Reg/Force3DoF': 'true',
     }
 
@@ -222,7 +224,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     ekf_parameters = {
-        'frequency': 15.0,
+        'frequency': 30.0,
         'predict_to_current_time': True,
         'history_length': 5.0,
         'smooth_lagged_data': True,
