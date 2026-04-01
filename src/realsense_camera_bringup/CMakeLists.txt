@@ -12,12 +12,19 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # --- CUDA (optional, for GPU-accelerated depth alignment on Jetson) ----------
+# Pin to /usr/local/cuda (JetPack's 11.4 toolkit) to avoid linking against a
+# newer cuda-cudart-12.x that ldconfig may resolve first.  The Jetson host
+# driver only supports CUDA 11.4.
+set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc" CACHE FILEPATH "")
+set(CUDAToolkit_ROOT    "/usr/local/cuda"           CACHE PATH     "")
 include(CheckLanguage)
 check_language(CUDA)
 if(CMAKE_CUDA_COMPILER)
   enable_language(CUDA)
   set(HAVE_CUDA TRUE)
   message(STATUS "CUDA found — GPU-accelerated depth alignment enabled")
+  message(STATUS "  nvcc: ${CMAKE_CUDA_COMPILER}")
+  message(STATUS "  toolkit root: ${CUDAToolkit_ROOT}")
 else()
   set(HAVE_CUDA FALSE)
   message(STATUS "CUDA not found — falling back to CPU depth alignment (rs2::align)")
@@ -48,15 +55,21 @@ add_executable(realsense_camera_node
 )
 
 if(HAVE_CUDA)
-  # Build CUDA alignment as a static library and link it into the node
+  # Build CUDA alignment as a static library and link it into the node.
+  # Statically link cudart from JetPack's 11.4 toolkit so the binary never
+  # picks up the wrong libcudart.so.12 at runtime.
   add_library(cuda_align STATIC src/cuda_align.cu)
-  target_include_directories(cuda_align PUBLIC include)
+  target_include_directories(cuda_align PUBLIC include ${CUDAToolkit_ROOT}/include)
   set_target_properties(cuda_align PROPERTIES
     CUDA_STANDARD 14
     CUDA_SEPARABLE_COMPILATION ON
     POSITION_INDEPENDENT_CODE ON
     # Xavier NX = sm_72, Orin = sm_87; include PTX for forward compat
     CUDA_ARCHITECTURES "72;87"
+  )
+  target_link_libraries(cuda_align
+    ${CUDAToolkit_ROOT}/lib64/libcudart_static.a
+    pthread dl rt      # cudart_static dependencies
   )
   target_link_libraries(realsense_camera_node cuda_align)
   target_compile_definitions(realsense_camera_node PRIVATE HAVE_CUDA)
