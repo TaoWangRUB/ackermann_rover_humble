@@ -47,6 +47,8 @@ else
 fi
 echo "Using: $DOCKER_COMPOSE"
 
+COLCON_SKIP_ARGS="--packages-ignore-regex '^example_.*' --packages-ignore px4_ros2_py"
+
 if [ "$CI" = "true" ]; then
     echo -e "${GREEN}CI Environment Detected: Removing GPU runtime requirement for headless build...${NC}"
     # compose file uses version 2.4 with only 'runtime: nvidia' (no deploy block)
@@ -65,15 +67,12 @@ $DOCKER_COMPOSE -f docker/docker-compose.yml up -d ackermann_slam
 sleep 5 # wait for container to be ready
 
 echo -e "${GREEN}=== Running Build ===${NC}"
-# Exclude submodule example and test packages from the build
-$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "
-  touch src/px4-ros2-interface-lib/examples/COLCON_IGNORE 2>/dev/null || true
-  touch src/px4-ros2-interface-lib/px4_ros2_py/COLCON_IGNORE 2>/dev/null || true
-"
+# Exclude submodule example packages and the optional Python bindings package
+# from the workspace build.
 # Stage 1: Build px4_msgs then px4_ros2_cpp (px4_ros2_cpp needs px4_msgs at configure time)
-$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --packages-up-to px4_ros2_cpp"
+$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install $COLCON_SKIP_ARGS --packages-up-to px4_ros2_cpp"
 # Stage 2: Source stage-1 artifacts, then build the project's own packages
-$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && colcon build --symlink-install --packages-up-to ackermann_control safety px4_bringup robot_bringup ackermann_nav2_bringup rtabmap_bringup description_robot"
+$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && colcon build --symlink-install $COLCON_SKIP_ARGS --packages-up-to ackermann_control safety px4_bringup robot_bringup ackermann_nav2_bringup rtabmap_bringup description_robot"
 
 echo -e "${GREEN}=== Running Unit Tests ===${NC}"
 # Only test project packages — skip submodule tests (px4-ros2-interface-lib examples, etc.)

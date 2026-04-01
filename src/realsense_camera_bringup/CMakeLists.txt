@@ -55,6 +55,8 @@ if(HAVE_CUDA)
     CUDA_STANDARD 14
     CUDA_SEPARABLE_COMPILATION ON
     POSITION_INDEPENDENT_CODE ON
+    # Xavier NX = sm_72, Orin = sm_87; include PTX for forward compat
+    CUDA_ARCHITECTURES "72;87"
   )
   target_link_libraries(realsense_camera_node cuda_align)
   target_compile_definitions(realsense_camera_node PRIVATE HAVE_CUDA)

@@ -61,11 +61,9 @@ jobs:
           sudo apt-get update
           # Remove submodule example package manifests so rosdep does not
           # process their deps (the ament_python examples can trigger pip
-          # installs that shadow system modules).  Also drop COLCON_IGNORE
-          # so colcon skips them during build.
+          # installs that shadow system modules). The build step below skips
+          # the example_* packages and px4_ros2_py explicitly.
           find src/px4-ros2-interface-lib/examples -name package.xml -delete
-          touch src/px4-ros2-interface-lib/examples/COLCON_IGNORE
-          touch src/px4-ros2-interface-lib/px4_ros2_py/COLCON_IGNORE 2>/dev/null || true
           rosdep update
           rosdep install --from-paths src --ignore-src --rosdistro jazzy -y
 
@@ -74,6 +72,7 @@ jobs:
         run: |
           set -eo pipefail
           source /opt/ros/jazzy/setup.bash
+          COLCON_SKIP_ARGS=(--packages-ignore-regex '^example_.*' --packages-ignore px4_ros2_py)
           # CMake's execute_process calls /usr/bin/python3 directly and may
           # not inherit PYTHONPATH set by setup.bash.  Add a .pth file so
           # the ROS Python packages are always on the default sys.path.
@@ -82,16 +81,16 @@ jobs:
           echo "/opt/ros/jazzy/lib/python${PY_VER}/site-packages" | sudo tee "$SITE/ros-jazzy.pth" > /dev/null
           /usr/bin/python3 -c "import ament_package; print('ament_package:', ament_package.__file__)"
           # Stage 1: Build px4_msgs first.
-          colcon build --symlink-install --packages-select px4_msgs
+          colcon build --symlink-install "${COLCON_SKIP_ARGS[@]}" --packages-select px4_msgs
           source install/setup.bash
           # Stage 2: Build px4_ros2_cpp (needs px4_msgs on CMAKE_PREFIX_PATH
           # because it calls ament_index_get_resource() at configure time).
-          colcon build --symlink-install --packages-select px4_ros2_cpp
+          colcon build --symlink-install "${COLCON_SKIP_ARGS[@]}" --packages-select px4_ros2_cpp
           source install/setup.bash
           # Stage 2: Build the project's own packages (and remaining
           # deps).  Skips unneeded examples from the
           # px4-ros2-interface-lib submodule.
-          colcon build --symlink-install --packages-up-to \
+          colcon build --symlink-install "${COLCON_SKIP_ARGS[@]}" --packages-up-to \
             ackermann_control \
             safety \
             px4_bringup \
