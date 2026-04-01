@@ -15,6 +15,10 @@
 #include <queue>
 #include <memory>
 
+#ifdef HAVE_CUDA
+#include "realsense_camera_bringup/cuda_align.hpp"
+#endif
+
 namespace realsense_camera_bringup
 {
 
@@ -40,6 +44,7 @@ private:
   static bool parse_profile_string(const std::string & profile_str, int & width, int & height, int & fps);
 
   void publish_video_frame(const rs2::video_frame& frame, rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub, const sensor_msgs::msg::CameraInfo& info_template);
+  void publish_aligned_depth(const uint16_t * data, int width, int height);
   void publish_imu_data(const rs2::motion_frame& accel, const rs2::motion_frame& gyro);
   void publish_pose_frame(const rs2::pose_frame& frame);
 
@@ -101,12 +106,17 @@ private:
   sensor_msgs::msg::CameraInfo color_info_msg_, depth_info_msg_, fisheye1_info_msg_, fisheye2_info_msg_;
   sensor_msgs::msg::CameraInfo infra1_info_msg_, infra2_info_msg_;
 
-  // Async alignment worker (offloads rs2::align::process() off the pipeline callback)
+  // Async alignment worker (offloads depth alignment off the pipeline callback)
   std::queue<rs2::frameset> align_queue_;
   std::mutex align_mutex_;
   std::condition_variable align_cv_;
   std::thread align_thread_;
   static constexpr size_t ALIGN_QUEUE_MAX = 2;  // drop oldest if consumer falls behind
+
+#ifdef HAVE_CUDA
+  std::unique_ptr<CudaAligner> cuda_aligner_;
+  std::vector<uint16_t> aligned_depth_buf_;  // host buffer for CUDA output
+#endif
 
   // Shutdown flag + cached accel frame for IMU pairing
   std::atomic<bool> running_{false};
