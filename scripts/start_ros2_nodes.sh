@@ -165,7 +165,8 @@ if [[ "${BUILD}" == "true" ]]; then
         BUILD_CMD+=" --packages-select ${BUILD_PKGS//,/ }"
         echo "Building packages: ${BUILD_PKGS}..."
     else
-        echo "Building all packages..."
+        BUILD_CMD+=" --packages-ignore-regex '^example_.*' --packages-ignore px4_ros2_py"
+        echo "Building all workspace packages (skipping PX4 example packages and px4_ros2_py)..."
     fi
     dcomp exec ackermann_slam bash -c "${BUILD_CMD}"
     echo ""
