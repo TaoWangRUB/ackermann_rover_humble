@@ -777,13 +777,16 @@ void RealsenseCameraNode::align_worker()
       if (cuda_aligner_) {
         auto depth = fs.get_depth_frame();
         if (!depth) continue;
+        const auto color = fs.get_color_frame();
+        const auto aligned_stamp = frame_ros_time(color ? color : depth);
 
         try {
           const auto * src = reinterpret_cast<const uint16_t *>(depth.get_data());
           cuda_aligner_->align(src, aligned_depth_buf_.data());
           publish_aligned_depth(aligned_depth_buf_.data(),
                                 cuda_aligner_->color_width(),
-                                cuda_aligner_->color_height());
+                                cuda_aligner_->color_height(),
+                                aligned_stamp);
           continue;
         } catch (const std::exception & e) {
           enable_cpu_alignment_fallback(e.what());
@@ -791,14 +794,30 @@ void RealsenseCameraNode::align_worker()
       }
 
       if (align_to_color_) {
+        const auto color = fs.get_color_frame();
+        const auto depth = fs.get_depth_frame();
+        const auto aligned_stamp = frame_ros_time(color ? color : depth);
         rs2::frameset processed = align_to_color_->process(fs);
         if (auto aligned = processed.get_depth_frame())
-          publish_video_frame(aligned, aligned_depth_image_pub_, aligned_depth_info_pub_, color_info_msg_);
+          publish_video_frame(
+            aligned,
+            aligned_depth_image_pub_,
+            aligned_depth_info_pub_,
+            color_info_msg_,
+            aligned_stamp);
       }
 #else
+      const auto color = fs.get_color_frame();
+      const auto depth = fs.get_depth_frame();
+      const auto aligned_stamp = frame_ros_time(color ? color : depth);
       rs2::frameset processed = align_to_color_->process(fs);
       if (auto aligned = processed.get_depth_frame())
-        publish_video_frame(aligned, aligned_depth_image_pub_, aligned_depth_info_pub_, color_info_msg_);
+        publish_video_frame(
+          aligned,
+          aligned_depth_image_pub_,
+          aligned_depth_info_pub_,
+          color_info_msg_,
+          aligned_stamp);
 #endif
     } catch (const std::exception & e) {
       if (running_) RCLCPP_WARN(get_logger(), "Align worker error: %s", e.what());
@@ -812,7 +831,7 @@ void RealsenseCameraNode::align_worker()
 void RealsenseCameraNode::publish_imu_data(const rs2::motion_frame& accel, const rs2::motion_frame& gyro)
 {
   auto msg = std::make_unique<sensor_msgs::msg::Imu>();
-  msg->header.stamp = now();
+  msg->header.stamp = frame_ros_time(gyro);
   msg->header.frame_id = camera_name_ + "_imu_optical_frame";
 
   auto g = gyro.get_motion_data();
@@ -826,6 +845,50 @@ void RealsenseCameraNode::publish_imu_data(const rs2::motion_frame& accel, const
   msg->linear_acceleration.z = a.z;
 
   imu_pub_->publish(std::move(msg));
+}
+
+// ---------------------------------------------------------------------------
+// sensor_time_to_ros / frame_ros_time
+// ---------------------------------------------------------------------------
+rclcpp::Time RealsenseCameraNode::sensor_time_to_ros(
+  double frame_time_ms, rs2_timestamp_domain time_domain)
+{
+  if (frame_time_ms <= 0.0) {
+    return now();
+  }
+
+  if (time_domain == RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME ||
+      time_domain == RS2_TIMESTAMP_DOMAIN_GLOBAL_TIME)
+  {
+    return rclcpp::Time(
+      static_cast<int64_t>(frame_time_ms * 1000000.0),
+      RCL_SYSTEM_TIME);
+  }
+
+  const auto ros_now = now();
+  std::lock_guard<std::mutex> lock(timestamp_base_mutex_);
+  if (!timestamp_base_initialized_ ||
+      time_domain != timestamp_domain_ ||
+      frame_time_ms < camera_time_base_ms_)
+  {
+    camera_time_base_ms_ = frame_time_ms;
+    ros_time_base_ = ros_now;
+    timestamp_domain_ = time_domain;
+    timestamp_base_initialized_ = true;
+  }
+
+  const int64_t delta_ns =
+    static_cast<int64_t>((frame_time_ms - camera_time_base_ms_) * 1000000.0);
+  return ros_time_base_ + rclcpp::Duration::from_nanoseconds(delta_ns);
+}
+
+rclcpp::Time RealsenseCameraNode::frame_ros_time(const rs2::frame & frame)
+{
+  if (!frame) {
+    return now();
+  }
+
+  return sensor_time_to_ros(frame.get_timestamp(), frame.get_frame_timestamp_domain());
 }
 
 // ---------------------------------------------------------------------------
@@ -864,10 +927,20 @@ void RealsenseCameraNode::publish_video_frame(
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub,
   const sensor_msgs::msg::CameraInfo & info_template)
 {
+  publish_video_frame(frame, pub, info_pub, info_template, frame_ros_time(frame));
+}
+
+void RealsenseCameraNode::publish_video_frame(
+  const rs2::video_frame & frame,
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub,
+  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub,
+  const sensor_msgs::msg::CameraInfo & info_template,
+  const rclcpp::Time & stamp)
+{
   if (!pub || !info_pub) return;
 
   auto img = std::make_unique<sensor_msgs::msg::Image>();
-  img->header.stamp = now();
+  img->header.stamp = stamp;
   img->header.frame_id = info_template.header.frame_id;
   img->width = frame.get_width();
   img->height = frame.get_height();
@@ -895,12 +968,12 @@ void RealsenseCameraNode::publish_video_frame(
 // Used by CUDA alignment path (no rs2::video_frame available).
 // ---------------------------------------------------------------------------
 void RealsenseCameraNode::publish_aligned_depth(
-  const uint16_t * data, int width, int height)
+  const uint16_t * data, int width, int height, const rclcpp::Time & stamp)
 {
   if (!aligned_depth_image_pub_ || !aligned_depth_info_pub_) return;
 
   auto img = std::make_unique<sensor_msgs::msg::Image>();
-  img->header.stamp = now();
+  img->header.stamp = stamp;
   img->header.frame_id = color_info_msg_.header.frame_id;
   img->width = static_cast<uint32_t>(width);
   img->height = static_cast<uint32_t>(height);
@@ -926,7 +999,7 @@ void RealsenseCameraNode::publish_pose_frame(const rs2::pose_frame & frame)
 
   auto pose = frame.get_pose_data();
   auto msg = std::make_unique<nav_msgs::msg::Odometry>();
-  msg->header.stamp = now();
+  msg->header.stamp = frame_ros_time(frame);
   msg->header.frame_id = camera_name_ + "_odom_frame";
   msg->child_frame_id = camera_name_ + "_pose_frame";
 
