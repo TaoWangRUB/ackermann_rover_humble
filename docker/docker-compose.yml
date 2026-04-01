@@ -40,9 +40,8 @@ services:
       - ${PX4_DIR}:/px4
       - ${REALSENSE_ROS_DIR}:/realsense-ros
       - /dev:/dev
-      # JetPack 5 CUDA 11.4 toolkit — needed for GPU-accelerated depth alignment.
-      # The container's CUDA 12.6 nvcc handles compilation; this mount provides the
-      # 11.4 cudart_static.a whose runtime is compatible with the host driver.
+      # JetPack 5 CUDA 11.4 toolkit — provides nvcc + cudart_static for
+      # GPU-accelerated depth alignment. The host driver is 11.4.
       - /usr/local/cuda-11.4:/usr/local/cuda-11.4:ro
 
     network_mode: host
