@@ -467,9 +467,13 @@ void RealsenseCameraNode::start_pipeline()
     auto depth_sensor = profile.get_device().first<rs2::depth_sensor>();
     float depth_scale = depth_sensor.get_depth_scale();
 
-    cuda_aligner_ = std::make_unique<CudaAligner>(d_intr, c_intr, d2c, depth_scale);
-    aligned_depth_buf_.resize(static_cast<size_t>(ci.width) * ci.height, 0);
-    RCLCPP_INFO(get_logger(), "Depth alignment: CUDA GPU-accelerated (depth_scale=%.6f)", depth_scale);
+    try {
+      cuda_aligner_ = std::make_unique<CudaAligner>(d_intr, c_intr, d2c, depth_scale);
+      aligned_depth_buf_.resize(static_cast<size_t>(ci.width) * ci.height, 0);
+      RCLCPP_INFO(get_logger(), "Depth alignment: CUDA GPU-accelerated (depth_scale=%.6f)", depth_scale);
+    } catch (const std::exception & e) {
+      enable_cpu_alignment_fallback(e.what());
+    }
 #else
     align_to_color_ = std::make_shared<rs2::align>(RS2_STREAM_COLOR);
     RCLCPP_INFO(get_logger(), "Depth alignment: CPU rs2::align (async worker thread)");
@@ -557,6 +561,36 @@ void RealsenseCameraNode::apply_sensor_options(rs2::pipeline_profile & profile)
     }
   }
 }
+
+#ifdef HAVE_CUDA
+void RealsenseCameraNode::enable_cpu_alignment_fallback(const std::string & reason)
+{
+  if (!align_to_color_) {
+    align_to_color_ = std::make_shared<rs2::align>(RS2_STREAM_COLOR);
+  }
+
+  const bool was_using_cuda = static_cast<bool>(cuda_aligner_);
+  cuda_aligner_.reset();
+  aligned_depth_buf_.clear();
+  aligned_depth_buf_.shrink_to_fit();
+
+  if (reason.empty()) {
+    if (was_using_cuda) {
+      RCLCPP_WARN(
+        get_logger(),
+        "CUDA depth alignment disabled at runtime. Falling back to CPU rs2::align.");
+    } else {
+      RCLCPP_INFO(get_logger(), "Depth alignment: CPU rs2::align (async worker thread)");
+    }
+    return;
+  }
+
+  RCLCPP_WARN(
+    get_logger(),
+    "CUDA depth alignment unavailable (%s). Falling back to CPU rs2::align.",
+    reason.c_str());
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // start_imu_sensor — respects enable_accel_ / enable_gyro_ independently
@@ -740,13 +774,27 @@ void RealsenseCameraNode::align_worker()
     }
     try {
 #ifdef HAVE_CUDA
-      auto depth = fs.get_depth_frame();
-      if (!depth) continue;
-      const auto * src = reinterpret_cast<const uint16_t *>(depth.get_data());
-      cuda_aligner_->align(src, aligned_depth_buf_.data());
-      publish_aligned_depth(aligned_depth_buf_.data(),
-                            cuda_aligner_->color_width(),
-                            cuda_aligner_->color_height());
+      if (cuda_aligner_) {
+        auto depth = fs.get_depth_frame();
+        if (!depth) continue;
+
+        try {
+          const auto * src = reinterpret_cast<const uint16_t *>(depth.get_data());
+          cuda_aligner_->align(src, aligned_depth_buf_.data());
+          publish_aligned_depth(aligned_depth_buf_.data(),
+                                cuda_aligner_->color_width(),
+                                cuda_aligner_->color_height());
+          continue;
+        } catch (const std::exception & e) {
+          enable_cpu_alignment_fallback(e.what());
+        }
+      }
+
+      if (align_to_color_) {
+        rs2::frameset processed = align_to_color_->process(fs);
+        if (auto aligned = processed.get_depth_frame())
+          publish_video_frame(aligned, aligned_depth_image_pub_, aligned_depth_info_pub_, color_info_msg_);
+      }
 #else
       rs2::frameset processed = align_to_color_->process(fs);
       if (auto aligned = processed.get_depth_frame())
