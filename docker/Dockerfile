@@ -114,19 +114,13 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && rm -rf /var/lib/apt/lists/*
 
 # CUDA toolkit for GPU-accelerated depth alignment.
-# On Jetson (aarch64), the JetPack 5 host driver only supports CUDA 11.4.
-# We mount the host's /usr/local/cuda-11.4 at runtime (see docker-compose.yml)
-# and compile with nvcc 11.4 + gcc-11 (CUDA 11.4 max supported host compiler).
-# CUDA 12.6 is kept as fallback for x86_64 desktop builds.
-RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa/cuda-keyring_1.1-1_all.deb \
-    -o /tmp/cuda-keyring.deb && \
-    dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    cuda-nvcc-12-6 \
-    cuda-cudart-dev-12-6 \
+# Jetson Xavier is permanently locked to CUDA 11.4 (JetPack 5, no JetPack 6).
+# The host's /usr/local/cuda-11.4 toolkit is mounted at runtime (docker-compose.yml)
+# providing nvcc 11.4 + cudart_static. gcc-11 is needed because CUDA 11.4 nvcc
+# only supports up to GCC 11, while Ubuntu 24.04 ships GCC 13.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc-11 g++-11 \
     && rm -rf /var/lib/apt/lists/*
-ENV PATH=/usr/local/cuda-12.6/bin:${PATH}
 
 # PX4 Python dependencies
 COPY docker/px4_requirements.txt /tmp/px4_requirements.txt

@@ -12,10 +12,10 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # --- CUDA (optional, for GPU-accelerated depth alignment on Jetson) ----------
-# On Jetson (aarch64): prefer the host-mounted CUDA 11.4 toolkit (JetPack 5)
+# On Jetson (aarch64): use the host-mounted CUDA 11.4 toolkit (JetPack 5)
 # because the host driver is 11.4 and the runtime must match.
 # CUDA 11.4 nvcc only supports up to GCC 11, so we use gcc-11 as host compiler.
-# On x86_64: fall back to whatever /usr/local/cuda provides (12.x in container).
+# On x86_64: fall back to whatever /usr/local/cuda provides.
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64" AND EXISTS "/usr/local/cuda-11.4/bin/nvcc")
   set(CMAKE_CUDA_COMPILER "/usr/local/cuda-11.4/bin/nvcc" CACHE FILEPATH "")
   set(CUDAToolkit_ROOT    "/usr/local/cuda-11.4"           CACHE PATH     "")
