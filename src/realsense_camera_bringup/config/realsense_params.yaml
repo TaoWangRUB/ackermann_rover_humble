@@ -31,14 +31,14 @@ realsense_camera_node:
     # =========================================================================
     color_width: 640
     color_height: 480
-    color_fps: 60
+    color_fps: 30
 
     # =========================================================================
     # Depth stream
     # =========================================================================
     depth_width: 640
     depth_height: 480
-    depth_fps: 60
+    depth_fps: 30
 
     # =========================================================================
     # Profile string overrides — format: "WxHxFPS" (e.g. "640x480x60")
@@ -66,7 +66,7 @@ realsense_camera_node:
     # =========================================================================
     enable_sync: true
     align_depth.enable: true       # align depth to color frame
-    align_depth_to_color: false    # legacy alias for align_depth.enable
+    align_depth_to_color: true     # legacy alias for align_depth.enable
 
     # =========================================================================
     # Stubs (declared for compatibility, not yet functional)
