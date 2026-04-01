@@ -1,4 +1,26 @@
 cmake_minimum_required(VERSION 3.8)
+
+execute_process(
+  COMMAND uname -m
+  OUTPUT_VARIABLE _HOST_ARCH
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# Jetson builds use Ubuntu 24.04 plus the CUDA 11.x toolkit exposed inside the
+# running container, which still requires GCC 11 as the host compiler. Set
+# these before project()/enable_language(CUDA) so CMake's compiler detection
+# and the actual build use the same toolchain.
+if(_HOST_ARCH STREQUAL "aarch64")
+  find_program(_JETSON_GCC11 gcc-11)
+  find_program(_JETSON_GPP11 g++-11)
+  if(_JETSON_GCC11 AND _JETSON_GPP11)
+    set(CMAKE_C_COMPILER "${_JETSON_GCC11}" CACHE FILEPATH "" FORCE)
+    set(CMAKE_CXX_COMPILER "${_JETSON_GPP11}" CACHE FILEPATH "" FORCE)
+    set(CMAKE_CUDA_HOST_COMPILER "${_JETSON_GPP11}" CACHE FILEPATH "" FORCE)
+    set(ENV{CUDAHOSTCXX} "${_JETSON_GPP11}")
+  endif()
+endif()
+
 project(realsense_camera_bringup LANGUAGES CXX)
 
 # Default to C++17 for ROS 2 Jazzy
@@ -12,25 +34,40 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # --- CUDA (optional, for GPU-accelerated depth alignment on Jetson) ----------
-# On Jetson (aarch64): use the host-mounted CUDA 11.4 toolkit (JetPack 5)
-# because the host driver is 11.4 and the runtime must match.
-# CUDA 11.4 nvcc only supports up to GCC 11, so we use gcc-11 as host compiler.
-# On x86_64: fall back to whatever /usr/local/cuda provides.
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64" AND EXISTS "/usr/local/cuda-11.4/bin/nvcc")
-  set(CMAKE_CUDA_COMPILER "/usr/local/cuda-11.4/bin/nvcc" CACHE FILEPATH "")
-  set(CUDAToolkit_ROOT    "/usr/local/cuda-11.4"           CACHE PATH     "")
-  # CUDA 11.4 nvcc can't parse GCC 13+ headers — use GCC 11 for host compilation
-  find_program(_GCC11 gcc-11)
-  if(_GCC11)
-    set(CMAKE_CUDA_HOST_COMPILER "${_GCC11}" CACHE FILEPATH "")
+# On Jetson, use whichever CUDA toolkit the running container exposes.
+# On x86_64, keep using the default /usr/local/cuda layout.
+unset(_CUDA_ROOT)
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+  if(EXISTS "/usr/local/cuda/bin/nvcc")
+    set(_CUDA_ROOT "/usr/local/cuda")
+  else()
+    foreach(_candidate IN ITEMS /usr/local/cuda-12.6 /usr/local/cuda-12.4 /usr/local/cuda-11.8 /usr/local/cuda-11.6 /usr/local/cuda-11.4)
+      if(EXISTS "${_candidate}/bin/nvcc")
+        set(_CUDA_ROOT "${_candidate}")
+        break()
+      endif()
+    endforeach()
   endif()
 elseif(EXISTS "/usr/local/cuda/bin/nvcc")
-  set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc" CACHE FILEPATH "")
-  set(CUDAToolkit_ROOT    "/usr/local/cuda"           CACHE PATH     "")
+  set(_CUDA_ROOT "/usr/local/cuda")
 endif()
-include(CheckLanguage)
-check_language(CUDA)
-if(CMAKE_CUDA_COMPILER)
+
+if(_CUDA_ROOT)
+  set(CMAKE_CUDA_COMPILER "${_CUDA_ROOT}/bin/nvcc" CACHE FILEPATH "")
+  set(CUDAToolkit_ROOT    "${_CUDA_ROOT}"          CACHE PATH     "")
+  set(CMAKE_CUDA_RUNTIME_LIBRARY Shared)
+  # Ubuntu 24.04 glibc 2.39 exposes vector typedefs through
+  # bits/math-vector.h that CUDA 11.4's cicc cannot parse on Jetson. Include
+  # a tiny compat header before cuda_runtime.h so the compiler-id probe and
+  # actual .cu builds see a tamed __GNUC_PREREQ macro.
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    set(_CUDA_GLIBC_COMPAT_HEADER
+      "${CMAKE_CURRENT_SOURCE_DIR}/include/realsense_camera_bringup/cuda_glibc_compat.h")
+    string(APPEND CMAKE_CUDA_FLAGS_INIT
+      " -Xcompiler=-include -Xcompiler=${_CUDA_GLIBC_COMPAT_HEADER}")
+  endif()
+endif()
+if(CMAKE_CUDA_COMPILER AND EXISTS "${CMAKE_CUDA_COMPILER}")
   enable_language(CUDA)
   set(HAVE_CUDA TRUE)
   message(STATUS "CUDA found — GPU-accelerated depth alignment enabled")
@@ -72,20 +109,25 @@ if(HAVE_CUDA)
   find_package(CUDAToolkit REQUIRED)
 
   # Build CUDA alignment as a static library and link it into the node.
-  # Statically link cudart so the binary never picks up the wrong libcudart.so
-  # from ldconfig at runtime.
+  # Use the toolkit's shared cudart inside the running container. Jetson's
+  # CUDA 11.4 static cudart pulls in librt.a during device link, which is not
+  # available on this Ubuntu 24.04 image.
   add_library(cuda_align STATIC src/cuda_align.cu)
   target_include_directories(cuda_align PUBLIC include)
   set_target_properties(cuda_align PROPERTIES
     CUDA_STANDARD 14
     CUDA_SEPARABLE_COMPILATION ON
+    CUDA_RUNTIME_LIBRARY Shared
     POSITION_INDEPENDENT_CODE ON
     # Xavier = sm_72, Orin = sm_87
     CUDA_ARCHITECTURES "72;87"
   )
   target_link_libraries(cuda_align
-    CUDA::cudart_static      # portable: finds correct lib path for x86/aarch64
-    pthread dl rt
+    CUDA::cudart             # portable: finds correct lib path for x86/aarch64
+    pthread dl
+  )
+  set_target_properties(realsense_camera_node PROPERTIES
+    CUDA_RUNTIME_LIBRARY Shared
   )
   target_link_libraries(realsense_camera_node cuda_align)
   target_compile_definitions(realsense_camera_node PRIVATE HAVE_CUDA)

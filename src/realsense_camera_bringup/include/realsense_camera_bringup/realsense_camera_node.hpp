@@ -39,6 +39,9 @@ private:
   void on_frame(rs2::frame frame);
   void apply_sensor_options(rs2::pipeline_profile & profile);
   void align_worker();
+#ifdef HAVE_CUDA
+  void enable_cpu_alignment_fallback(const std::string & reason);
+#endif
 
   sensor_msgs::msg::CameraInfo build_camera_info(const rs2::video_stream_profile& profile, const std::string& frame_id) const;
   static bool parse_profile_string(const std::string & profile_str, int & width, int & height, int & fps);
