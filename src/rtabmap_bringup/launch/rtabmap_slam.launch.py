@@ -23,7 +23,21 @@ ARGUMENTS = [
         'vision',
         default_value='true',
         choices=['true', 'false'],
-        description='Use RGB-D visual odometry (true) or ICP odometry (false).'
+        description='Use RGB-D visual odometry (true) or ICP odometry (false). '
+                    'Ignored when use_t265_odom:=true.'
+    ),
+    DeclareLaunchArgument(
+        'use_t265_odom',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Use T265 tracking camera as odometry source instead of '
+                    'RTAB-Map VO/ICP. Skips rgbd_odometry and icp_odometry nodes. '
+                    'D435i is still used for mapping and obstacles.'
+    ),
+    DeclareLaunchArgument(
+        't265_odom_topic',
+        default_value='/t265/odom_base',
+        description='T265 odometry topic (used when use_t265_odom:=true).'
     ),
     DeclareLaunchArgument(
         'rtabmap_viz',
@@ -73,9 +87,21 @@ def generate_launch_description() -> LaunchDescription:
     localization = LaunchConfiguration('localization')
     vision = LaunchConfiguration('vision')
     rtabmap_viz = LaunchConfiguration('rtabmap_viz')
+    use_t265_odom = LaunchConfiguration('use_t265_odom')
+    t265_odom_topic = LaunchConfiguration('t265_odom_topic')
 
+    # When use_t265_odom, skip VO/ICP and use T265 directly.
     odom_topic = PythonExpression([
-        '"/vo_odom" if "', vision, '" == "true" else "/icp_odom"'
+        '"', t265_odom_topic, '" if "', use_t265_odom, '" == "true"'
+        ' else ("/vo_odom" if "', vision, '" == "true" else "/icp_odom")'
+    ])
+
+    # Only launch VO/ICP when NOT using T265 odom.
+    launch_visual_odom = PythonExpression([
+        '"true" if "', use_t265_odom, '" == "false" and "', vision, '" == "true" else "false"'
+    ])
+    launch_icp_odom = PythonExpression([
+        '"true" if "', use_t265_odom, '" == "false" and "', vision, '" == "false" else "false"'
     ])
     subscribe_scan = PythonExpression([
         'True if "', vision, '" == "false" else False'
@@ -132,7 +158,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{
             'approx_sync': True,
             'queue_size': 30,
-            'approx_sync_max_interval': 0.02,
+            'approx_sync_max_interval': 0.05,
             'use_sim_time': use_sim_time
         }],
         remappings=remappings,
@@ -172,25 +198,23 @@ def generate_launch_description() -> LaunchDescription:
         'use_sim_time': use_sim_time,
         'approx_sync': True,
         'queue_size': 30,
-        'approx_sync_max_interval': 0.02,
-        'Odom/Strategy': '0',
+        'approx_sync_max_interval': 0.05,
+        'Odom/Strategy': '1',
+        'Odom/ImageDecimation': '3', 
         'Vis/MinInliers': '15',
         'Vis/FeatureType': '6',
-        'Vis/MaxFeatures': '800',
+        'Vis/MaxFeatures': '300',
         'Vis/EstimationType': '1',
         'Vis/CorType': '0',
-        'Vis/CorGuessWinSize': '15',
-        'Vis/MaxDepth': '10.0',
-        'Odom/GuessMotion': 'false',
+        'Vis/CorGuessWinSize': '20',
+        'Vis/MaxDepth': '8.0',
+        'Odom/GuessMotion': 'true',
         'Odom/GuessSmoothingDelay': '0.1',
-        'Odom/Holonomic': 'false',
-        'Odom/ImageDecimation': '2',
         'Reg/Force3DoF': 'true',
-        'Optimizer/GravitySigma': '0.0'
     }
 
     visual_odom = Node(
-        condition=IfCondition(vision),
+        condition=IfCondition(launch_visual_odom),
         package='rtabmap_odom',
         executable='rgbd_odometry',
         output='screen',
@@ -215,7 +239,7 @@ def generate_launch_description() -> LaunchDescription:
     }
 
     icp_odom = Node(
-        condition=UnlessCondition(vision),
+        condition=IfCondition(launch_icp_odom),
         package='rtabmap_odom',
         executable='icp_odometry',
         output='screen',

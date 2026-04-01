@@ -184,6 +184,13 @@ ARGUMENTS = [
         description='[HW mode] Enable T265 tracking camera and odom_tf_relay.',
     ),
     DeclareLaunchArgument(
+        'use_t265_odom',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Use T265 as odometry source (skip RTAB-Map VO/ICP). '
+                    'Requires hw_enable_t265:=true.',
+    ),
+    DeclareLaunchArgument(
         'rover_monitor',
         default_value='false',
         choices=['true', 'false'],
@@ -216,6 +223,7 @@ def generate_launch_description() -> LaunchDescription:
     reversible_drive = LaunchConfiguration('reversible_drive')
     depth_camera = LaunchConfiguration('depth_camera')
     hw_enable_t265 = LaunchConfiguration('hw_enable_t265')
+    use_t265_odom = LaunchConfiguration('use_t265_odom')
 
     robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
@@ -328,6 +336,7 @@ def generate_launch_description() -> LaunchDescription:
             'vision': vision,
             'localization': localization,
             'rtabmap_viz': rtabmap_viz,
+            'use_t265_odom': use_t265_odom,
             'rgb_image_topic': PythonExpression([
                 '"', depth_camera, '/color/image_raw"'
                 ' if "', use_gazebo, '" == "false"'

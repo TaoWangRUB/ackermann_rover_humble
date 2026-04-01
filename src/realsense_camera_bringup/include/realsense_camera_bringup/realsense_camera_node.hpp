@@ -43,11 +43,14 @@ private:
   void enable_cpu_alignment_fallback(const std::string & reason);
 #endif
 
+  rclcpp::Time sensor_time_to_ros(double frame_time_ms, rs2_timestamp_domain time_domain);
+  rclcpp::Time frame_ros_time(const rs2::frame & frame);
   sensor_msgs::msg::CameraInfo build_camera_info(const rs2::video_stream_profile& profile, const std::string& frame_id) const;
   static bool parse_profile_string(const std::string & profile_str, int & width, int & height, int & fps);
 
   void publish_video_frame(const rs2::video_frame& frame, rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub, const sensor_msgs::msg::CameraInfo& info_template);
-  void publish_aligned_depth(const uint16_t * data, int width, int height);
+  void publish_video_frame(const rs2::video_frame& frame, rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub, const sensor_msgs::msg::CameraInfo& info_template, const rclcpp::Time & stamp);
+  void publish_aligned_depth(const uint16_t * data, int width, int height, const rclcpp::Time & stamp);
   void publish_imu_data(const rs2::motion_frame& accel, const rs2::motion_frame& gyro);
   void publish_pose_frame(const rs2::pose_frame& frame);
 
@@ -115,6 +118,13 @@ private:
   std::condition_variable align_cv_;
   std::thread align_thread_;
   static constexpr size_t ALIGN_QUEUE_MAX = 2;  // drop oldest if consumer falls behind
+
+  // Timestamp conversion base for frames reported in hardware-clock domain.
+  std::mutex timestamp_base_mutex_;
+  bool timestamp_base_initialized_{false};
+  double camera_time_base_ms_{0.0};
+  rs2_timestamp_domain timestamp_domain_{RS2_TIMESTAMP_DOMAIN_COUNT};
+  rclcpp::Time ros_time_base_;
 
 #ifdef HAVE_CUDA
   std::unique_ptr<CudaAligner> cuda_aligner_;
