@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(realsense_camera_bringup)
+project(realsense_camera_bringup LANGUAGES CXX)
 
 # Default to C++17 for ROS 2 Jazzy
 if(NOT CMAKE_CXX_STANDARD)
@@ -9,6 +9,18 @@ endif()
 # Standard compiler flags
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# --- CUDA (optional, for GPU-accelerated depth alignment on Jetson) ----------
+include(CheckLanguage)
+check_language(CUDA)
+if(CMAKE_CUDA_COMPILER)
+  enable_language(CUDA)
+  set(HAVE_CUDA TRUE)
+  message(STATUS "CUDA found — GPU-accelerated depth alignment enabled")
+else()
+  set(HAVE_CUDA FALSE)
+  message(STATUS "CUDA not found — falling back to CPU depth alignment (rs2::align)")
 endif()
 
 # Find ROS 2 dependencies
@@ -34,6 +46,19 @@ include_directories(
 add_executable(realsense_camera_node
   src/realsense_camera_node.cpp
 )
+
+if(HAVE_CUDA)
+  # Build CUDA alignment as a static library and link it into the node
+  add_library(cuda_align STATIC src/cuda_align.cu)
+  target_include_directories(cuda_align PUBLIC include)
+  set_target_properties(cuda_align PROPERTIES
+    CUDA_STANDARD 14
+    CUDA_SEPARABLE_COMPILATION ON
+    POSITION_INDEPENDENT_CODE ON
+  )
+  target_link_libraries(realsense_camera_node cuda_align)
+  target_compile_definitions(realsense_camera_node PRIVATE HAVE_CUDA)
+endif()
 
 ament_target_dependencies(realsense_camera_node
   rclcpp
