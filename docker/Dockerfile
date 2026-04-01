@@ -113,18 +113,18 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     libudev-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# CUDA 12.6 toolkit (nvcc + cudart headers) for GPU-accelerated depth alignment.
-# The NVIDIA runtime driver (libcuda.so) is provided at container start via
-# nvidia-container-runtime; only the compiler toolkit is needed in the image.
-# CUDA 11.4 (JetPack 5 host) is incompatible with Ubuntu 24.04 glibc headers,
-# so we install CUDA 12.6 for compilation. The compiled kernels target sm_72
-# (Xavier) and sm_87 (Orin) and run on the JetPack 5 driver via PTX JIT.
+# CUDA toolkit for GPU-accelerated depth alignment.
+# On Jetson (aarch64), the JetPack 5 host driver only supports CUDA 11.4.
+# We mount the host's /usr/local/cuda-11.4 at runtime (see docker-compose.yml)
+# and compile with nvcc 11.4 + gcc-11 (CUDA 11.4 max supported host compiler).
+# CUDA 12.6 is kept as fallback for x86_64 desktop builds.
 RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa/cuda-keyring_1.1-1_all.deb \
     -o /tmp/cuda-keyring.deb && \
     dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb && \
     apt-get update && apt-get install -y --no-install-recommends \
     cuda-nvcc-12-6 \
     cuda-cudart-dev-12-6 \
+    gcc-11 g++-11 \
     && rm -rf /var/lib/apt/lists/*
 ENV PATH=/usr/local/cuda-12.6/bin:${PATH}
 
