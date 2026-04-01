@@ -200,7 +200,7 @@ def generate_launch_description() -> LaunchDescription:
         'queue_size': 30,
         'approx_sync_max_interval': 0.05,
         'Odom/Strategy': '1',
-        'Odom/ImageDecimation': '3', 
+        'Odom/ImageDecimation': '4',
         'Vis/MinInliers': '15',
         'Vis/FeatureType': '6',
         'Vis/MaxFeatures': '300',
