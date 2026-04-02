@@ -90,18 +90,19 @@ def generate_launch_description() -> LaunchDescription:
     use_t265_odom = LaunchConfiguration('use_t265_odom')
     t265_odom_topic = LaunchConfiguration('t265_odom_topic')
 
-    # When use_t265_odom, skip VO/ICP and use T265 directly.
+    # When use_t265_odom, RTAB-Map SLAM and EKF use T265 odom.
+    # VO still runs (for EKF secondary input) but is not the primary odom source.
     odom_topic = PythonExpression([
         '"', t265_odom_topic, '" if "', use_t265_odom, '" == "true"'
         ' else ("/vo_odom" if "', vision, '" == "true" else "/icp_odom")'
     ])
 
-    # Only launch VO/ICP when NOT using T265 odom.
+    # Always launch VO/ICP based on vision mode (even when use_t265_odom).
     launch_visual_odom = PythonExpression([
-        '"true" if "', use_t265_odom, '" == "false" and "', vision, '" == "true" else "false"'
+        '"true" if "', vision, '" == "true" else "false"'
     ])
     launch_icp_odom = PythonExpression([
-        '"true" if "', use_t265_odom, '" == "false" and "', vision, '" == "false" else "false"'
+        '"true" if "', vision, '" == "false" else "false"'
     ])
     subscribe_scan = PythonExpression([
         'True if "', vision, '" == "false" else False'
@@ -158,7 +159,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{
             'approx_sync': True,
             'queue_size': 30,
-            'approx_sync_max_interval': 0.05,
+            'approx_sync_max_interval': 0.02,
             'use_sim_time': use_sim_time
         }],
         remappings=remappings,
@@ -198,16 +199,16 @@ def generate_launch_description() -> LaunchDescription:
         'use_sim_time': use_sim_time,
         'approx_sync': True,
         'queue_size': 30,
-        'approx_sync_max_interval': 0.05,
-        'Odom/Strategy': '1',
-        'Odom/ImageDecimation': '4',
-        'Vis/MinInliers': '15',
+        'approx_sync_max_interval': 0.02,
+        'Odom/Strategy': '0',
+        'Odom/ImageDecimation': '2',
+        'Vis/MinInliers': '20',
         'Vis/FeatureType': '6',
-        'Vis/MaxFeatures': '300',
+        'Vis/MaxFeatures': '800',
         'Vis/EstimationType': '1',
         'Vis/CorType': '0',
         'Vis/CorGuessWinSize': '20',
-        'Vis/MaxDepth': '8.0',
+        'Vis/MaxDepth': '5.0',
         'Odom/GuessMotion': 'true',
         'Odom/GuessSmoothingDelay': '0.1',
         'Reg/Force3DoF': 'true',
@@ -255,15 +256,18 @@ def generate_launch_description() -> LaunchDescription:
         'smooth_lagged_data': True,
         'use_sim_time': use_sim_time,
         'two_d_mode': True,
-        'publish_tf': True,
+        # When T265 odom is used, relay owns odom→base_link TF; otherwise EKF does.
+        'publish_tf': PythonExpression([
+            'False if "', use_t265_odom, '" == "true" else True'
+        ]),
         'map_frame': 'map',
         'odom_frame': 'odom',
         'base_link_frame': 'ackermann/base_link',
         'world_frame': 'odom',
         'sensor_timeout': 0.2,
         'transform_timeout': 0.2,
-        'transform_time_offset': 0.1,
-        'odom0': odom_topic, #odom_topic '/ackermann_odom'
+        'transform_time_offset': 0.0,
+        'odom0': odom_topic,
         "odom0_config": [True, True, False,     # x, y, z position
                          False, False, True,    # roll, pitch, yaw
                          True, True, False,     # x, y, z velocity
@@ -272,20 +276,20 @@ def generate_launch_description() -> LaunchDescription:
         'odom0_queue_size': 10,
         'odom0_nodelay': False,
         'odom0_differential': False,
-        'odom0_relative': True,
+        'odom0_relative': False,
         'imu0': '/imu/data',
         "imu0_config": [False, False, False,   # x, y, z position
-                        False, False, True,    # roll, pitch, yaw
+                        False, False, False,   # roll, pitch, yaw (VO owns heading)
                         False, False, False,   # x, y, z velocity
                         False, False, True,    # roll, pitch, yaw rates
                         False, False, False],  # x, y, z acceleration
         'imu0_queue_size': 10,
         'imu0_nodelay': False,
-        'imu0_differential': False,
-        'imu0_relative': True,
+        'imu0_differential': True,
+        'imu0_relative': False,
         'imu0_remove_gravitational_acceleration': True,
         'imu0_angular_velocity_covariance': [0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001],
-        'imu0_linear_acceleration_covariance': [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01],
+        'imu0_linear_acceleration_covariance': [0.1, 0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.0, 0.1],
         'imu0_orientation_covariance': [0.01, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.01],
     }
 
@@ -299,6 +303,9 @@ def generate_launch_description() -> LaunchDescription:
             'input_topic':  LaunchConfiguration('relay_input_topic'),
             'output_topic': LaunchConfiguration('relay_output_topic'),
             'base_frame':   LaunchConfiguration('relay_base_frame'),
+            'publish_tf':   PythonExpression([
+                'True if "', use_t265_odom, '" == "true" else False'
+            ]),
             'use_sim_time': use_sim_time,
         }],
     )
