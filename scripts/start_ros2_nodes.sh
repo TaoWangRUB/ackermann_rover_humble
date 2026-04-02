@@ -10,7 +10,8 @@
 #                          Selects which camera node starts (HW), which Gazebo bridge topics
 #                          are exposed (sim), and which RTAB-Map topics are subscribed.
 #   --t265                 [HW mode] Enable T265 tracking camera + odom_tf_relay
-#   --t265-odom            [HW mode] Use T265 as odometry source (implies --t265, skips RTAB-Map VO)
+#   --t265-odom            [HW mode] Use T265 as odometry source for EKF/RTAB-Map
+#                          while keeping RTAB-Map VO on /vo_odom for debugging
 #   --px4              Enable PX4 SITL (disables ros2_control, implies --bridge --vo-bridge)
 #   --rtabmap          Launch RTAB-Map SLAM
 #   --nav2             Launch Nav2 navigation stack

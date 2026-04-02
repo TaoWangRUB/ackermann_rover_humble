@@ -162,6 +162,15 @@
 
 ## Recent Hardware Notes
 
+- 2026-04-02 `--t265-odom` wiring fix:
+  - `src/rtabmap_bringup/launch/rtabmap_slam.launch.py` now keeps RTAB-Map VO and ICP on their own topics (`/vo_odom`, `/icp_odom`) even when `use_t265_odom:=true`.
+  - In that mode, EKF and RTAB-Map subscribe to `/t265/odom_base`, but `rgbd_odometry` must remain independent for debugging and comparison.
+  - `src/realsense_camera_bringup/launch/realsense_camera.launch.py` now passes `output_frame:=odom` into `odom_tf_relay`, so the relayed T265 base odometry uses the standard `odom -> ackermann/base_link` frame chain.
+  - Verification on Jetson with `./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265-odom --rtabmap`:
+    - `/t265/odom_base` had exactly one publisher: `t265_odom_relay`
+    - `/vo_odom` had exactly one publisher: `rgbd_odometry`
+    - `/t265/odom_base` message headers used `frame_id: odom`, `child_frame_id: ackermann/base_link`
+    - `tf2_echo odom ackermann/base_link` resolved successfully
 - 2026-04-02 Jetson D435i IMU outage:
   - Verified on Jetson that D435i color/depth still stream and CUDA depth alignment still works while D435i IMU produces no ROS messages.
   - The failure reproduces below ROS: a native librealsense accel+gyro probe inside the Jetson container returned `ACCEL_COUNT 0` and `GYRO_COUNT 0`, including when run as `root`.
