@@ -205,7 +205,11 @@ def generate_launch_description() -> LaunchDescription:
         'frame_id': 'ackermann/base_link',
         'odom_frame_id': 'odom',
         'publish_tf': False,
-        'wait_imu_to_init': True,
+        # When T265 provides the primary odom source, keep VO independent from
+        # the D435i IMU's arbitrary startup yaw so /vo_odom remains comparable.
+        'wait_imu_to_init': PythonExpression([
+            'False if "', use_t265_odom, '" == "true" else True'
+        ]),
         'use_sim_time': use_sim_time,
         'approx_sync': True,
         'queue_size': 30,
