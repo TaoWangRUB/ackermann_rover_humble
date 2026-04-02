@@ -262,6 +262,12 @@ optionally the px4 VO/mode bridge) so you don't need to source workspaces or
 type long commands.
 
 ```bash
+# ── Hardware RTAB-Map with D435i + T265 ──
+./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265 --rtabmap
+
+# ── Hardware RTAB-Map with D435i + T265 odom source ──
+./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265-odom --rtabmap
+
 # ── Gazebo only (ros2_control) ──
 ./scripts/start_ros2_nodes.sh
 
@@ -317,11 +323,19 @@ type long commands.
 | Flag               | Effect                                                                 |
 | ------------------- | ---------------------------------------------------------------------- |
 | `--px4`             | PX4 SITL mode (disables ros2_control, auto-enables `--bridge` + `--vo-bridge`) |
+| `--hw`              | Hardware mode: launch real RealSense cameras instead of Gazebo         |
+| `--depth-camera=NAME` | Select hardware/sim depth camera (`d435i` or `l515`)                |
+| `--t265`            | Hardware mode only: enable T265 + odom relay                           |
+| `--t265-odom`       | Hardware mode only: route RTAB-Map / EKF odom input to `/t265/odom_base` |
 | `--rtabmap`         | Launch RTAB-Map SLAM                                                   |
 | `--nav2`            | Launch Nav2 navigation stack                                           |
 | `--bridge[=MODE]`   | Launch PX4 mode node only (default: `manual`; options: `speed_steering`, `trajectory`, `speed_attitude`) |
 | `--vo-bridge`       | Launch VO bridge: `px4_vision_odom.py` (vision odom → PX4) + `px4_vehicle_odometry.py` (PX4 odom → ROS 2) |
 | `--odom-topic=TOPIC` | Odometry topic for `px4_vision_odom.py` only (default: `/odometry/filtered`) |
+| `--build[=PKG]`     | Build the whole workspace or selected packages before launch           |
+| `--build-only[=PKG]` | Build only, do not start the launch                                  |
+| `--no-rviz`         | Disable RViz                                                           |
+| `--reversible-drive` | Enable bidirectional ESC / reverse-drive mode                        |
 
 | Input              | `enable_px4_sitl` | ros2_control | Mode node | VO bridge |
 | ------------------- | ----------------- | ------------ | --------- | --------- |
@@ -329,6 +343,29 @@ type long commands.
 | `--bridge`          | false             | active       | yes       | no        |
 | `--bridge --vo-bridge` | false          | active       | yes       | yes       |
 | `--px4`             | true              | disabled     | yes (auto) | yes (auto) |
+
+With `--t265-odom`, the T265 relay publishes `/t265/odom_base` in the standard
+`odom -> ackermann/base_link` frame chain, and EKF plus RTAB-Map subscribe to
+that topic. RTAB-Map VO/ICP remain independent on `/vo_odom` or `/icp_odom`
+for debugging and side-by-side comparison.
+
+#### VIO Debug Probe
+
+The helper script `scripts/debug_vio.sh` probes the live camera / IMU /
+RTAB-Map pipeline and mirrors the same host-to-container environment setup used
+by `scripts/start_ros2_nodes.sh`.
+
+```bash
+# Run from the host while the hardware or sim stack is already up
+./scripts/debug_vio.sh
+
+# Shorter probe windows for quick checks
+HZ_WINDOW=5 ECHO_TIMEOUT=3 ./scripts/debug_vio.sh
+```
+
+It auto-detects D435i, L515, T265, IMU, VO, EKF, `rgbd_image`, and `map`
+topics, prints timestamp samples, and ends with a per-topic statistics summary.
+Absent cameras are treated as optional and reported as `not published`.
 
 For PX4 co-simulation you still need to start MicroXRCEAgent and PX4 SITL in
 separate terminals **before** `--bridge` can register with the FMU:

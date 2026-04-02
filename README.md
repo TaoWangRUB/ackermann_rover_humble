@@ -189,6 +189,28 @@ See [System Monitor Architecture](docs/architecture/system_monitor.md) and [Cont
 ./scripts/start_jetson_session.sh --depth-camera=d435i --t265 --nav2 --with-telemetry --broker-host=192.168.0.225
 ```
 
+### Hardware Bringup Shortcuts
+
+```bash
+# Launch hardware SLAM directly from the host
+./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265 --rtabmap
+
+# Probe the live VIO / RTAB-Map pipeline from the host
+HZ_WINDOW=5 ECHO_TIMEOUT=3 ./scripts/debug_vio.sh
+
+# Try T265 as the odometry source for RTAB-Map / EKF
+./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265-odom --rtabmap
+```
+
+`./scripts/debug_vio.sh` mirrors the Docker/ROS environment setup from
+`start_ros2_nodes.sh`, so it can be launched directly from the host without
+manually entering the container.
+
+With `--t265-odom`, EKF and RTAB-Map subscribe to `/t265/odom_base`, while
+`rgbd_odometry` stays independent on `/vo_odom` for debugging and comparison.
+The relayed T265 base odometry publishes in the standard `odom ->
+ackermann/base_link` frame chain.
+
 ### Quick Start — Host (base station)
 
 ```bash

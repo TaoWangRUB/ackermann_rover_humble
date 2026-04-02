@@ -23,16 +23,15 @@ ARGUMENTS = [
         'vision',
         default_value='true',
         choices=['true', 'false'],
-        description='Use RGB-D visual odometry (true) or ICP odometry (false). '
-                    'Ignored when use_t265_odom:=true.'
+        description='Use RGB-D visual odometry (true) or ICP odometry (false).'
     ),
     DeclareLaunchArgument(
         'use_t265_odom',
         default_value='false',
         choices=['true', 'false'],
-        description='Use T265 tracking camera as odometry source instead of '
-                    'RTAB-Map VO/ICP. Skips rgbd_odometry and icp_odometry nodes. '
-                    'D435i is still used for mapping and obstacles.'
+        description='Use T265 tracking camera as the odometry source for EKF '
+                    'and RTAB-Map while keeping VO/ICP published on their own '
+                    'topics for debugging or comparison.'
     ),
     DeclareLaunchArgument(
         't265_odom_topic',
@@ -91,7 +90,7 @@ def generate_launch_description() -> LaunchDescription:
     t265_odom_topic = LaunchConfiguration('t265_odom_topic')
 
     # When use_t265_odom, RTAB-Map SLAM and EKF use T265 odom.
-    # VO still runs (for EKF secondary input) but is not the primary odom source.
+    # VO/ICP remain available on their own topics for debugging or comparison.
     odom_topic = PythonExpression([
         '"', t265_odom_topic, '" if "', use_t265_odom, '" == "true"'
         ' else ("/vo_odom" if "', vision, '" == "true" else "/icp_odom")'
@@ -141,15 +140,26 @@ def generate_launch_description() -> LaunchDescription:
         'Icp/PointToPlaneMinComplexity': '0.04'
     }
 
-    remappings = [
+    sensor_remappings = [
         ('scan', scan_topic),
-        ('odom', odom_topic),
         ('imu', '/imu/data'),
         ('rgb/image', LaunchConfiguration('rgb_image_topic')), 
         ('rgb/camera_info', LaunchConfiguration('rgb_camera_info_topic')),
         ('depth/image', LaunchConfiguration('depth_image_topic')),
         ('depth/camera_info', LaunchConfiguration('depth_camera_info_topic')),
         ('cloud', '/camera/cloud')
+    ]
+
+    consumer_remappings = sensor_remappings + [
+        ('odom', odom_topic),
+    ]
+
+    visual_odom_remappings = sensor_remappings + [
+        ('odom', '/vo_odom'),
+    ]
+
+    icp_odom_remappings = sensor_remappings + [
+        ('odom', '/icp_odom'),
     ]
 
     rgbd_sync = Node(
@@ -162,7 +172,7 @@ def generate_launch_description() -> LaunchDescription:
             'approx_sync_max_interval': 0.02,
             'use_sim_time': use_sim_time
         }],
-        remappings=remappings,
+        remappings=sensor_remappings,
     )
 
     imu_transform_node = Node(
@@ -220,7 +230,7 @@ def generate_launch_description() -> LaunchDescription:
         executable='rgbd_odometry',
         output='screen',
         parameters=[visual_odom_parameters],
-        remappings=remappings,
+        remappings=visual_odom_remappings,
         arguments=['--ros-args', '--log-level', 'rgbd_odometry:=warn'],
     )
 
@@ -245,7 +255,7 @@ def generate_launch_description() -> LaunchDescription:
         executable='icp_odometry',
         output='screen',
         parameters=[icp_parameters, shared_parameters],
-        remappings=remappings,
+        remappings=icp_odom_remappings,
         arguments=['--ros-args', '--log-level', 'icp_odometry:=warn'],
     )
 
@@ -277,11 +287,17 @@ def generate_launch_description() -> LaunchDescription:
         'odom0_nodelay': False,
         'odom0_differential': False,
         'odom0_relative': False,
+        # IMU yaw rate — only fused when T265 is NOT the odom source.
+        # T265 odom already contains IMU-corrected heading from its internal
+        # VIO pipeline; adding a second (D435i) IMU double-counts yaw rate
+        # and causes the EKF to drift.
         'imu0': '/imu/data',
         "imu0_config": [False, False, False,   # x, y, z position
                         False, False, False,   # roll, pitch, yaw (VO owns heading)
                         False, False, False,   # x, y, z velocity
-                        False, False, True,    # roll, pitch, yaw rates
+                        False, False, PythonExpression([
+                            'False if "', use_t265_odom, '" == "true" else True'
+                        ]),    # yaw rate: skip when T265 odom is used
                         False, False, False],  # x, y, z acceleration
         'imu0_queue_size': 10,
         'imu0_nodelay': False,
@@ -324,7 +340,7 @@ def generate_launch_description() -> LaunchDescription:
         executable='rtabmap',
         output='screen',
         parameters=[rtabmap_parameters, shared_parameters],
-        remappings=remappings + [('odom', odom_topic)],#/ackermann/odom /odometry/filtered
+        remappings=consumer_remappings,
         arguments=['-d'],
     )
 
@@ -337,7 +353,7 @@ def generate_launch_description() -> LaunchDescription:
             'Mem/IncrementalMemory': 'False',
             'Mem/InitWMWithAllNodes': 'True'
         }],
-        remappings=remappings,
+        remappings=consumer_remappings,
     )
 
     rtabmap_viz_node = Node(
@@ -346,7 +362,7 @@ def generate_launch_description() -> LaunchDescription:
         executable='rtabmap_viz',
         output='screen',
         parameters=[rtabmap_parameters, shared_parameters],
-        remappings=remappings,
+        remappings=consumer_remappings,
     )
 
     depth_to_scan = Node(
@@ -379,7 +395,7 @@ def generate_launch_description() -> LaunchDescription:
                      'max_depth': 20.0,
                      'voxel_size': 0.02,
                      'use_sim_time': use_sim_time}],
-        remappings=remappings)
+        remappings=sensor_remappings)
     
     # Second, we segment the floor from the obstacles.
     obstacle_parameters={
