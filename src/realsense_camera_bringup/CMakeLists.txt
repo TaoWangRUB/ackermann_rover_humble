@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.8)
 
+if(POLICY CMP0074)
+  cmake_policy(SET CMP0074 NEW)
+endif()
+if(POLICY CMP0104)
+  cmake_policy(SET CMP0104 NEW)
+endif()
+
 execute_process(
   COMMAND uname -m
   OUTPUT_VARIABLE _HOST_ARCH
@@ -37,7 +44,13 @@ endif()
 # On Jetson, use whichever CUDA toolkit the running container exposes.
 # On x86_64, keep using the default /usr/local/cuda layout.
 unset(_CUDA_ROOT)
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+foreach(_cuda_env IN ITEMS CUDA_HOME CUDA_PATH)
+  if(DEFINED ENV{${_cuda_env}} AND EXISTS "$ENV{${_cuda_env}}/bin/nvcc")
+    set(_CUDA_ROOT "$ENV{${_cuda_env}}")
+    break()
+  endif()
+endforeach()
+if(NOT _CUDA_ROOT AND CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
   if(EXISTS "/usr/local/cuda/bin/nvcc")
     set(_CUDA_ROOT "/usr/local/cuda")
   else()
@@ -48,8 +61,15 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
       endif()
     endforeach()
   endif()
-elseif(EXISTS "/usr/local/cuda/bin/nvcc")
+elseif(NOT _CUDA_ROOT AND EXISTS "/usr/local/cuda/bin/nvcc")
   set(_CUDA_ROOT "/usr/local/cuda")
+elseif(NOT _CUDA_ROOT)
+  foreach(_candidate IN ITEMS /usr/local/cuda-12.8 /usr/local/cuda-12.6 /usr/local/cuda-12.4 /usr/local/cuda-12.2 /usr/local/cuda-12.0 /usr/local/cuda-11.8 /usr/local/cuda-11.6 /usr/local/cuda-11.4)
+    if(EXISTS "${_candidate}/bin/nvcc")
+      set(_CUDA_ROOT "${_candidate}")
+      break()
+    endif()
+  endforeach()
 endif()
 
 if(_CUDA_ROOT)
@@ -70,9 +90,16 @@ endif()
 if(CMAKE_CUDA_COMPILER AND EXISTS "${CMAKE_CUDA_COMPILER}")
   enable_language(CUDA)
   set(HAVE_CUDA TRUE)
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    set(_CUDA_ARCHITECTURES "72;87")
+  else()
+    # Match the local desktop GPU on x86 instead of hard-wiring Jetson SMs.
+    set(_CUDA_ARCHITECTURES "native")
+  endif()
   message(STATUS "CUDA found — GPU-accelerated depth alignment enabled")
   message(STATUS "  nvcc: ${CMAKE_CUDA_COMPILER}")
   message(STATUS "  toolkit root: ${CUDAToolkit_ROOT}")
+  message(STATUS "  architectures: ${_CUDA_ARCHITECTURES}")
   if(CMAKE_CUDA_HOST_COMPILER)
     message(STATUS "  host compiler: ${CMAKE_CUDA_HOST_COMPILER}")
   endif()
@@ -119,14 +146,14 @@ if(HAVE_CUDA)
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_RUNTIME_LIBRARY Shared
     POSITION_INDEPENDENT_CODE ON
-    # Xavier = sm_72, Orin = sm_87
-    CUDA_ARCHITECTURES "72;87"
+    CUDA_ARCHITECTURES "${_CUDA_ARCHITECTURES}"
   )
   target_link_libraries(cuda_align
     CUDA::cudart             # portable: finds correct lib path for x86/aarch64
     pthread dl
   )
   set_target_properties(realsense_camera_node PROPERTIES
+    CUDA_ARCHITECTURES "${_CUDA_ARCHITECTURES}"
     CUDA_RUNTIME_LIBRARY Shared
   )
   target_link_libraries(realsense_camera_node cuda_align)
