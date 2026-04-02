@@ -102,6 +102,7 @@ STAT_KEYS=(
 )
 
 declare -A RESOLVED_TOPICS
+declare -A TOPIC_TYPES
 declare -A SUMMARY
 
 TOPIC_LIST="$(ros2 topic list 2>/dev/null || true)"
@@ -148,6 +149,14 @@ resolve_topic rtabmap_info /rtabmap/info
 resolve_topic d435i_extrinsics /d435i/extrinsics/depth_to_color /camera/extrinsics/depth_to_color
 resolve_topic l515_extrinsics /l515/extrinsics/depth_to_color
 
+for key in "${TOPIC_KEYS[@]}"; do
+    if [[ -n "${RESOLVED_TOPICS[$key]}" ]]; then
+        TOPIC_TYPES["${key}"]="$(ros2 topic type "${RESOLVED_TOPICS[$key]}" 2>/dev/null || true)"
+    else
+        TOPIC_TYPES["${key}"]=""
+    fi
+done
+
 RTABMAP_NODE=""
 if grep -Fxq "/rtabmap" <<<"${NODE_LIST}"; then
     RTABMAP_NODE="/rtabmap"
@@ -185,6 +194,7 @@ print_topic_info() {
 print_stamp_sample() {
     local key="$1"
     local topic="${RESOLVED_TOPICS[$key]}"
+    local topic_type="${TOPIC_TYPES[$key]}"
     echo "${LABELS[$key]}:"
     if [[ -z "${topic}" ]]; then
         echo "  not published"
@@ -192,9 +202,74 @@ print_stamp_sample() {
     fi
     local sample
     sample="$(
-        timeout "${ECHO_TIMEOUT}s" ros2 topic echo "${topic}" --once --no-arr 2>/dev/null \
-            | grep -E 'stamp:|sec:|nanosec:|frame_id:|child_frame_id:' \
-            | head -12 || true
+        python3 - "${topic}" "${topic_type}" "${ECHO_TIMEOUT}" <<'PY'
+import importlib
+import sys
+import time
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+
+topic = sys.argv[1]
+type_name = sys.argv[2]
+timeout = float(sys.argv[3])
+
+pkg, _, iface = type_name.partition('/msg/')
+if not pkg or not iface:
+    sys.exit(0)
+
+msg_module = importlib.import_module(f'{pkg}.msg')
+msg_type = getattr(msg_module, iface)
+
+qos = QoSProfile(
+    history=HistoryPolicy.KEEP_LAST,
+    depth=50,
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE,
+)
+
+rclpy.init()
+
+
+class Probe(Node):
+    def __init__(self) -> None:
+        super().__init__('debug_vio_stamp_probe')
+        self.msg = None
+        self.create_subscription(msg_type, topic, self._cb, qos)
+
+    def _cb(self, msg) -> None:
+        if self.msg is None:
+            self.msg = msg
+
+
+node = Probe()
+deadline = time.monotonic() + timeout
+while rclpy.ok() and time.monotonic() < deadline and node.msg is None:
+    rclpy.spin_once(node, timeout_sec=0.2)
+
+msg = node.msg
+node.destroy_node()
+rclpy.shutdown()
+
+if msg is None:
+    sys.exit(0)
+
+lines = []
+header = getattr(msg, 'header', None)
+if header is not None:
+    lines.append('stamp:')
+    lines.append(f'  sec: {header.stamp.sec}')
+    lines.append(f'  nanosec: {header.stamp.nanosec}')
+    lines.append(f'frame_id: {header.frame_id}')
+
+child_frame_id = getattr(msg, 'child_frame_id', None)
+if child_frame_id is not None:
+    lines.append(f'child_frame_id: {child_frame_id}')
+
+if lines:
+    print('\n'.join(lines))
+PY
     )"
     if [[ -n "${sample}" ]]; then
         sed 's/^/  /' <<<"${sample}"
@@ -205,25 +280,77 @@ print_stamp_sample() {
 
 format_hz_stats() {
     local topic="$1"
-    local output
-    output="$(
-        timeout "${HZ_WINDOW}s" ros2 topic hz "${topic}" 2>/dev/null \
-            | sed '/^WARNING:/d' || true
-    )"
+    local topic_type="$2"
+    python3 - "${topic}" "${topic_type}" "${HZ_WINDOW}" <<'PY'
+import importlib
+import statistics
+import sys
+import time
 
-    local avg min max std window
-    avg="$(awk '/average rate:/ {value=$3} END {print value}' <<<"${output}")"
-    min="$(sed -n 's/.*min: \([^ ]*\).*/\1/p' <<<"${output}" | tail -1)"
-    max="$(sed -n 's/.*max: \([^ ]*\).*/\1/p' <<<"${output}" | tail -1)"
-    std="$(sed -n 's/.*std dev: \([^ ]*\).*/\1/p' <<<"${output}" | tail -1)"
-    window="$(sed -n 's/.*window: \([^ ]*\).*/\1/p' <<<"${output}" | tail -1)"
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 
-    if [[ -n "${avg}" ]]; then
-        printf '%s Hz (min %s, max %s, std %s, window %s)' \
-            "${avg}" "${min:-n/a}" "${max:-n/a}" "${std:-n/a}" "${window:-n/a}"
-    else
-        printf 'no samples in %ss' "${HZ_WINDOW}"
-    fi
+topic = sys.argv[1]
+type_name = sys.argv[2]
+duration = float(sys.argv[3])
+
+pkg, _, iface = type_name.partition('/msg/')
+if not pkg or not iface:
+    print(f'no samples in {duration:g}s')
+    sys.exit(0)
+
+msg_module = importlib.import_module(f'{pkg}.msg')
+msg_type = getattr(msg_module, iface)
+
+qos = QoSProfile(
+    history=HistoryPolicy.KEEP_LAST,
+    depth=200,
+    reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE,
+)
+
+rclpy.init()
+
+
+class Probe(Node):
+    def __init__(self) -> None:
+        super().__init__('debug_vio_rate_probe')
+        self.arrivals = []
+        self.create_subscription(msg_type, topic, self._cb, qos)
+
+    def _cb(self, _msg) -> None:
+        self.arrivals.append(time.monotonic())
+
+
+node = Probe()
+deadline = time.monotonic() + duration
+while rclpy.ok() and time.monotonic() < deadline:
+    rclpy.spin_once(node, timeout_sec=0.2)
+
+arrivals = node.arrivals
+node.destroy_node()
+rclpy.shutdown()
+
+if len(arrivals) < 2:
+    print(f'no samples in {duration:g}s')
+    sys.exit(0)
+
+intervals = [b - a for a, b in zip(arrivals, arrivals[1:]) if b > a]
+if not intervals:
+    print(f'no samples in {duration:g}s')
+    sys.exit(0)
+
+avg_rate = len(intervals) / sum(intervals)
+min_period = min(intervals)
+max_period = max(intervals)
+std_period = statistics.pstdev(intervals) if len(intervals) > 1 else 0.0
+
+print(
+    f'{avg_rate:.3f} Hz (min {min_period:.4f}, max {max_period:.4f}, '
+    f'std {std_period:.4f}, window {len(arrivals)})'
+)
+PY
 }
 
 capture_stats() {
@@ -233,7 +360,7 @@ capture_stats() {
         SUMMARY["$key"]="not published"
         return
     fi
-    SUMMARY["$key"]="$(format_hz_stats "${topic}")"
+    SUMMARY["$key"]="$(format_hz_stats "${topic}" "${TOPIC_TYPES[$key]}")"
 }
 
 section "1. Frame Transform Tree"

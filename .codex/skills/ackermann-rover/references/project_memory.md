@@ -159,3 +159,12 @@
 - Many practical workflows live in shell scripts and tmux sessions rather than only in ROS launch files, so repo understanding is incomplete unless `scripts/` is inspected alongside `src/` and `docs/`.
 - If a change alters public topics, frames, parameters, or launch behavior, update docs in the same task.
 - Keep container and simulation cleanup explicit. Background launches left running will interfere with later work.
+
+## Recent Hardware Notes
+
+- 2026-04-02 Jetson D435i IMU outage:
+  - Verified on Jetson that D435i color/depth still stream and CUDA depth alignment still works while D435i IMU produces no ROS messages.
+  - The failure reproduces below ROS: a native librealsense accel+gyro probe inside the Jetson container returned `ACCEL_COUNT 0` and `GYRO_COUNT 0`, including when run as `root`.
+  - A D435i hardware reset from the RealSense node did not restore IMU frames.
+  - Conclusion: treat this as a Jetson/librealsense/D435i motion-stream runtime issue first, not an `rtabmap_slam.launch.py`, EKF, or ROS remapping bug.
+  - Cleanup expectation: after these hardware probes, explicitly verify there are no leftover `ros2 launch`, `realsense_camera_node`, `rgbd_odometry`, `imu_filter_madgwick`, `imu_transformer_node`, or `rtabmap` processes in either the x86 or Jetson container.

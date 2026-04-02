@@ -11,9 +11,10 @@ Use this skill for any task in this repository. Start by reading [references/pro
 
 1. On the host, run `source ~/.bashrc` before any Docker command. The compose stack depends on exported `ARCH`, `USERNAME`, `USER_UID`, and `USER_GID`.
    In non-interactive automation, `.bashrc` may return before exporting them; if Compose still shows blank variables, load `.env` and export `ARCH`, `USERNAME`, `USER_UID`, and `USER_GID` explicitly before invoking Compose.
-2. Manage the environment with `docker-compose -f docker/docker-compose.yml ...` as described in `AGENTS.md`. In practice, many day-to-day workflows are wrapped by `scripts/lib/dc.sh` and the `scripts/start_*.sh` helpers, so inspect the matching script before reproducing a launch sequence manually.
-3. Run ROS build, test, launch, and debugging commands inside `ackermann_slam`. Treat the host-side `control_center/` stack separately from the in-container rover stack.
-4. Before declaring a task done, follow the repo validation contract in `AGENTS.md`, `.agent/instructions.md`, and `scripts/verify_agent_work.sh`. Always shut down launches and containers you started.
+2. First consider the repo's `scripts/` entrypoints before using raw `docker compose`, `ros2 launch`, or ad hoc shell commands. In practice, many day-to-day workflows are wrapped by `scripts/lib/dc.sh`, `scripts/start_*.sh`, `scripts/stop_all.sh`, and `scripts/verify_*`, so inspect the matching script before reproducing a launch sequence manually.
+3. Manage the environment with `docker-compose -f docker/docker-compose.yml ...` as described in `AGENTS.md` when a script does not already encode the desired workflow.
+4. Run ROS build, test, launch, and debugging commands inside `ackermann_slam`. Treat the host-side `control_center/` stack separately from the in-container rover stack.
+5. Before declaring a task done, follow the repo validation contract in `AGENTS.md`, `.agent/instructions.md`, and `scripts/verify_agent_work.sh`. Always shut down launches and containers you started.
 
 ## Mental Model
 
@@ -26,6 +27,7 @@ Use this skill for any task in this repository. Start by reading [references/pro
 - `rover_monitor` is the health/telemetry monitoring subsystem.
 - `control_center` is the host-side base-station subsystem. It consumes `rover_monitor` telemetry over MQTT/Protobuf, serves a FastAPI + React dashboard, stores history in InfluxDB, gates outbound commands, and tracks command ACKs.
 - `scripts/` is a first-class operational layer, not just miscellaneous helpers. `scripts/lib/dc.sh` normalizes Compose usage, and the `start_*`, `stop_all.sh`, `verify_*`, and test scripts encode the canonical launch, tmux-session, and smoke-test workflows.
+- When deciding how to reproduce, launch, build, verify, or tear down the stack, prefer the existing script in `scripts/` first and fall back to raw commands only when no script covers the workflow.
 - `ackermann_control` and `safety` are small focused nodes with their own parameters and tests.
 
 ## Read These First For Common Task Types
