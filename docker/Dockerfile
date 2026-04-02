@@ -113,11 +113,10 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     libudev-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# CUDA toolkit for GPU-accelerated depth alignment.
-# Jetson Xavier is permanently locked to CUDA 11.4 (JetPack 5, no JetPack 6).
-# The host's /usr/local/cuda-11.4 toolkit is mounted at runtime (docker-compose.yml)
-# providing nvcc 11.4 + cudart_static. gcc-11 is needed because CUDA 11.4 nvcc
-# only supports up to GCC 11, while Ubuntu 24.04 ships GCC 13.
+# CUDA toolkit for GPU-accelerated depth alignment is provided at runtime by the
+# host and mounted into the container at /usr/local/cuda. Keep gcc-11 available
+# because Jetson's CUDA 11.4 toolchain still needs it, while newer x86 CUDA
+# toolkits can also build successfully with gcc-11.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc-11 g++-11 \
     && rm -rf /var/lib/apt/lists/*
@@ -186,13 +185,20 @@ RUN apt-get update && apt-get install -y \
 ARG USERNAME=nvidia
 ARG USER_UID=1000
 ARG USER_GID=1000
-RUN userdel -r ubuntu 2>/dev/null || true && \
-    getent group video >/dev/null || groupadd --system video && \
-    groupadd --gid ${USER_GID} ${USERNAME} 2>/dev/null || true && \
-    useradd --uid ${USER_UID} --gid ${USER_GID} -m -s /bin/bash ${USERNAME} && \
-    usermod -aG dialout,video ${USERNAME} && \
-    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
-    chmod 0440 /etc/sudoers.d/${USERNAME}
+RUN set -eux; \
+    username="${USERNAME:-nvidia}"; \
+    user_uid="${USER_UID:-1000}"; \
+    user_gid="${USER_GID:-1000}"; \
+    if ! [[ "${user_uid}" =~ ^[0-9]+$ ]]; then user_uid=1000; fi; \
+    if ! [[ "${user_gid}" =~ ^[0-9]+$ ]]; then user_gid=1000; fi; \
+    userdel -r ubuntu 2>/dev/null || true; \
+    getent group video >/dev/null || groupadd --system video; \
+    groupadd --gid "${user_gid}" "${username}" 2>/dev/null || true; \
+    useradd --uid "${user_uid}" --gid "${user_gid}" -m -s /bin/bash "${username}" || \
+      usermod --uid "${user_uid}" --gid "${user_gid}" "${username}"; \
+    usermod -aG dialout,video "${username}"; \
+    echo "${username} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${username}"; \
+    chmod 0440 "/etc/sudoers.d/${username}"
 
 ENV HOME=/home/${USERNAME}
 USER ${USERNAME}
