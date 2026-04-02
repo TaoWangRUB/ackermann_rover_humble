@@ -181,6 +181,7 @@ def generate_launch_description() -> LaunchDescription:
         ('t265_odom_input_topic',  '/t265/odom'),
         ('t265_odom_output_topic', '/t265/odom_base'),
         ('t265_relay_base_frame',  'ackermann/base_link'),
+        ('t265_relay_publish_tf',  'false'),
     ]
     for name, default in t265_args:
         ld.add_action(DeclareLaunchArgument(name, default_value=default))
@@ -278,6 +279,7 @@ def generate_launch_description() -> LaunchDescription:
             'input_topic':  LaunchConfiguration('t265_odom_input_topic'),
             'output_topic': LaunchConfiguration('t265_odom_output_topic'),
             'base_frame':   LaunchConfiguration('t265_relay_base_frame'),
+            'publish_tf':   LaunchConfiguration('t265_relay_publish_tf'),
         }],
     )
     ld.add_action(t265_odom_relay)

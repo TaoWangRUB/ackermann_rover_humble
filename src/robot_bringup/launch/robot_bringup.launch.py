@@ -310,6 +310,7 @@ def generate_launch_description() -> LaunchDescription:
             'enable_d435i': PythonExpression(['"true" if "', depth_camera, '" == "d435i" else "false"']),
             'enable_l515':  PythonExpression(['"true" if "', depth_camera, '" == "l515"  else "false"']),
             'enable_t265':  hw_enable_t265,
+            't265_relay_publish_tf': use_t265_odom,
             'd435i_startup_delay_s': PythonExpression(['"12.0" if "', hw_enable_t265, '" == "true" else "0.0"']),
             'l515_startup_delay_s':  PythonExpression(['"12.0" if "', hw_enable_t265, '" == "true" else "0.0"']),
         }.items(),
