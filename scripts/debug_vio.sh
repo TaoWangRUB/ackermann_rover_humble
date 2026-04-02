@@ -44,7 +44,7 @@ if [[ "${SCRIPT_DIR}" != "/workspace/scripts" ]]; then
     INNER_CMD+="export ECHO_TIMEOUT=$(printf '%q' "${ECHO_TIMEOUT}") && "
     INNER_CMD+="export KEEP_TF_ARTIFACTS=$(printf '%q' "${KEEP_TF_ARTIFACTS}") && "
     INNER_CMD+="bash /workspace/scripts/debug_vio.sh"
-    xdcomp exec ackermann_slam bash -lc "${INNER_CMD}"
+    xdcomp exec -T ackermann_slam bash -lc "${INNER_CMD}"
 fi
 
 trap cleanup_tf_artifacts EXIT
