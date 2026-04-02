@@ -73,8 +73,11 @@ elseif(NOT _CUDA_ROOT)
 endif()
 
 if(_CUDA_ROOT)
-  set(CMAKE_CUDA_COMPILER "${_CUDA_ROOT}/bin/nvcc" CACHE FILEPATH "")
-  set(CUDAToolkit_ROOT    "${_CUDA_ROOT}"          CACHE PATH     "")
+  # Force-refresh these cache entries so moving between Jetson and x86, or
+  # switching from a versioned CUDA mount to /usr/local/cuda, doesn't leave
+  # CMake stuck on a stale compiler path from an older build tree.
+  set(CMAKE_CUDA_COMPILER "${_CUDA_ROOT}/bin/nvcc" CACHE FILEPATH "" FORCE)
+  set(CUDAToolkit_ROOT    "${_CUDA_ROOT}"          CACHE PATH     "" FORCE)
   set(CMAKE_CUDA_RUNTIME_LIBRARY Shared)
   # Ubuntu 24.04 glibc 2.39 exposes vector typedefs through
   # bits/math-vector.h that CUDA 11.4's cicc cannot parse on Jetson. Include
@@ -86,6 +89,9 @@ if(_CUDA_ROOT)
     string(APPEND CMAKE_CUDA_FLAGS_INIT
       " -Xcompiler=-include -Xcompiler=${_CUDA_GLIBC_COMPAT_HEADER}")
   endif()
+else()
+  unset(CMAKE_CUDA_COMPILER CACHE)
+  unset(CUDAToolkit_ROOT CACHE)
 endif()
 if(CMAKE_CUDA_COMPILER AND EXISTS "${CMAKE_CUDA_COMPILER}")
   enable_language(CUDA)
