@@ -10,6 +10,9 @@ log/
 # Colcon metadata
 .colcon/
 
+# Local persistent Docker build caches
+docker_cache/
+
 # Node dependencies
 node_modules/
 

@@ -46,7 +46,7 @@ ARGUMENTS = [
     ),
     DeclareLaunchArgument(
         'opencv_prefix',
-        default_value='/opt/opencv-cuda',
+        default_value='/workspace/docker_cache/opencv-cuda/current',
         description='Prefix containing the optional CUDA-enabled OpenCV runtime for vins.',
     ),
 ]
