@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-OPENCV_PREFIX="${OPENCV_PREFIX:-/opt/opencv-cuda}"
+OPENCV_PREFIX="${OPENCV_PREFIX:-/workspace/docker_cache/opencv-cuda/current}"
 OPENCV_DIR="${OPENCV_DIR:-${OPENCV_PREFIX}/lib/cmake/opencv4}"
 
 if [[ ! -f "${OPENCV_DIR}/OpenCVConfig.cmake" ]]; then
@@ -11,7 +11,9 @@ if [[ ! -f "${OPENCV_DIR}/OpenCVConfig.cmake" ]]; then
     exit 1
 fi
 
+set +u
 source "/opt/ros/${ROS_DISTRO:-jazzy}/setup.bash"
+set -u
 
 cd "${REPO_ROOT}"
 ./scripts/apply_vins_fusion_patch.sh
