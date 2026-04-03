@@ -6,7 +6,7 @@ The rover currently supports RTAB-Map RGB-D odometry, ICP odometry, and the T265
 
 - Add a selectable VINS-Fusion-based VIO source that consumes T265 fisheye stereo images and IMU data.
 - Add bringup/configuration support for launching VINS-Fusion, relaying its output into the rover's standard `odom -> ackermann/base_link` frame contract, and selecting it as the SLAM/EKF odometry input.
-- Extend top-level bringup so enabling VINS automatically enables the required T265 hardware path and fisheye streams in hardware mode.
+- Extend top-level bringup so enabling VINS automatically enables the required T265 hardware path and fisheye streams in hardware mode, while keeping fisheye streams disabled when VINS is not selected.
 - Add container dependency support and validation steps for the chosen VINS-Fusion fork and its OpenCV/Ceres requirements, with Jazzy compatibility treated as an integration constraint rather than assumed upstream support.
 - Preserve existing odometry options (`/vo_odom`, `/icp_odom`, `/t265/odom_base`) so VINS can be introduced without removing or regressing current workflows.
 
