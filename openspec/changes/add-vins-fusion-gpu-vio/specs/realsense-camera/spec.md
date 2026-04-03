@@ -13,3 +13,7 @@ The RealSense bringup SHALL accept top-level launch control for T265 fisheye str
 #### Scenario: Top-level launch requests VINS prerequisites
 - **WHEN** higher-level bringup selects a VINS-based odometry mode
 - **THEN** the RealSense launch SHALL honor the passed T265 fisheye enablement argument and start the required fisheye streams
+
+#### Scenario: VINS mode not selected
+- **WHEN** the T265 hardware path is enabled but higher-level bringup has not selected a VINS-based odometry mode
+- **THEN** the RealSense launch SHALL keep T265 fisheye stream publishing disabled

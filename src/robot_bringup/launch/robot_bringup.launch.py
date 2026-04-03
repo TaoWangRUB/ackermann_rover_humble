@@ -17,6 +17,11 @@ Hardware — D435i + T265:
   ros2 launch robot_bringup robot_bringup.launch.py \\
       use_gazebo:=false use_sim_time:=false \\
       depth_camera:=d435i hw_enable_t265:=true rtabmap:=true
+
+Hardware — D435i + VINS-Fusion:
+  ros2 launch robot_bringup robot_bringup.launch.py \\
+      use_gazebo:=false use_sim_time:=false \\
+      depth_camera:=d435i use_vins_odom:=true rtabmap:=true
 """
 
 import os
@@ -191,6 +196,12 @@ ARGUMENTS = [
                     'Requires hw_enable_t265:=true.',
     ),
     DeclareLaunchArgument(
+        'use_vins_odom',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Use VINS-Fusion odometry sourced from the T265 fisheye cameras and IMU.',
+    ),
+    DeclareLaunchArgument(
         'rover_monitor',
         default_value='false',
         choices=['true', 'false'],
@@ -224,14 +235,31 @@ def generate_launch_description() -> LaunchDescription:
     depth_camera = LaunchConfiguration('depth_camera')
     hw_enable_t265 = LaunchConfiguration('hw_enable_t265')
     use_t265_odom = LaunchConfiguration('use_t265_odom')
+    use_vins_odom = LaunchConfiguration('use_vins_odom')
 
     robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
     nav2_bringup_share = get_package_share_directory('ackermann_nav2_bringup')
     realsense_bringup_share = get_package_share_directory('realsense_camera_bringup')
+    vins_fusion_bringup_share = get_package_share_directory('vins_fusion_bringup')
     xacro_file = os.path.join(
         robot_description_share, 'models', 'ackermann_rover', 'ackermann_rover.urdf'
     )
+
+    enable_t265 = PythonExpression([
+        '"true" if "',
+        hw_enable_t265,
+        '" == "true" or "',
+        use_t265_odom,
+        '" == "true" or "',
+        use_vins_odom,
+        '" == "true" else "false"'
+    ])
+    t265_enable_fisheye = PythonExpression([
+        '"true" if "',
+        use_vins_odom,
+        '" == "true" else "false"'
+    ])
 
     # -----------------------------------------------------------------------
     # Simulation path: Gazebo + bridge provides all sensor topics
@@ -251,7 +279,7 @@ def generate_launch_description() -> LaunchDescription:
             'z': z_pos,
             'enable_px4_sitl': enable_px4_sitl,
             'depth_camera': depth_camera,
-            'enable_t265': hw_enable_t265,
+            'enable_t265': enable_t265,
         }.items()
     )
 
@@ -289,7 +317,7 @@ def generate_launch_description() -> LaunchDescription:
                 'ns:=', robot_name, ' ',
                 'enable_d435i:=', PythonExpression(['"true" if "', depth_camera, '" == "d435i" else "false"']), ' ',
                 'enable_l515:=',  PythonExpression(['"true" if "', depth_camera, '" == "l515"  else "false"']), ' ',
-                'enable_t265:=', hw_enable_t265, ' ',
+                'enable_t265:=', enable_t265, ' ',
                 'enable_rplidar:=false ',
                 'enable_cubepilot:=true',
             ]),
@@ -309,10 +337,21 @@ def generate_launch_description() -> LaunchDescription:
         launch_arguments={
             'enable_d435i': PythonExpression(['"true" if "', depth_camera, '" == "d435i" else "false"']),
             'enable_l515':  PythonExpression(['"true" if "', depth_camera, '" == "l515"  else "false"']),
-            'enable_t265':  hw_enable_t265,
+            'enable_t265':  enable_t265,
+            't265_enable_fisheye': t265_enable_fisheye,
             't265_relay_publish_tf': use_t265_odom,
-            'd435i_startup_delay_s': PythonExpression(['"12.0" if "', hw_enable_t265, '" == "true" else "0.0"']),
-            'l515_startup_delay_s':  PythonExpression(['"12.0" if "', hw_enable_t265, '" == "true" else "0.0"']),
+            'd435i_startup_delay_s': PythonExpression(['"12.0" if "', enable_t265, '" == "true" else "0.0"']),
+            'l515_startup_delay_s':  PythonExpression(['"12.0" if "', enable_t265, '" == "true" else "0.0"']),
+        }.items(),
+    )
+
+    vins_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(vins_fusion_bringup_share, 'launch', 'vins_fusion.launch.py')
+        ),
+        condition=IfCondition(use_vins_odom),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
         }.items(),
     )
 
@@ -338,6 +377,7 @@ def generate_launch_description() -> LaunchDescription:
             'localization': localization,
             'rtabmap_viz': rtabmap_viz,
             'use_t265_odom': use_t265_odom,
+            'use_vins_odom': use_vins_odom,
             'rgb_image_topic': PythonExpression([
                 '"', depth_camera, '/color/image_raw"'
                 ' if "', use_gazebo, '" == "false"'
@@ -416,6 +456,7 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(hw_robot_state_publisher)
     ld.add_action(hw_cameras_launch)
     # Common
+    ld.add_action(vins_launch)
     ld.add_action(rtabmap_launch)
     ld.add_action(nav2_launch)
     ld.add_action(rviz_delayed)

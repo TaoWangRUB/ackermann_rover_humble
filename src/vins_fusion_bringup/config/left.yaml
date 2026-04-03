@@ -1,0 +1,15 @@
+%YAML:1.0
+---
+model_type: KANNALA_BRANDT
+camera_name: t265_fisheye1
+image_width: 848
+image_height: 800
+projection_parameters:
+   k2: -0.00517302006483078
+   k3: 0.04260534048080444
+   k4: -0.04044441133737564
+   k5: 0.00740980077534914
+   mu: 284.10400390625
+   mv: 285.1369934082031
+   u0: 421.202392578125
+   v0: 390.9504089355469

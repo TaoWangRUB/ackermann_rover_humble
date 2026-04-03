@@ -45,9 +45,9 @@ Rationale:
 Alternatives considered:
 - Letting VINS publish its native frames directly. Rejected because it would leak fork-specific frame conventions into the rest of the system and risk duplicate TF ownership.
 
-### Treat T265 fisheye enablement as a bringup concern
+### Treat T265 fisheye enablement as a gated bringup concern
 
-Selecting VINS odometry in hardware mode will automatically require T265 hardware enablement and T265 fisheye stream enablement from top-level bringup.
+Selecting VINS odometry in hardware mode will automatically require T265 hardware enablement and T265 fisheye stream enablement from top-level bringup. When VINS is not selected, fisheye streams will remain disabled to avoid unnecessary camera bandwidth, CPU work, and message traffic.
 
 Rationale:
 - VINS cannot operate without the T265 stereo fisheye feeds and IMU.
@@ -55,6 +55,7 @@ Rationale:
 
 Alternatives considered:
 - Requiring operators to manually set independent fisheye arguments. Rejected because it is error-prone and makes the launch contract harder to use.
+- Leaving fisheye streams enabled whenever the T265 is present. Rejected because it spends resources in the common non-VINS cases without helping downstream consumers.
 
 ### Keep `/odometry/filtered` as the stable downstream interface
 

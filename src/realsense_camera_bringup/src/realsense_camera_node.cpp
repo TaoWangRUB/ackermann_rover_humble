@@ -438,6 +438,13 @@ void RealsenseCameraNode::start_pipeline()
       infra2_info_msg_ = build_camera_info(ip, camera_name_ + "_infra2_optical_frame");
       RCLCPP_INFO(get_logger(), "Infra2 stream: %dx%d @ %dfps", ip.width(), ip.height(), ip.fps());
     }
+  } else if (enable_fisheye_) {
+    auto fp1 = profile.get_stream(RS2_STREAM_FISHEYE, 1).as<rs2::video_stream_profile>();
+    auto fp2 = profile.get_stream(RS2_STREAM_FISHEYE, 2).as<rs2::video_stream_profile>();
+    fisheye1_info_msg_ = build_camera_info(fp1, camera_name_ + "_fisheye1_optical_frame");
+    fisheye2_info_msg_ = build_camera_info(fp2, camera_name_ + "_fisheye2_optical_frame");
+    RCLCPP_INFO(get_logger(), "Fisheye1 stream: %dx%d @ %dfps", fp1.width(), fp1.height(), fp1.fps());
+    RCLCPP_INFO(get_logger(), "Fisheye2 stream: %dx%d @ %dfps", fp2.width(), fp2.height(), fp2.fps());
   }
 
   // Depth alignment — rs2::align::process() is CPU-intensive (especially on ARM).
@@ -903,8 +910,21 @@ sensor_msgs::msg::CameraInfo RealsenseCameraNode::build_camera_info(
   info.height = profile.height();
 
   auto i = profile.get_intrinsics();
-  info.distortion_model = "plumb_bob";
-  info.d.assign(i.coeffs, i.coeffs + 5);
+  switch (i.model) {
+    case RS2_DISTORTION_KANNALA_BRANDT4:
+    case RS2_DISTORTION_FTHETA:
+      info.distortion_model = "equidistant";
+      info.d.assign(i.coeffs, i.coeffs + 4);
+      break;
+    case RS2_DISTORTION_NONE:
+      info.distortion_model = "plumb_bob";
+      info.d.assign(5, 0.0);
+      break;
+    default:
+      info.distortion_model = "plumb_bob";
+      info.d.assign(i.coeffs, i.coeffs + 5);
+      break;
+  }
 
   info.k = {i.fx, 0.0, i.ppx,
              0.0, i.fy, i.ppy,

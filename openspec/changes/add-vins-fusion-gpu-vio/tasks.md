@@ -1,21 +1,21 @@
 ## 1. Dependency and fork validation
 
-- [ ] 1.1 Select the canonical VINS-Fusion fork for this repo and add it as a submodule under `src/`.
+- [x] 1.1 Select the canonical VINS-Fusion fork for this repo and add it as a submodule under `src/`.
 - [ ] 1.2 Update `docker/Dockerfile` with the VINS-compatible Ceres and CUDA-enabled OpenCV dependency path needed for the selected fork.
 - [ ] 1.3 Rebuild the Docker image and validate that the chosen fork can be configured and built in the Jazzy container, patching the vendored fork locally if required.
 
 ## 2. VINS bringup package and odometry adaptation
 
-- [ ] 2.1 Create `src/vins_fusion_bringup/` with package metadata, launch files, and versioned T265 fisheye + IMU calibration/config files.
-- [ ] 2.2 Add the VINS estimator launch and topic wiring for `/t265/fisheye1/image_raw`, `/t265/fisheye2/image_raw`, and `/t265/imu`.
-- [ ] 2.3 Add or reuse an odometry adapter so the VINS output exposed as `/vins_odom` conforms to `odom -> ackermann/base_link`.
-- [ ] 2.4 Validate standalone VINS bringup and confirm `/vins_odom` publishes with the expected frame contract.
+- [x] 2.1 Create `src/vins_fusion_bringup/` with package metadata, launch files, and versioned T265 fisheye + IMU calibration/config files.
+- [x] 2.2 Add the VINS estimator launch and topic wiring for `/t265/fisheye1/image_raw`, `/t265/fisheye2/image_raw`, and `/t265/imu`.
+- [x] 2.3 Add or reuse an odometry adapter so the VINS output exposed as `/vins_odom` conforms to `odom -> ackermann/base_link`.
+- [x] 2.4 Validate standalone VINS bringup and confirm `/vins_odom` publishes with the expected frame contract.
 
 ## 3. Top-level launch and SLAM integration
 
-- [ ] 3.1 Add `use_vins_odom` orchestration to `robot_bringup.launch.py`, including automatic T265 and fisheye enablement in hardware mode.
-- [ ] 3.2 Add VINS odometry-source selection to `rtabmap_slam.launch.py`, including EKF handling for external VIO heading data.
-- [ ] 3.3 Extend operator-facing scripts and docs so VINS can be launched and debugged through the repo’s normal workflows.
+- [x] 3.1 Add `use_vins_odom` orchestration to `robot_bringup.launch.py`, including automatic T265 and fisheye enablement in hardware mode.
+- [x] 3.2 Add VINS odometry-source selection to `rtabmap_slam.launch.py`, including EKF handling for external VIO heading data.
+- [x] 3.3 Extend operator-facing scripts and docs so VINS can be launched and debugged through the repo’s normal workflows.
 
 ## 4. End-to-end verification
 

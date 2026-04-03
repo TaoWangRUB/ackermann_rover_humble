@@ -65,8 +65,14 @@ declare -A LABELS=(
     [l515_color_info]="L515 color camera_info"
     [l515_depth_info]="L515 depth camera_info"
     [l515_imu]="L515 IMU"
+    [t265_fisheye1]="T265 fisheye1"
+    [t265_fisheye2]="T265 fisheye2"
+    [t265_fisheye1_info]="T265 fisheye1 camera_info"
+    [t265_fisheye2_info]="T265 fisheye2 camera_info"
     [t265_odom]="T265 odom"
     [t265_odom_base]="T265 odom base"
+    [vins_raw_odom]="VINS raw odom"
+    [vins_odom]="VINS adapted odom"
     [imu_raw_transformed]="IMU transformed"
     [imu_data]="IMU filtered"
     [rgbd_image]="RGBD image"
@@ -81,7 +87,8 @@ declare -A LABELS=(
 TOPIC_KEYS=(
     d435i_color d435i_depth d435i_color_info d435i_depth_info d435i_imu
     l515_color l515_depth l515_color_info l515_depth_info l515_imu
-    t265_odom t265_odom_base imu_raw_transformed imu_data
+    t265_fisheye1 t265_fisheye2 t265_fisheye1_info t265_fisheye2_info
+    t265_odom t265_odom_base vins_raw_odom vins_odom imu_raw_transformed imu_data
     rgbd_image vo_odom ekf_odom map rtabmap_info
     d435i_extrinsics l515_extrinsics
 )
@@ -89,14 +96,14 @@ TOPIC_KEYS=(
 STAMP_KEYS=(
     d435i_color d435i_depth d435i_imu
     l515_color l515_depth l515_imu
-    t265_odom t265_odom_base imu_raw_transformed imu_data
-    vo_odom ekf_odom rgbd_image
+    t265_fisheye1 t265_fisheye2 t265_odom t265_odom_base vins_raw_odom vins_odom
+    imu_raw_transformed imu_data vo_odom ekf_odom rgbd_image
 )
 
 STAT_KEYS=(
     d435i_color d435i_depth d435i_imu
     l515_color l515_depth l515_imu
-    t265_odom t265_odom_base
+    t265_fisheye1 t265_fisheye2 t265_odom t265_odom_base vins_raw_odom vins_odom
     imu_raw_transformed imu_data
     rgbd_image vo_odom ekf_odom map
 )
@@ -137,8 +144,14 @@ resolve_topic l515_depth /l515/aligned_depth_to_color/image_raw /l515/depth_imag
 resolve_topic l515_color_info /l515/color/camera_info /l515/camera_info
 resolve_topic l515_depth_info /l515/aligned_depth_to_color/camera_info /l515/camera_info
 resolve_topic l515_imu /l515/imu /l515/imu/raw
+resolve_topic t265_fisheye1 /t265/fisheye1/image_raw
+resolve_topic t265_fisheye2 /t265/fisheye2/image_raw
+resolve_topic t265_fisheye1_info /t265/fisheye1/camera_info
+resolve_topic t265_fisheye2_info /t265/fisheye2/camera_info
 resolve_topic t265_odom /t265/odom /t265/odom/sample
 resolve_topic t265_odom_base /t265/odom_base /t265_odom_base
+resolve_topic vins_raw_odom /vins/raw_odometry /vins/odometry
+resolve_topic vins_odom /vins_odom /vins/odom_base
 resolve_topic imu_raw_transformed /imu/raw_transformed
 resolve_topic imu_data /imu/data
 resolve_topic rgbd_image /rgbd_image

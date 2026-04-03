@@ -7,6 +7,10 @@ The top-level bringup SHALL expose a `use_vins_odom` launch mode that orchestrat
 - **WHEN** `use_gazebo:=false` and `use_vins_odom:=true`
 - **THEN** `robot_bringup.launch.py` SHALL enable the T265 hardware path, enable the T265 fisheye streams needed by VINS, and include the VINS-Fusion bringup launch
 
+#### Scenario: Hardware bringup without VINS odometry
+- **WHEN** `use_gazebo:=false`, the T265 hardware path is enabled, and `use_vins_odom:=false`
+- **THEN** `robot_bringup.launch.py` SHALL keep T265 fisheye stream publishing disabled unless another explicitly selected mode requires it
+
 ### Requirement: VINS mode propagation to SLAM bringup
 The top-level bringup SHALL pass VINS odometry selection into the SLAM bringup so downstream odometry-source selection is consistent.
 

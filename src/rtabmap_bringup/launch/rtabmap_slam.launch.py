@@ -34,9 +34,21 @@ ARGUMENTS = [
                     'topics for debugging or comparison.'
     ),
     DeclareLaunchArgument(
+        'use_vins_odom',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Use VINS-Fusion as the odometry source for EKF and RTAB-Map '
+                    'while keeping VO/ICP published on their own topics.'
+    ),
+    DeclareLaunchArgument(
         't265_odom_topic',
         default_value='/t265/odom_base',
         description='T265 odometry topic (used when use_t265_odom:=true).'
+    ),
+    DeclareLaunchArgument(
+        'vins_odom_topic',
+        default_value='/vins_odom',
+        description='VINS odometry topic (used when use_vins_odom:=true).'
     ),
     DeclareLaunchArgument(
         'rtabmap_viz',
@@ -86,14 +98,17 @@ def generate_launch_description() -> LaunchDescription:
     localization = LaunchConfiguration('localization')
     vision = LaunchConfiguration('vision')
     rtabmap_viz = LaunchConfiguration('rtabmap_viz')
+    use_vins_odom = LaunchConfiguration('use_vins_odom')
     use_t265_odom = LaunchConfiguration('use_t265_odom')
     t265_odom_topic = LaunchConfiguration('t265_odom_topic')
+    vins_odom_topic = LaunchConfiguration('vins_odom_topic')
 
-    # When use_t265_odom, RTAB-Map SLAM and EKF use T265 odom.
+    # Priority: VINS-Fusion > T265 built-in > RGB-D VO > ICP.
     # VO/ICP remain available on their own topics for debugging or comparison.
     odom_topic = PythonExpression([
-        '"', t265_odom_topic, '" if "', use_t265_odom, '" == "true"'
-        ' else ("/vo_odom" if "', vision, '" == "true" else "/icp_odom")'
+        '"', vins_odom_topic, '" if "', use_vins_odom, '" == "true"'
+        ' else ("', t265_odom_topic, '" if "', use_t265_odom, '" == "true"'
+        ' else ("/vo_odom" if "', vision, '" == "true" else "/icp_odom"))'
     ])
 
     # Always launch VO/ICP based on vision mode (even when use_t265_odom).
@@ -208,7 +223,7 @@ def generate_launch_description() -> LaunchDescription:
         # When T265 provides the primary odom source, keep VO independent from
         # the D435i IMU's arbitrary startup yaw so /vo_odom remains comparable.
         'wait_imu_to_init': PythonExpression([
-            'False if "', use_t265_odom, '" == "true" else True'
+            'False if "', use_vins_odom, '" == "true" or "', use_t265_odom, '" == "true" else True'
         ]),
         'use_sim_time': use_sim_time,
         'approx_sync': True,
@@ -270,7 +285,8 @@ def generate_launch_description() -> LaunchDescription:
         'smooth_lagged_data': True,
         'use_sim_time': use_sim_time,
         'two_d_mode': True,
-        # When T265 odom is used, relay owns odom→base_link TF; otherwise EKF does.
+        # When T265 odom is used, the T265 relay owns odom→base_link TF; VINS is
+        # adapted into message frame ids only, so EKF still owns the TF edge.
         'publish_tf': PythonExpression([
             'False if "', use_t265_odom, '" == "true" else True'
         ]),
@@ -291,16 +307,15 @@ def generate_launch_description() -> LaunchDescription:
         'odom0_nodelay': False,
         'odom0_differential': False,
         'odom0_relative': False,
-        # IMU yaw rate — only fused when T265 is NOT the odom source.
-        # T265 odom already contains IMU-corrected heading from its internal
-        # VIO pipeline; adding a second (D435i) IMU double-counts yaw rate
-        # and causes the EKF to drift.
+        # IMU yaw rate — only fused when RTAB-Map VO/ICP is the odom source.
+        # External VIO sources already incorporate IMU-driven heading, so adding
+        # the filtered IMU yaw rate here double-counts heading information.
         'imu0': '/imu/data',
         "imu0_config": [False, False, False,   # x, y, z position
                         False, False, False,   # roll, pitch, yaw (VO owns heading)
                         False, False, False,   # x, y, z velocity
                         False, False, PythonExpression([
-                            'False if "', use_t265_odom, '" == "true" else True'
+                            'False if "', use_vins_odom, '" == "true" or "', use_t265_odom, '" == "true" else True'
                         ]),    # yaw rate: skip when T265 odom is used
                         False, False, False],  # x, y, z acceleration
         'imu0_queue_size': 10,

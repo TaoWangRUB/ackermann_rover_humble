@@ -12,6 +12,10 @@
 #   --t265                 [HW mode] Enable T265 tracking camera + odom_tf_relay
 #   --t265-odom            [HW mode] Use T265 as odometry source for EKF/RTAB-Map
 #                          while keeping RTAB-Map VO on /vo_odom for debugging
+#   --vins-odom            Use VINS-Fusion as the odometry source. In hardware
+#                          mode this automatically relies on the T265 fisheye
+#                          streams; in simulation it auto-enables the simulated
+#                          T265 path via robot_bringup.
 #   --px4              Enable PX4 SITL (disables ros2_control, implies --bridge --vo-bridge)
 #   --rtabmap          Launch RTAB-Map SLAM
 #   --nav2             Launch Nav2 navigation stack
@@ -45,6 +49,12 @@
 #
 #   ── Hardware mode + D435i + T265 odom (skip VO) + RTAB-Map ──
 #   ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265-odom --rtabmap
+
+#   ── Hardware mode + D435i + VINS odom + RTAB-Map ──
+#   ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --vins-odom --rtabmap
+
+#   ── Gazebo + VINS odom + RTAB-Map ──
+#   ./scripts/start_ros2_nodes.sh --vins-odom --rtabmap
 #
 #   ── Hardware mode + VO bridge to real PX4 ──
 #   ./scripts/start_ros2_nodes.sh --hw --rtabmap --vo-bridge --bridge=speed_steering
@@ -113,6 +123,7 @@ HW="false"
 DEPTH_CAMERA="l515"
 HW_T265="false"
 HW_T265_ODOM="false"
+VINS_ODOM="false"
 PX4="false"
 RTABMAP="false"
 NAV2="false"
@@ -133,6 +144,7 @@ for arg in "$@"; do
         --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
         --t265)            HW_T265="true" ;;
         --t265-odom)       HW_T265="true"; HW_T265_ODOM="true" ;;
+        --vins-odom)       VINS_ODOM="true" ;;
         --px4)          PX4="true" ;;
         --rtabmap)      RTABMAP="true" ;;
         --nav2)         NAV2="true" ;;
@@ -151,7 +163,7 @@ for arg in "$@"; do
             exit 0 ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
+            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
             exit 1
             ;;
     esac
@@ -194,6 +206,7 @@ else
     echo "  Depth camera: ${DEPTH_CAMERA}"
     echo "  PX4 SITL:     ${PX4}"
 fi
+echo "  VINS odom:    ${VINS_ODOM}"
 echo "  RTAB-Map:     ${RTABMAP}"
 echo "  Nav2:         ${NAV2}"
 echo "  RViz:         ${RVIZ}"
@@ -218,6 +231,7 @@ if [[ "${HW}" == "true" ]]; then
 else
     LAUNCH_CMD+=" enable_px4_sitl:=${PX4}"
 fi
+LAUNCH_CMD+=" use_vins_odom:=${VINS_ODOM}"
 LAUNCH_CMD+=" rtabmap:=${RTABMAP}"
 LAUNCH_CMD+=" nav2:=${NAV2}"
 LAUNCH_CMD+=" rviz:=${RVIZ}"
