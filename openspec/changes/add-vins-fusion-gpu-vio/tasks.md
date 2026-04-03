@@ -1,8 +1,8 @@
 ## 1. Dependency and fork validation
 
 - [x] 1.1 Select the canonical VINS-Fusion fork for this repo and add it as a submodule under `src/`.
-- [ ] 1.2 Update `docker/Dockerfile` with the VINS-compatible Ceres and CUDA-enabled OpenCV dependency path needed for the selected fork.
-- [ ] 1.3 Rebuild the Docker image and validate that the chosen fork can be configured and built in the Jazzy container, patching the vendored fork locally if required.
+- [x] 1.2 Update the Docker dependency tooling (`docker/install_vins_gpu_deps.sh`, related compose mounts, and launch/build defaults) with the VINS-compatible CUDA-enabled OpenCV path needed for the selected fork.
+- [x] 1.3 Rebuild the Docker image and validate that the chosen fork can be configured and built in the Jazzy container, patching the vendored fork locally if required.
 
 ## 2. VINS bringup package and odometry adaptation
 

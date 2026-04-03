@@ -22,6 +22,6 @@ The rover currently supports RTAB-Map RGB-D odometry, ICP odometry, and the T265
 
 ## Impact
 
-- Affected code: `docker/Dockerfile`, `.gitmodules`, new `src/vins_fusion_bringup/` package, `src/robot_bringup/launch/robot_bringup.launch.py`, `src/rtabmap_bringup/launch/rtabmap_slam.launch.py`, and RealSense launch/config wiring.
+- Affected code: `.gitmodules`, `docker/docker-compose.yml`, `docker/install_vins_gpu_deps.sh`, `scripts/build_vins_gpu.sh`, new `src/vins_fusion_bringup/` package, `src/robot_bringup/launch/robot_bringup.launch.py`, `src/rtabmap_bringup/launch/rtabmap_slam.launch.py`, and RealSense launch/config wiring.
 - Affected systems: Docker image build, hardware camera launch flow, SLAM/EKF odometry input selection, T265 hardware workflows, and operator scripts used to launch/debug the stack.
 - New dependency surface: VINS-Fusion fork selection, Ceres compatibility management, and CUDA-enabled OpenCV for GPU feature tracking.
