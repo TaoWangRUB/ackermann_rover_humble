@@ -19,7 +19,7 @@
 
 ## 4. End-to-end verification
 
-- [ ] 4.1 Run the required workspace build and test commands in the Docker environment after the integration is complete.
-- [ ] 4.2 Verify topic flow, TF stability, and lifecycle readiness with VINS selected as the odometry source.
-- [ ] 4.3 Validate the hardware or simulation launch path end to end, including `/vins_odom`, `/odometry/filtered`, RTAB-Map, and downstream PX4/Nav2 consumers.
-- [ ] 4.4 Compare VINS against the existing odometry sources and document any remaining performance, compatibility, or GPU-usage findings.
+- [x] 4.1 Run the required workspace build and test commands in the Docker environment after the integration is complete.
+- [x] 4.2 Verify topic flow, TF stability, and lifecycle readiness with VINS selected as the odometry source.
+- [ ] 4.3 Validate the hardware or simulation launch path end to end, including `/vins_odom`, `/odometry/filtered`, RTAB-Map, and downstream PX4/Nav2 consumers. (blocked: D435i not connected during verification; RTAB-Map + Nav2 untested)
+- [x] 4.4 Compare VINS against the existing odometry sources and document any remaining performance, compatibility, or GPU-usage findings. (T265 hardware VIO ~7mm drift stationary; VINS diverges due to stereo sync issue — tracked in follow-up task)

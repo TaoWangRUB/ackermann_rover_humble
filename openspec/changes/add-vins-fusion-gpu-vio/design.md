@@ -19,6 +19,24 @@ This is a cross-cutting change because it touches Docker dependencies, hardware 
 - Reworking PX4 bridge topics, Nav2 contracts, or the global TF tree.
 - Treating upstream Jazzy compatibility as guaranteed before local build validation proves it.
 
+## Architecture / Data Flow
+
+```
+T265 Fisheye (848x800 @30Hz) + IMU
+  → realsense_camera_node (fisheye auto-enabled when use_vins_odom:=true)
+  → /t265/fisheye1/image_raw, /t265/fisheye2/image_raw, /t265/imu
+  → [vins_node] (GPU feature tracking via CUDA OpenCV, LD_LIBRARY_PATH injected)
+  → /vins/raw_odometry (t265_pose_frame)
+  → [odom_tf_relay] (frame adaptation: t265_pose_frame → ackermann/base_link)
+  → /vins_odom (odom → ackermann/base_link)
+  → EKF (odom0, IMU yaw fusion disabled for external VIO)
+  → /odometry/filtered → RTAB-Map / Nav2 / PX4
+```
+
+Odometry priority when multiple sources enabled: **VINS-Fusion > T265 built-in > RGB-D VO > ICP**
+
+All existing odometry topics (`/vo_odom`, `/icp_odom`, `/t265/odom_base`) remain published for debugging/comparison when their producers are enabled.
+
 ## Decisions
 
 ### Use a dedicated VINS capability and bringup package
