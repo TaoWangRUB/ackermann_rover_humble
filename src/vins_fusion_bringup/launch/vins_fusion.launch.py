@@ -4,7 +4,7 @@
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 
 
@@ -44,6 +44,11 @@ ARGUMENTS = [
         choices=['true', 'false'],
         description='Use simulation time for the odom relay node.',
     ),
+    DeclareLaunchArgument(
+        'opencv_prefix',
+        default_value='/opt/opencv-cuda',
+        description='Prefix containing the optional CUDA-enabled OpenCV runtime for vins.',
+    ),
 ]
 
 
@@ -54,6 +59,7 @@ def generate_launch_description() -> LaunchDescription:
     base_frame = LaunchConfiguration('base_frame')
     output_frame = LaunchConfiguration('output_frame')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    opencv_prefix = LaunchConfiguration('opencv_prefix')
 
     vins_node = Node(
         package='vins',
@@ -61,6 +67,13 @@ def generate_launch_description() -> LaunchDescription:
         name='vins_estimator',
         output='screen',
         arguments=[config_file],
+        additional_env={
+            'LD_LIBRARY_PATH': [
+                PathJoinSubstitution([opencv_prefix, 'lib']),
+                ':',
+                EnvironmentVariable('LD_LIBRARY_PATH', default_value=''),
+            ],
+        },
         remappings=[
             ('odometry', raw_odom_topic),
             ('path', '/vins/path'),
