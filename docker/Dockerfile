@@ -121,6 +121,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc-11 g++-11 \
     && rm -rf /var/lib/apt/lists/*
 
+# Optional VINS-Fusion GPU mode depends on a CUDA-enabled OpenCV build.
+# The CUDA toolkit itself is mounted into the running container at /usr/local/cuda,
+# so the image only bakes the source-build prerequisites here. The actual OpenCV
+# CUDA build is performed later inside the running container via
+# docker/install_vins_gpu_deps.sh.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-dev \
+    python3-numpy \
+    libgtk-3-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libtbb-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # PX4 Python dependencies
 COPY docker/px4_requirements.txt /tmp/px4_requirements.txt
 RUN python3 -m pip install --break-system-packages -r /tmp/px4_requirements.txt \
