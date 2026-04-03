@@ -31,6 +31,9 @@ use_gpu_ceres: 0
 
 # Extrinsic parameter between the T265 body frame and the stereo fisheye
 # optical frames. The pose frame is an identity child of t265_link in the URDF.
+# 0 = use provided values as-is; 1 = refine online; 2 = estimate from scratch.
+# Use 1: the yaml body_T_cam values are approximate; online refinement converges
+# them correctly once the camera is moved (motion excitation required).
 estimate_extrinsic: 1
 
 body_T_cam0: !!opencv-matrix

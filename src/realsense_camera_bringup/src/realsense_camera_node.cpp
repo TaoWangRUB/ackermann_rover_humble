@@ -701,8 +701,10 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
           if (auto vf = f.as<rs2::video_frame>()) {
             if (vf.get_profile().stream_type() == RS2_STREAM_FISHEYE) {
               int idx = vf.get_profile().stream_index();
-              if (idx == 1) publish_video_frame(vf, fisheye1_image_pub_, fisheye1_info_pub_, fisheye1_info_msg_);
-              else           publish_video_frame(vf, fisheye2_image_pub_, fisheye2_info_pub_, fisheye2_info_msg_);
+              if (idx == 1)
+                publish_video_frame(vf, fisheye1_image_pub_, fisheye1_info_pub_, fisheye1_info_msg_);
+              else if (idx == 2)
+                publish_video_frame(vf, fisheye2_image_pub_, fisheye2_info_pub_, fisheye2_info_msg_);
             }
           }
         });
