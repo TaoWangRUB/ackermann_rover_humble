@@ -29,30 +29,32 @@ use_gpu: 1
 use_gpu_acc_flow: 1
 use_gpu_ceres: 0
 
-# Extrinsic parameter between the T265 body frame and the stereo fisheye
-# optical frames. The pose frame is an identity child of t265_link in the URDF.
-# 0 = use provided values as-is; 1 = refine online; 2 = estimate from scratch.
-# Use 1: the yaml body_T_cam values are approximate; online refinement converges
-# them correctly once the camera is moved (motion excitation required).
+# Extrinsic: body_T_cam = imu_optical_frame → fisheye_optical_frame.
+# Derived from rs-enumerate-devices -c hardware calibration, converted through
+# the official T265 ROS driver's coordinate chain (t265_realsense_node.cpp):
+#   SDK extrinsic → rotation conjugation + translation remap → TF frames
+#   → optical frame rotation → body_T_cam.
+# See tools/compute_body_T_cam.py for the full computation.
+# 0 = fix; 1 = refine online; 2 = calibrate from scratch.
 estimate_extrinsic: 1
 
 body_T_cam0: !!opencv-matrix
    rows: 4
    cols: 4
    dt: d
-   data: [ 0.0, 0.0, 1.0, 0.0,
-           -1.0, 0.0, 0.0, 0.032,
-            0.0, -1.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 1.0 ]
+   data: [-0.99994884,  0.00508425,  0.00873548,  0.01070083,
+          -0.00511504, -0.99998054, -0.00350635,  0.00004562,
+           0.00871748, -0.00355086,  0.99995539, -0.00000636,
+           0.0,         0.0,         0.0,          1.0 ]
 
 body_T_cam1: !!opencv-matrix
    rows: 4
    cols: 4
    dt: d
-   data: [ 0.0, 0.0, 1.0, 0.0,
-           -1.0, 0.0, 0.0, -0.032,
-            0.0, -1.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 1.0 ]
+   data: [-0.99997712,  0.00309843,  0.00593948, -0.05280119,
+          -0.00311985, -0.99998831, -0.00359936, -0.00003635,
+           0.00592826, -0.00361782,  0.99997577, -0.00001374,
+           0.0,         0.0,         0.0,          1.0 ]
 
 # Multiple thread support
 multiple_thread: 1
@@ -78,8 +80,8 @@ acc_w: 0.002
 gyr_w: 0.0004
 g_norm: 9.81
 
-# Time-offset estimation
-estimate_td: 1
+# Time-offset estimation (T265 has HW-synced IMU/camera timestamps)
+estimate_td: 0
 td: 0.0
 
 # Loop closure parameters
