@@ -6,9 +6,10 @@
 # Flags:
 #   --hw                   Hardware mode: real cameras instead of Gazebo (use_gazebo:=false).
 #                          Starts robot_state_publisher + realsense_camera_bringup.
-#   --depth-camera=NAME    Depth camera for RTAB-Map: l515 (default) or d435i.
+#   --depth-camera=NAME    Depth camera for RTAB-Map: l515 (default), d435i, or none.
 #                          Selects which camera node starts (HW), which Gazebo bridge topics
 #                          are exposed (sim), and which RTAB-Map topics are subscribed.
+#                          Auto-set to 'none' when --vins-odom without --rtabmap.
 #   --t265                 [HW mode] Enable T265 tracking camera + odom_tf_relay
 #   --t265-odom            [HW mode] Use T265 as odometry source for EKF/RTAB-Map
 #                          while keeping RTAB-Map VO on /vo_odom for debugging
@@ -53,6 +54,9 @@
 #   ── Hardware mode + D435i + VINS odom + RTAB-Map ──
 #   ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --vins-odom --rtabmap
 
+#   ── Hardware mode + VINS odom only (T265 only, no depth camera) ──
+#   ./scripts/start_ros2_nodes.sh --hw --vins-odom
+#
 #   ── Gazebo + VINS odom + RTAB-Map ──
 #   ./scripts/start_ros2_nodes.sh --vins-odom --rtabmap
 #
@@ -120,7 +124,8 @@ source "${SCRIPT_DIR}/lib/dc.sh"
 
 # Defaults
 HW="false"
-DEPTH_CAMERA="l515"
+DEPTH_CAMERA=""
+DEPTH_CAMERA_EXPLICIT="false"
 HW_T265="false"
 HW_T265_ODOM="false"
 VINS_ODOM="false"
@@ -141,7 +146,7 @@ BUILD_PKGS=""
 for arg in "$@"; do
     case "$arg" in
         --hw)              HW="true"; RVIZ="false" ;;
-        --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
+        --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}"; DEPTH_CAMERA_EXPLICIT="true" ;;
         --t265)            HW_T265="true" ;;
         --t265-odom)       HW_T265="true"; HW_T265_ODOM="true" ;;
         --vins-odom)       VINS_ODOM="true" ;;
@@ -176,6 +181,17 @@ if [[ "${PX4}" == "true" ]]; then
     VO_BRIDGE="true"
 fi
 
+# Auto-resolve depth camera: default to 'none' when only T265/VINS is needed,
+# otherwise fall back to 'l515'.
+if [[ -z "${DEPTH_CAMERA}" ]]; then
+    if [[ "${DEPTH_CAMERA_EXPLICIT}" == "false" && "${RTABMAP}" == "false" \
+          && ( "${VINS_ODOM}" == "true" || "${HW_T265}" == "true" || "${HW_T265_ODOM}" == "true" ) ]]; then
+        DEPTH_CAMERA="none"
+    else
+        DEPTH_CAMERA="l515"
+    fi
+fi
+
 # ── Build step (if requested) ──
 if [[ "${BUILD}" == "true" ]]; then
     BUILD_CMD="source /opt/ros/\$ROS_DISTRO/setup.bash && cd /workspace && colcon build --symlink-install"
@@ -198,7 +214,9 @@ fi
 echo "Launching ROS 2 nodes inside Docker container..."
 if [[ "${HW}" == "true" ]]; then
     echo "  Mode:         hardware (real cameras)"
-    echo "  Depth camera: ${DEPTH_CAMERA}"
+    if [[ "${DEPTH_CAMERA}" != "none" ]]; then
+        echo "  Depth camera: ${DEPTH_CAMERA}"
+    fi
     echo "  T265:         ${HW_T265}"
     echo "  T265 odom:    ${HW_T265_ODOM}"
 else
