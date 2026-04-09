@@ -11,7 +11,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup ROS 2 Jazzy
         uses: ros-tooling/setup-ros@v0.7
@@ -47,12 +47,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup ROS 2 Jazzy
         uses: ros-tooling/setup-ros@v0.7
         with:
           required-ros-distributions: jazzy
+
+      - name: Prepare CI submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/prepare_ci_submodules.sh
 
       - name: Install package dependencies
         shell: bash
