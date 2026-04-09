@@ -28,11 +28,15 @@ The system SHALL transform raw IMU data from sensor frame to `ackermann/base_lin
 - **THEN** raw IMU → `imu_transformer` (frame transform) → `imu_filter_madgwick` (orientation fusion) → `/imu/data` SHALL be active
 
 ### Requirement: EKF sensor fusion
-The system SHALL fuse visual/ICP odometry and IMU data using a robot_localization EKF at 30 Hz in 2D mode, publishing `/odometry/filtered` in ENU/FLU convention.
+The system SHALL fuse the selected odometry source and IMU data using a robot_localization EKF at 30 Hz in 2D mode, publishing `/odometry/filtered` in ENU/FLU convention.
 
-#### Scenario: Filtered odometry
-- **WHEN** EKF is running
-- **THEN** `/odometry/filtered` SHALL fuse odom0 (position + velocity + yaw rate from VO/ICP) and imu0 (yaw + yaw rate from IMU)
+#### Scenario: Filtered odometry with RTAB-Map VO or ICP
+- **WHEN** the EKF is running with RTAB-Map visual odometry or ICP selected as odom0
+- **THEN** `/odometry/filtered` SHALL fuse odom0 with IMU angular-rate data needed to stabilize heading
+
+#### Scenario: Filtered odometry with external VIO
+- **WHEN** the EKF is running with VINS-Fusion or T265 built-in odometry selected as odom0
+- **THEN** `/odometry/filtered` SHALL use the selected external VIO odometry as odom0 and SHALL disable the redundant IMU yaw-rate fusion that would double-count heading information
 
 ### Requirement: Depth-to-laserscan conversion
 The system SHALL convert depth images to 2D laser scan (`/scan`) with range 0.1–20.0 m for Nav2 costmap consumption.
@@ -47,3 +51,14 @@ The system SHALL maintain pose drift below 0.1 m and yaw drift below 3 degrees o
 #### Scenario: Stationary drift check
 - **WHEN** the robot is stationary for 10 seconds
 - **THEN** position drift SHALL be < 0.1 m and yaw drift SHALL be < 3 degrees
+
+### Requirement: External VIO odometry source selection
+The SLAM stack SHALL support VINS-Fusion as an external odometry source in addition to T265 built-in odometry, RTAB-Map visual odometry, and ICP odometry.
+
+#### Scenario: VINS selected as odometry source
+- **WHEN** `use_vins_odom:=true`
+- **THEN** the SLAM stack SHALL use `/vins_odom` as the odometry input consumed by RTAB-Map and the EKF
+
+#### Scenario: T265 built-in odometry selected
+- **WHEN** `use_vins_odom:=false` and `use_t265_odom:=true`
+- **THEN** the SLAM stack SHALL use the relayed T265 odometry topic as the odometry input consumed by RTAB-Map and the EKF
