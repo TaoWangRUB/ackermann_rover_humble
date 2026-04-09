@@ -6,6 +6,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+      - name: Prepare CI submodules
+        run: bash scripts/prepare_ci_submodules.sh
       - name: Run Autonomous Agent Verification
         run: bash scripts/verify_agent_work.sh

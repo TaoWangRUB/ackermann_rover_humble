@@ -55,6 +55,9 @@ if [ "$CI" = "true" ]; then
     sed -i '/runtime: nvidia/d' docker/docker-compose.yml
 fi
 
+echo -e "${GREEN}=== Applying VINS-Fusion Patch ===${NC}"
+./scripts/apply_vins_fusion_patch.sh
+
 echo -e "${GREEN}=== Setting up Docker Environment ===${NC}"
 # Allow local X11 connections for GUI apps (like RViz/Gazebo) inside Docker
 # xhost is not available in headless CI environments — skip it there.
@@ -75,6 +78,9 @@ $DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source
 $DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && colcon build --symlink-install $COLCON_SKIP_ARGS --packages-up-to ackermann_control safety px4_bringup robot_bringup ackermann_nav2_bringup rtabmap_bringup description_robot"
 
 echo -e "${GREEN}=== Running Unit Tests ===${NC}"
+# Clear stale test result XMLs from previous broader workspace runs so the
+# package-select test pass below reports only the packages this script covers.
+$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && cd /workspace && colcon test-result --test-result-base build --delete-yes || true"
 # Only test project packages — skip submodule tests (px4-ros2-interface-lib examples, etc.)
 $DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && colcon test --event-handlers console_direct+ --packages-select ackermann_control safety && colcon test-result --verbose"
 
@@ -85,9 +91,30 @@ echo -e "${GREEN}=== Validating Simulation & Launch (Dry Run/Topology Check) ===
 $DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && timeout --preserve-status 25 ros2 launch robot_bringup robot_bringup.launch.py rtabmap:=true nav2:=true || true"
 
 echo -e "${GREEN}=== Running Safety Checks & Linting ===${NC}"
-$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && ament_lint_cmake . || true"
-$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && ament_flake8 . || true"
-$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && ament_cpplint . || true"
+$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && cd /workspace && ament_lint_cmake \
+    src/ackermann_control \
+    src/safety \
+    src/description_robot \
+    src/realsense_camera_bringup \
+    src/rtabmap_bringup \
+    src/ackermann_nav2_bringup \
+    src/robot_bringup \
+    src/vins_fusion_bringup \
+    src/px4_bringup || true"
+$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && cd /workspace && ament_flake8 \
+    scripts \
+    tools \
+    src/description_robot \
+    src/realsense_camera_bringup \
+    src/rtabmap_bringup \
+    src/robot_bringup \
+    src/vins_fusion_bringup \
+    src/px4_bringup || true"
+$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && cd /workspace && ament_cpplint \
+    src/ackermann_control \
+    src/safety \
+    src/description_robot \
+    src/px4_bringup || true"
 
 echo -e "${GREEN}=== Tear Down ===${NC}"
 $DOCKER_COMPOSE -f docker/docker-compose.yml down
