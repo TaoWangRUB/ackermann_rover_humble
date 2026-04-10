@@ -124,21 +124,35 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-# Use manually installed librealsense from /usr/local (v2.51) — avoids the ROS-bundled
-# librealsense2 2.55+ which dropped L515 support.
-find_package(realsense2 REQUIRED PATHS /usr/local NO_DEFAULT_PATH)
+# Use manually installed librealsense from /usr/local (v2.51) when available.
+# CI runners do not provide the hardware SDK, so fall back to a stub node
+# there instead of aborting the whole workspace configure step.
+find_package(realsense2 QUIET PATHS /usr/local NO_DEFAULT_PATH)
+if(realsense2_FOUND)
+  set(HAVE_LIBREALSENSE TRUE)
+  message(STATUS "librealsense2 found — building RealSense hardware node")
+else()
+  set(HAVE_LIBREALSENSE FALSE)
+  message(WARNING
+    "librealsense2 was not found under /usr/local. "
+    "Building a stub realsense_camera_node so CI and non-hardware builds can proceed. "
+    "Hardware RealSense launches will require librealsense2 to be installed before rebuilding.")
+endif()
 
-include_directories(
-  include
-  ${realsense2_INCLUDE_DIRS}
-)
+include_directories(include)
+if(HAVE_LIBREALSENSE)
+  include_directories(${realsense2_INCLUDE_DIRS})
+endif()
 
-# Define the node executable
-add_executable(realsense_camera_node
-  src/realsense_camera_node.cpp
-)
+if(HAVE_LIBREALSENSE)
+  set(REALSENSE_CAMERA_NODE_SOURCES src/realsense_camera_node.cpp)
+else()
+  set(REALSENSE_CAMERA_NODE_SOURCES src/realsense_camera_node_stub.cpp)
+endif()
 
-if(HAVE_CUDA)
+add_executable(realsense_camera_node ${REALSENSE_CAMERA_NODE_SOURCES})
+
+if(HAVE_CUDA AND HAVE_LIBREALSENSE)
   find_package(CUDAToolkit REQUIRED)
 
   # Build CUDA alignment as a static library and link it into the node.
@@ -164,19 +178,24 @@ if(HAVE_CUDA)
   )
   target_link_libraries(realsense_camera_node cuda_align)
   target_compile_definitions(realsense_camera_node PRIVATE HAVE_CUDA)
+elseif(HAVE_CUDA AND NOT HAVE_LIBREALSENSE)
+  message(STATUS "CUDA found but librealsense2 is unavailable — skipping CUDA depth alignment build")
 endif()
 
-ament_target_dependencies(realsense_camera_node
-  rclcpp
-  sensor_msgs
-  nav_msgs
-  tf2_ros
-  geometry_msgs
-)
+set(REALSENSE_CAMERA_NODE_DEPS rclcpp)
+if(HAVE_LIBREALSENSE)
+  list(APPEND REALSENSE_CAMERA_NODE_DEPS
+    sensor_msgs
+    nav_msgs
+    tf2_ros
+    geometry_msgs
+  )
+endif()
+ament_target_dependencies(realsense_camera_node ${REALSENSE_CAMERA_NODE_DEPS})
 
-target_link_libraries(realsense_camera_node
-  ${realsense2_LIBRARY}
-)
+if(HAVE_LIBREALSENSE)
+  target_link_libraries(realsense_camera_node ${realsense2_LIBRARY})
+endif()
 
 add_executable(odom_tf_relay
   src/odom_tf_relay.cpp
@@ -195,10 +214,12 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(
-  DIRECTORY include/
-  DESTINATION include
-)
+if(HAVE_LIBREALSENSE)
+  install(
+    DIRECTORY include/
+    DESTINATION include
+  )
+endif()
 
 install(
   DIRECTORY launch config
