@@ -2,7 +2,8 @@
 set -euo pipefail
 
 OPENCV_VERSION="${OPENCV_VERSION:-4.10.0}"
-OPENCV_CACHE_ROOT="${OPENCV_CACHE_ROOT:-/workspace/docker_cache/opencv-cuda}"
+_ARCH="$(uname -m)"
+OPENCV_CACHE_ROOT="${OPENCV_CACHE_ROOT:-/workspace/docker_cache/opencv-cuda/${_ARCH}}"
 OPENCV_PREFIX_VERSIONED="${OPENCV_PREFIX_VERSIONED:-${OPENCV_CACHE_ROOT}/${OPENCV_VERSION}}"
 OPENCV_PREFIX_LINK="${OPENCV_PREFIX_LINK:-${OPENCV_CACHE_ROOT}/current}"
 OPENCV_BUILD_ROOT="${OPENCV_BUILD_ROOT:-/tmp/opencv-cuda-build}"

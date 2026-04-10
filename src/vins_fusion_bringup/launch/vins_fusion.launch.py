@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Launch VINS-Fusion and adapt its raw odometry into the rover frame contract."""
 
+import platform
+
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -46,7 +48,7 @@ ARGUMENTS = [
     ),
     DeclareLaunchArgument(
         'opencv_prefix',
-        default_value='/workspace/docker_cache/opencv-cuda/current',
+        default_value=f'/workspace/docker_cache/opencv-cuda/{platform.machine()}/current',
         description='Prefix containing the optional CUDA-enabled OpenCV runtime for vins.',
     ),
 ]
