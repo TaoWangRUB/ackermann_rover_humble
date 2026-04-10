@@ -107,7 +107,7 @@
   - `/monitor/health` publishes RoverHealth at 2 Hz (aggregator timer)
 - [x] 12.4 **Docker MQTT telemetry:** Start Mosquitto inside Docker, publish mock `/fmu/out/vehicle_global_position` (PX4 heartbeat), verify `mosquitto_sub -h localhost -t "rover/health/#"` receives Protobuf-serialized RoverHealth messages with correct field values
 - [x] 12.5 **Docker alert triggering:** Publish degraded telemetry (e.g., low battery via `/fmu/out/battery_status` with `remaining=15.0`), verify PX4_BATTERY_CRITICAL alert appears in `/monitor/health` message and `rover/alerts` MQTT topic
-- [ ] 12.6 **Hardware validation:** After Docker passes, deploy to hardware (Jetson Xavier NX or test platform), launch with real RealSense camera + PX4 + sysfs, verify same topics/rates with live inputs
+- [x] 12.6 **Hardware validation:** After Docker passes, deploy to hardware (Jetson Xavier NX or test platform), launch with real RealSense camera + PX4 + sysfs, verify same topics/rates with live inputs
 
 ---
 
@@ -209,4 +209,4 @@
   - `rover_telemetry`: cam_connected, cam_depth_fps, cam_frame_delta_ms, jetson_disk_free_gb, jetson_gpu_pct, jetson_ram_used_mb, jetson_temp_cpu_c, jetson_temp_gpu_c, overall_health, px4_armed, px4_battery_pct, px4_battery_v, px4_connected, px4_heartbeat_age_ms, slam_latency_ms
   - `rover_alerts`: alert_id tag (CAM_DISCONNECTED, CAM_STUTTER, PX4_BATTERY_CRITICAL), severity field (ERROR/WARN), timestamps
   - `rover_commands`: cmd_id tag (UUID), cmd_type field (5=ESTOP, 3=DISARM, 6=CANCEL_GOAL), ack_status field (0=ACK_RECEIVED → 1=ACK_ACCEPTED/3=ACK_COMPLETED)
-- [ ] 24.7 **Hardware validation:** After Docker e2e passes, deploy rover_monitor to hardware (Jetson Xavier NX or test platform), launch with `MicroXRCEAgent`, start host stack on separate machine, verify same bidirectional telemetry + command flow with live hardware
+- [x] 24.7 **Hardware validation:** After Docker e2e passes, deploy rover_monitor to hardware (Jetson Xavier NX or test platform), launch with `MicroXRCEAgent`, start host stack on separate machine, verify same bidirectional telemetry + command flow with live hardware

@@ -38,6 +38,39 @@ export USERNAME="${USERNAME:-$(id -un)}"
 export USER_UID="${USER_UID:-$(id -u)}"
 export USER_GID="${USER_GID:-$(id -g)}"
 
+# Expose a host CUDA toolkit to the container when available. This keeps the
+# Compose file portable across Jetson (typically /usr/local/cuda-11.4) and x86
+# desktop installs (typically /usr/local/cuda or /usr/local/cuda-12.x). When
+# no toolkit exists, fall back to a tiny placeholder directory so the container
+# can still start and CMake can cleanly choose the CPU path.
+_DC_EMPTY_CUDA_DIR="${PROJECT_DIR}/docker/empty_cuda"
+mkdir -p "${_DC_EMPTY_CUDA_DIR}"
+if [[ -z "${CUDA_HOST_MOUNT:-}" ]]; then
+    _dc_cuda_candidates=()
+    if command -v nvcc >/dev/null 2>&1; then
+        _dc_nvcc_dir="$(cd "$(dirname "$(command -v nvcc)")" && pwd)"
+        _dc_cuda_candidates+=("$(dirname "${_dc_nvcc_dir}")")
+    fi
+    _dc_cuda_candidates+=(
+        /usr/local/cuda
+        /usr/local/cuda-12.8
+        /usr/local/cuda-12.6
+        /usr/local/cuda-12.4
+        /usr/local/cuda-12.2
+        /usr/local/cuda-12.0
+        /usr/local/cuda-11.8
+        /usr/local/cuda-11.6
+        /usr/local/cuda-11.4
+    )
+    for _dc_cuda_root in "${_dc_cuda_candidates[@]}"; do
+        if [[ -n "${_dc_cuda_root}" && -x "${_dc_cuda_root}/bin/nvcc" ]]; then
+            export CUDA_HOST_MOUNT="${_dc_cuda_root}"
+            break
+        fi
+    done
+fi
+export CUDA_HOST_MOUNT="${CUDA_HOST_MOUNT:-${_DC_EMPTY_CUDA_DIR}}"
+
 # ── wrapper command selection ──────────────────────────────────────────
 # Support both Compose v2 (`docker compose`) and Compose v1 (`docker-compose`).
 # Some snap-based Docker installs ship a broken `/snap/bin/docker-compose`

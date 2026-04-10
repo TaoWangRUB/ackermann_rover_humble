@@ -1,0 +1,90 @@
+%YAML:1.0
+
+# T265 stereo fisheye + IMU config for this repo.
+# The paired left/right camera YAML files are populated from live T265
+# `/t265/fisheye*/camera_info` samples captured on 2026-04-03 from the hardware
+# bringup path in this workspace.
+
+# common parameters
+imu: 1
+num_of_cam: 2
+
+imu_topic: "/t265/imu"
+image0_topic: "/t265/fisheye1/image_raw"
+image1_topic: "/t265/fisheye2/image_raw"
+output_path: "/tmp"
+
+# Override the raw VINS message contract so the repo relay can adapt from the
+# T265 sensor frame into ackermann/base_link.
+odom_frame: "odom"
+body_frame: "t265_pose_frame"
+
+cam0_calib: "left.yaml"
+cam1_calib: "right.yaml"
+image_width: 848
+image_height: 800
+
+# GPU acceleration
+use_gpu: 1
+use_gpu_acc_flow: 1
+use_gpu_ceres: 0
+
+# Extrinsic: body_T_cam = imu_optical_frame → fisheye_optical_frame.
+# Derived from rs-enumerate-devices -c hardware calibration, converted through
+# the official T265 ROS driver's coordinate chain (t265_realsense_node.cpp):
+#   SDK extrinsic → rotation conjugation + translation remap → TF frames
+#   → optical frame rotation → body_T_cam.
+# See tools/compute_body_T_cam.py for the full computation.
+# 0 = fix; 1 = refine online; 2 = calibrate from scratch.
+estimate_extrinsic: 1
+
+body_T_cam0: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: d
+   data: [-0.99994884,  0.00508425,  0.00873548,  0.01070083,
+          -0.00511504, -0.99998054, -0.00350635,  0.00004562,
+           0.00871748, -0.00355086,  0.99995539, -0.00000636,
+           0.0,         0.0,         0.0,          1.0 ]
+
+body_T_cam1: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: d
+   data: [-0.99997712,  0.00309843,  0.00593948, -0.05280119,
+          -0.00311985, -0.99998831, -0.00359936, -0.00003635,
+           0.00592826, -0.00361782,  0.99997577, -0.00001374,
+           0.0,         0.0,         0.0,          1.0 ]
+
+# Multiple thread support
+multiple_thread: 1
+
+# Feature tracker parameters
+max_cnt: 150
+min_dist: 30
+freq: 20
+F_threshold: 1.0
+show_track: 1
+flow_back: 1
+
+# Optimization parameters
+max_solver_time: 0.04
+max_num_iterations: 8
+keyframe_parallax: 10.0
+
+# IMU parameters (seeded from BMI055-like noise levels; tune with Allan data if
+# the hardware path becomes the primary deployment mode).
+acc_n: 0.02
+gyr_n: 0.004
+acc_w: 0.002
+gyr_w: 0.0004
+g_norm: 9.81
+
+# Time-offset estimation (T265 has HW-synced IMU/camera timestamps)
+estimate_td: 0
+td: 0.0
+
+# Loop closure parameters
+load_previous_pose_graph: 0
+pose_graph_save_path: "/tmp/pose_graph/"
+save_image: 0

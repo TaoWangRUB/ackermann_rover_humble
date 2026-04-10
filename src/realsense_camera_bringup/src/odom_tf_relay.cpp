@@ -38,6 +38,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <tf2_ros/transform_broadcaster.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 
@@ -63,12 +64,18 @@ public:
     declare_parameter("base_frame",   "ackermann/base_link");
     declare_parameter("output_frame", "");
     declare_parameter("tf_timeout_s", 1.0);
+    declare_parameter("publish_tf", false);
 
     input_topic_  = get_parameter("input_topic").as_string();
     output_topic_ = get_parameter("output_topic").as_string();
     base_frame_   = get_parameter("base_frame").as_string();
     output_frame_ = get_parameter("output_frame").as_string();
     tf_timeout_   = get_parameter("tf_timeout_s").as_double();
+    publish_tf_   = get_parameter("publish_tf").as_bool();
+
+    if (publish_tf_) {
+      tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+    }
 
     pub_ = create_publisher<Odometry>(output_topic_, 10);
     sub_ = create_subscription<Odometry>(
@@ -270,6 +277,17 @@ private:
     out.twist.covariance = rotate_covariance(msg->twist.covariance, R);
 
     pub_->publish(out);
+
+    if (publish_tf_ && tf_broadcaster_) {
+      geometry_msgs::msg::TransformStamped tf;
+      tf.header = out.header;
+      tf.child_frame_id          = out.child_frame_id;
+      tf.transform.translation.x = out.pose.pose.position.x;
+      tf.transform.translation.y = out.pose.pose.position.y;
+      tf.transform.translation.z = out.pose.pose.position.z;
+      tf.transform.rotation      = out.pose.pose.orientation;
+      tf_broadcaster_->sendTransform(tf);
+    }
   }
 
   // ── members ──────────────────────────────────────────────────────────────
@@ -285,6 +303,8 @@ private:
   std::string base_frame_;
   std::string output_frame_;
   double      tf_timeout_;
+  bool        publish_tf_;
+  std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
   bool               tf_cached_      = false;
   bool               tf_warn_printed_ = false;

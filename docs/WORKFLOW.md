@@ -24,7 +24,7 @@ Standardize how features are implemented according to requirements, tested, and 
 - Example ROS 2 workspace commands:
 
 ```bash
-colcon build --symlink-install
+colcon build --symlink-install --packages-ignore-regex '^example_.*' --packages-ignore px4_ros2_py
 colcon test --event-handlers console_direct+ --packages-select ackermann_control safety
 colcon test-result --verbose
 ```
