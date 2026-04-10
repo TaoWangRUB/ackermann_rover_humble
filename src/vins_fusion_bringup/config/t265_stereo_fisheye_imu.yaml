@@ -35,8 +35,11 @@ use_gpu_ceres: 0
 #   SDK extrinsic → rotation conjugation + translation remap → TF frames
 #   → optical frame rotation → body_T_cam.
 # See tools/compute_body_T_cam.py for the full computation.
+# Keep the measured T265 extrinsics fixed. Online refinement increases the
+# required startup excitation and hurts convergence when the camera is mostly
+# stationary during bringup on Jetson.
 # 0 = fix; 1 = refine online; 2 = calibrate from scratch.
-estimate_extrinsic: 1
+estimate_extrinsic: 0
 
 body_T_cam0: !!opencv-matrix
    rows: 4
