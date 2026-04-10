@@ -49,7 +49,7 @@ No build or startup errors are allowed. Fix issues immediately before moving on.
 
 # 1. Build
 
-    colcon build --symlink-install
+    colcon build --symlink-install --packages-ignore-regex '^example_.*' --packages-ignore px4_ros2_py
 
 If build fails:
 - Fix compilation errors

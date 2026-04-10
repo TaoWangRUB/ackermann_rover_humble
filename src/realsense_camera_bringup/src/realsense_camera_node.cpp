@@ -3,6 +3,7 @@
 #include <chrono>
 #include <thread>
 #include <cstdio>
+#include <cstring>
 
 namespace realsense_camera_bringup
 {
@@ -437,20 +438,55 @@ void RealsenseCameraNode::start_pipeline()
       infra2_info_msg_ = build_camera_info(ip, camera_name_ + "_infra2_optical_frame");
       RCLCPP_INFO(get_logger(), "Infra2 stream: %dx%d @ %dfps", ip.width(), ip.height(), ip.fps());
     }
+  } else if (enable_fisheye_) {
+    auto fp1 = profile.get_stream(RS2_STREAM_FISHEYE, 1).as<rs2::video_stream_profile>();
+    auto fp2 = profile.get_stream(RS2_STREAM_FISHEYE, 2).as<rs2::video_stream_profile>();
+    fisheye1_info_msg_ = build_camera_info(fp1, camera_name_ + "_fisheye1_optical_frame");
+    fisheye2_info_msg_ = build_camera_info(fp2, camera_name_ + "_fisheye2_optical_frame");
+    RCLCPP_INFO(get_logger(), "Fisheye1 stream: %dx%d @ %dfps", fp1.width(), fp1.height(), fp1.fps());
+    RCLCPP_INFO(get_logger(), "Fisheye2 stream: %dx%d @ %dfps", fp2.width(), fp2.height(), fp2.fps());
   }
 
   // Depth alignment — rs2::align::process() is CPU-intensive (especially on ARM).
-  // Publishers are created here; the worker thread is started so alignment runs
-  // off the pipeline callback, keeping raw color/depth at full sensor fps.
+  // When CUDA is available, use GPU-accelerated alignment (~1-3ms vs ~250ms on Jetson).
+  // Otherwise fall back to rs2::align on a worker thread.
   if (align_depth_enable_ && enable_depth_ && enable_color_) {
-    align_to_color_ = std::make_shared<rs2::align>(RS2_STREAM_COLOR);
     const auto qos = rclcpp::QoS(10);
     aligned_depth_image_pub_ = create_publisher<sensor_msgs::msg::Image>(
       camera_name_ + "/aligned_depth_to_color/image_raw", qos);
     aligned_depth_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>(
       camera_name_ + "/aligned_depth_to_color/camera_info", qos);
+
+#ifdef HAVE_CUDA
+    // Extract intrinsics and extrinsics from active pipeline profiles
+    auto depth_profile = profile.get_stream(RS2_STREAM_DEPTH).as<rs2::video_stream_profile>();
+    auto color_profile = profile.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
+    auto di = depth_profile.get_intrinsics();
+    auto ci = color_profile.get_intrinsics();
+    auto ext = depth_profile.get_extrinsics_to(color_profile);
+
+    CameraIntrinsics d_intr{di.fx, di.fy, di.ppx, di.ppy, di.width, di.height};
+    CameraIntrinsics c_intr{ci.fx, ci.fy, ci.ppx, ci.ppy, ci.width, ci.height};
+    DepthColorExtrinsics d2c;
+    std::copy(std::begin(ext.rotation), std::end(ext.rotation), std::begin(d2c.rotation));
+    std::copy(std::begin(ext.translation), std::end(ext.translation), std::begin(d2c.translation));
+
+    auto depth_sensor = profile.get_device().first<rs2::depth_sensor>();
+    float depth_scale = depth_sensor.get_depth_scale();
+
+    try {
+      cuda_aligner_ = std::make_unique<CudaAligner>(d_intr, c_intr, d2c, depth_scale);
+      aligned_depth_buf_.resize(static_cast<size_t>(ci.width) * ci.height, 0);
+      RCLCPP_INFO(get_logger(), "Depth alignment: CUDA GPU-accelerated (depth_scale=%.6f)", depth_scale);
+    } catch (const std::exception & e) {
+      enable_cpu_alignment_fallback(e.what());
+    }
+#else
+    align_to_color_ = std::make_shared<rs2::align>(RS2_STREAM_COLOR);
+    RCLCPP_INFO(get_logger(), "Depth alignment: CPU rs2::align (async worker thread)");
+#endif
+
     align_thread_ = std::thread(&RealsenseCameraNode::align_worker, this);
-    RCLCPP_INFO(get_logger(), "Depth alignment to color enabled (async worker thread).");
   }
 
   // Log USB connection type; warn if USB 2.x (bandwidth may be insufficient for full resolution)
@@ -532,6 +568,36 @@ void RealsenseCameraNode::apply_sensor_options(rs2::pipeline_profile & profile)
     }
   }
 }
+
+#ifdef HAVE_CUDA
+void RealsenseCameraNode::enable_cpu_alignment_fallback(const std::string & reason)
+{
+  if (!align_to_color_) {
+    align_to_color_ = std::make_shared<rs2::align>(RS2_STREAM_COLOR);
+  }
+
+  const bool was_using_cuda = static_cast<bool>(cuda_aligner_);
+  cuda_aligner_.reset();
+  aligned_depth_buf_.clear();
+  aligned_depth_buf_.shrink_to_fit();
+
+  if (reason.empty()) {
+    if (was_using_cuda) {
+      RCLCPP_WARN(
+        get_logger(),
+        "CUDA depth alignment disabled at runtime. Falling back to CPU rs2::align.");
+    } else {
+      RCLCPP_INFO(get_logger(), "Depth alignment: CPU rs2::align (async worker thread)");
+    }
+    return;
+  }
+
+  RCLCPP_WARN(
+    get_logger(),
+    "CUDA depth alignment unavailable (%s). Falling back to CPU rs2::align.",
+    reason.c_str());
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // start_imu_sensor — respects enable_accel_ / enable_gyro_ independently
@@ -635,8 +701,10 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
           if (auto vf = f.as<rs2::video_frame>()) {
             if (vf.get_profile().stream_type() == RS2_STREAM_FISHEYE) {
               int idx = vf.get_profile().stream_index();
-              if (idx == 1) publish_video_frame(vf, fisheye1_image_pub_, fisheye1_info_pub_, fisheye1_info_msg_);
-              else           publish_video_frame(vf, fisheye2_image_pub_, fisheye2_info_pub_, fisheye2_info_msg_);
+              if (idx == 1)
+                publish_video_frame(vf, fisheye1_image_pub_, fisheye1_info_pub_, fisheye1_info_msg_);
+              else if (idx == 2)
+                publish_video_frame(vf, fisheye2_image_pub_, fisheye2_info_pub_, fisheye2_info_msg_);
             }
           }
         });
@@ -644,7 +712,7 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
 
       // Hand off to async alignment worker (if enabled). Drop oldest frame if
       // the worker is behind to bound queue memory usage.
-      if (align_to_color_) {
+      if (align_depth_enable_) {
         std::lock_guard<std::mutex> lock(align_mutex_);
         if (align_queue_.size() >= ALIGN_QUEUE_MAX) {
           align_queue_.pop();
@@ -698,10 +766,9 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
 }
 
 // ---------------------------------------------------------------------------
-// align_worker — runs on a dedicated thread to keep rs2::align::process()
-// off the pipeline callback. On Jetson ARM, alignment at 640x480 takes ~250ms,
-// which would otherwise throttle all streams to ~4 Hz. With this worker the
-// pipeline callback returns immediately so raw color/depth publish at full fps.
+// align_worker — runs on a dedicated thread to keep depth alignment off the
+// pipeline callback. With HAVE_CUDA, uses GPU-accelerated alignment (~1-3ms
+// on Jetson). Without CUDA, falls back to rs2::align (~250ms on ARM).
 // ---------------------------------------------------------------------------
 void RealsenseCameraNode::align_worker()
 {
@@ -715,9 +782,52 @@ void RealsenseCameraNode::align_worker()
       align_queue_.pop();
     }
     try {
+#ifdef HAVE_CUDA
+      if (cuda_aligner_) {
+        auto depth = fs.get_depth_frame();
+        if (!depth) continue;
+        const auto color = fs.get_color_frame();
+        const auto aligned_stamp = frame_ros_time(color ? color : depth);
+
+        try {
+          const auto * src = reinterpret_cast<const uint16_t *>(depth.get_data());
+          cuda_aligner_->align(src, aligned_depth_buf_.data());
+          publish_aligned_depth(aligned_depth_buf_.data(),
+                                cuda_aligner_->color_width(),
+                                cuda_aligner_->color_height(),
+                                aligned_stamp);
+          continue;
+        } catch (const std::exception & e) {
+          enable_cpu_alignment_fallback(e.what());
+        }
+      }
+
+      if (align_to_color_) {
+        const auto color = fs.get_color_frame();
+        const auto depth = fs.get_depth_frame();
+        const auto aligned_stamp = frame_ros_time(color ? color : depth);
+        rs2::frameset processed = align_to_color_->process(fs);
+        if (auto aligned = processed.get_depth_frame())
+          publish_video_frame(
+            aligned,
+            aligned_depth_image_pub_,
+            aligned_depth_info_pub_,
+            color_info_msg_,
+            aligned_stamp);
+      }
+#else
+      const auto color = fs.get_color_frame();
+      const auto depth = fs.get_depth_frame();
+      const auto aligned_stamp = frame_ros_time(color ? color : depth);
       rs2::frameset processed = align_to_color_->process(fs);
       if (auto aligned = processed.get_depth_frame())
-        publish_video_frame(aligned, aligned_depth_image_pub_, aligned_depth_info_pub_, color_info_msg_);
+        publish_video_frame(
+          aligned,
+          aligned_depth_image_pub_,
+          aligned_depth_info_pub_,
+          color_info_msg_,
+          aligned_stamp);
+#endif
     } catch (const std::exception & e) {
       if (running_) RCLCPP_WARN(get_logger(), "Align worker error: %s", e.what());
     }
@@ -730,7 +840,7 @@ void RealsenseCameraNode::align_worker()
 void RealsenseCameraNode::publish_imu_data(const rs2::motion_frame& accel, const rs2::motion_frame& gyro)
 {
   auto msg = std::make_unique<sensor_msgs::msg::Imu>();
-  msg->header.stamp = now();
+  msg->header.stamp = frame_ros_time(gyro);
   msg->header.frame_id = camera_name_ + "_imu_optical_frame";
 
   auto g = gyro.get_motion_data();
@@ -747,6 +857,50 @@ void RealsenseCameraNode::publish_imu_data(const rs2::motion_frame& accel, const
 }
 
 // ---------------------------------------------------------------------------
+// sensor_time_to_ros / frame_ros_time
+// ---------------------------------------------------------------------------
+rclcpp::Time RealsenseCameraNode::sensor_time_to_ros(
+  double frame_time_ms, rs2_timestamp_domain time_domain)
+{
+  if (frame_time_ms <= 0.0) {
+    return now();
+  }
+
+  if (time_domain == RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME ||
+      time_domain == RS2_TIMESTAMP_DOMAIN_GLOBAL_TIME)
+  {
+    return rclcpp::Time(
+      static_cast<int64_t>(frame_time_ms * 1000000.0),
+      RCL_SYSTEM_TIME);
+  }
+
+  const auto ros_now = now();
+  std::lock_guard<std::mutex> lock(timestamp_base_mutex_);
+  if (!timestamp_base_initialized_ ||
+      time_domain != timestamp_domain_ ||
+      frame_time_ms < camera_time_base_ms_)
+  {
+    camera_time_base_ms_ = frame_time_ms;
+    ros_time_base_ = ros_now;
+    timestamp_domain_ = time_domain;
+    timestamp_base_initialized_ = true;
+  }
+
+  const int64_t delta_ns =
+    static_cast<int64_t>((frame_time_ms - camera_time_base_ms_) * 1000000.0);
+  return ros_time_base_ + rclcpp::Duration::from_nanoseconds(delta_ns);
+}
+
+rclcpp::Time RealsenseCameraNode::frame_ros_time(const rs2::frame & frame)
+{
+  if (!frame) {
+    return now();
+  }
+
+  return sensor_time_to_ros(frame.get_timestamp(), frame.get_frame_timestamp_domain());
+}
+
+// ---------------------------------------------------------------------------
 // build_camera_info
 // ---------------------------------------------------------------------------
 sensor_msgs::msg::CameraInfo RealsenseCameraNode::build_camera_info(
@@ -758,8 +912,21 @@ sensor_msgs::msg::CameraInfo RealsenseCameraNode::build_camera_info(
   info.height = profile.height();
 
   auto i = profile.get_intrinsics();
-  info.distortion_model = "plumb_bob";
-  info.d.assign(i.coeffs, i.coeffs + 5);
+  switch (i.model) {
+    case RS2_DISTORTION_KANNALA_BRANDT4:
+    case RS2_DISTORTION_FTHETA:
+      info.distortion_model = "equidistant";
+      info.d.assign(i.coeffs, i.coeffs + 4);
+      break;
+    case RS2_DISTORTION_NONE:
+      info.distortion_model = "plumb_bob";
+      info.d.assign(5, 0.0);
+      break;
+    default:
+      info.distortion_model = "plumb_bob";
+      info.d.assign(i.coeffs, i.coeffs + 5);
+      break;
+  }
 
   info.k = {i.fx, 0.0, i.ppx,
              0.0, i.fy, i.ppy,
@@ -782,10 +949,20 @@ void RealsenseCameraNode::publish_video_frame(
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub,
   const sensor_msgs::msg::CameraInfo & info_template)
 {
+  publish_video_frame(frame, pub, info_pub, info_template, frame_ros_time(frame));
+}
+
+void RealsenseCameraNode::publish_video_frame(
+  const rs2::video_frame & frame,
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub,
+  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub,
+  const sensor_msgs::msg::CameraInfo & info_template,
+  const rclcpp::Time & stamp)
+{
   if (!pub || !info_pub) return;
 
   auto img = std::make_unique<sensor_msgs::msg::Image>();
-  img->header.stamp = now();
+  img->header.stamp = stamp;
   img->header.frame_id = info_template.header.frame_id;
   img->width = frame.get_width();
   img->height = frame.get_height();
@@ -809,6 +986,33 @@ void RealsenseCameraNode::publish_video_frame(
 }
 
 // ---------------------------------------------------------------------------
+// publish_aligned_depth — publishes raw uint16_t buffer as Z16 Image
+// Used by CUDA alignment path (no rs2::video_frame available).
+// ---------------------------------------------------------------------------
+void RealsenseCameraNode::publish_aligned_depth(
+  const uint16_t * data, int width, int height, const rclcpp::Time & stamp)
+{
+  if (!aligned_depth_image_pub_ || !aligned_depth_info_pub_) return;
+
+  auto img = std::make_unique<sensor_msgs::msg::Image>();
+  img->header.stamp = stamp;
+  img->header.frame_id = color_info_msg_.header.frame_id;
+  img->width = static_cast<uint32_t>(width);
+  img->height = static_cast<uint32_t>(height);
+  img->encoding = sensor_msgs::image_encodings::TYPE_16UC1;
+  img->step = static_cast<uint32_t>(width) * sizeof(uint16_t);
+
+  const auto * raw = reinterpret_cast<const uint8_t *>(data);
+  img->data.assign(raw, raw + img->height * img->step);
+
+  auto info = std::make_unique<sensor_msgs::msg::CameraInfo>(color_info_msg_);
+  info->header = img->header;
+
+  aligned_depth_image_pub_->publish(std::move(img));
+  aligned_depth_info_pub_->publish(std::move(info));
+}
+
+// ---------------------------------------------------------------------------
 // publish_pose_frame
 // ---------------------------------------------------------------------------
 void RealsenseCameraNode::publish_pose_frame(const rs2::pose_frame & frame)
@@ -817,7 +1021,7 @@ void RealsenseCameraNode::publish_pose_frame(const rs2::pose_frame & frame)
 
   auto pose = frame.get_pose_data();
   auto msg = std::make_unique<nav_msgs::msg::Odometry>();
-  msg->header.stamp = now();
+  msg->header.stamp = frame_ros_time(frame);
   msg->header.frame_id = camera_name_ + "_odom_frame";
   msg->child_frame_id = camera_name_ + "_pose_frame";
 

@@ -2,26 +2,26 @@ version: '2.3'
 
 services:
   ackermann_slam:
-    image: ${IMAGE_NAME}_${ARCH}_${ROS_DISTRO}
+    image: ${IMAGE_NAME-ackermann_rover}_${ARCH-x86_64}_${ROS_DISTRO-jazzy}
     build:
       context: ..
       dockerfile: docker/Dockerfile
       args:
-        UBUNTU_VERSION: ${UBUNTU_VERSION}
-        ROS_DISTRO: ${ROS_DISTRO}
-        GZ_DISTRO: ${GZ_DISTRO}
-        ROS_UBUNTU_CODENAME: ${ROS_UBUNTU_CODENAME}
-        USERNAME: ${USERNAME}
-        USER_UID: ${USER_UID}
-        USER_GID: ${USER_GID}
-    container_name: ${CONTAINER_NAME}_${ARCH}
+        UBUNTU_VERSION: ${UBUNTU_VERSION-24.04}
+        ROS_DISTRO: ${ROS_DISTRO-jazzy}
+        GZ_DISTRO: ${GZ_DISTRO-harmonic}
+        ROS_UBUNTU_CODENAME: ${ROS_UBUNTU_CODENAME-noble}
+        USERNAME: ${USERNAME-nvidia}
+        USER_UID: ${USER_UID-1000}
+        USER_GID: ${USER_GID-1000}
+    container_name: ${CONTAINER_NAME-jazzy_slam}_${ARCH-x86_64}
 
     env_file:
       - ../.env
     environment:
       # ARCH is set automatically from the shell via: export ARCH=$(uname -m)
       # Results in 'x86_64' on desktop or 'aarch64' on Jetson.
-      - ARCH=${ARCH}
+      - ARCH=${ARCH-x86_64}
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
       - LIBGL_ALWAYS_INDIRECT=0
@@ -29,17 +29,23 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       # 'all' covers compute + graphics on both x86 NVIDIA and Jetson L4T.
       - NVIDIA_DRIVER_CAPABILITIES=all
-      - UBUNTU_VERSION=${UBUNTU_VERSION}
-      - ROS_DISTRO=${ROS_DISTRO}
-      - GZ_DISTRO=${GZ_DISTRO}
+      - UBUNTU_VERSION=${UBUNTU_VERSION-24.04}
+      - ROS_DISTRO=${ROS_DISTRO-jazzy}
+      - GZ_DISTRO=${GZ_DISTRO-harmonic}
+      - CUDA_HOME=/usr/local/cuda
+      - CUDA_PATH=/usr/local/cuda
 
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ..:/workspace
       - ../gazebo_cache:/root/.gazebo
-      - ${PX4_DIR}:/px4
-      - ${REALSENSE_ROS_DIR}:/realsense-ros
+      - ${PX4_DIR-../../PX4-Autopilot}:/px4
+      - ${REALSENSE_ROS_DIR-../../realsense-ros}:/realsense-ros
       - /dev:/dev
+      - /run/udev:/run/udev:ro
+      # Auto-detected by scripts/lib/dc.sh on Jetson or x86. When no toolkit
+      # is installed yet, the default fallback is docker/empty_cuda.
+      - ${CUDA_HOST_MOUNT-../docker/empty_cuda}:/usr/local/cuda:ro
 
     network_mode: host
     ipc: host

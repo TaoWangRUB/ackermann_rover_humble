@@ -113,6 +113,32 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     libudev-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# CUDA toolkit for GPU-accelerated depth alignment is provided at runtime by the
+# host and mounted into the container at /usr/local/cuda. Keep gcc-11 available
+# because Jetson's CUDA 11.4 toolchain still needs it, while newer x86 CUDA
+# toolkits can also build successfully with gcc-11.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc-11 g++-11 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Optional VINS-Fusion GPU mode depends on a CUDA-enabled OpenCV build.
+# The CUDA toolkit itself is mounted into the running container at /usr/local/cuda,
+# so the image only bakes the source-build prerequisites here. The actual OpenCV
+# CUDA build is performed later inside the running container via
+# docker/install_vins_gpu_deps.sh.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-dev \
+    python3-numpy \
+    libgtk-3-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libtbb-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # PX4 Python dependencies
 COPY docker/px4_requirements.txt /tmp/px4_requirements.txt
 RUN python3 -m pip install --break-system-packages -r /tmp/px4_requirements.txt \
@@ -139,6 +165,11 @@ RUN cd /tmp && \
     git clone --depth 1 --branch v2.51.1 https://github.com/IntelRealSense/librealsense.git && \
     find /tmp/librealsense \( -name "*.h" -o -name "*.cpp" \) \
         -exec sed -i "s/\xe2\x80\x98/'/g; s/\xe2\x80\x99/'/g" {} + && \
+    # Patch the connectivity check so a flaky Intel URL never silently disables T265 (TM2) support.
+    # BUILD_WITH_TM2 requires internet for firmware download; if no internet, cmake will error
+    # explicitly rather than silently compiling a library without T265 support.
+    sed -i 's/set(INTERNET_CONNECTION OFF)/set(INTERNET_CONNECTION ON)/' \
+        /tmp/librealsense/CMake/connectivity_check.cmake && \
     cd librealsense && mkdir build && cd build && \
     cmake .. \
         -DCMAKE_BUILD_TYPE=Release \
@@ -146,9 +177,11 @@ RUN cd /tmp && \
         -DBUILD_EXAMPLES=OFF \
         -DBUILD_GRAPHICAL_EXAMPLES=OFF \
         -DBUILD_WITH_CUDA=OFF \
+        -DBUILD_WITH_TM2=ON \
+        -DIMPORT_DEPTH_CAM_FW=ON \
         -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    make -j$(nproc) && make install && ldconfig && \
-    rm -rf /tmp/librealsense
+    make -j$(nproc) && make install && ldconfig
+    # Source tree kept at /tmp/librealsense — allows runtime cmake rebuild inside container if needed
 
 # (Optional) Install package dependencies for any repos brought in via ros2.repos.
 # Your bind-mounted project can run rosdep / colcon inside the container.
@@ -177,12 +210,20 @@ RUN apt-get update && apt-get install -y \
 ARG USERNAME=nvidia
 ARG USER_UID=1000
 ARG USER_GID=1000
-RUN userdel -r ubuntu 2>/dev/null || true && \
-    groupadd --gid ${USER_GID} ${USERNAME} 2>/dev/null || true && \
-    useradd --uid ${USER_UID} --gid ${USER_GID} -m -s /bin/bash ${USERNAME} && \
-    usermod -aG dialout ${USERNAME} && \
-    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
-    chmod 0440 /etc/sudoers.d/${USERNAME}
+RUN set -eux; \
+    username="${USERNAME:-nvidia}"; \
+    user_uid="${USER_UID:-1000}"; \
+    user_gid="${USER_GID:-1000}"; \
+    if ! [[ "${user_uid}" =~ ^[0-9]+$ ]]; then user_uid=1000; fi; \
+    if ! [[ "${user_gid}" =~ ^[0-9]+$ ]]; then user_gid=1000; fi; \
+    userdel -r ubuntu 2>/dev/null || true; \
+    getent group video >/dev/null || groupadd --system video; \
+    groupadd --gid "${user_gid}" "${username}" 2>/dev/null || true; \
+    useradd --uid "${user_uid}" --gid "${user_gid}" -m -s /bin/bash "${username}" || \
+      usermod --uid "${user_uid}" --gid "${user_gid}" "${username}"; \
+    usermod -aG dialout,video "${username}"; \
+    echo "${username} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${username}"; \
+    chmod 0440 "/etc/sudoers.d/${username}"
 
 ENV HOME=/home/${USERNAME}
 USER ${USERNAME}

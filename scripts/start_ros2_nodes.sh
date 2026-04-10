@@ -6,10 +6,17 @@
 # Flags:
 #   --hw                   Hardware mode: real cameras instead of Gazebo (use_gazebo:=false).
 #                          Starts robot_state_publisher + realsense_camera_bringup.
-#   --depth-camera=NAME    Depth camera for RTAB-Map: l515 (default) or d435i.
+#   --depth-camera=NAME    Depth camera for RTAB-Map: l515 (default), d435i, or none.
 #                          Selects which camera node starts (HW), which Gazebo bridge topics
 #                          are exposed (sim), and which RTAB-Map topics are subscribed.
+#                          Auto-set to 'none' when --vins-odom without --rtabmap.
 #   --t265                 [HW mode] Enable T265 tracking camera + odom_tf_relay
+#   --t265-odom            [HW mode] Use T265 as odometry source for EKF/RTAB-Map
+#                          while keeping RTAB-Map VO on /vo_odom for debugging
+#   --vins-odom            Use VINS-Fusion as the odometry source. In hardware
+#                          mode this automatically relies on the T265 fisheye
+#                          streams; in simulation it auto-enables the simulated
+#                          T265 path via robot_bringup.
 #   --px4              Enable PX4 SITL (disables ros2_control, implies --bridge --vo-bridge)
 #   --rtabmap          Launch RTAB-Map SLAM
 #   --nav2             Launch Nav2 navigation stack
@@ -40,6 +47,18 @@
 #
 #   ── Hardware mode + D435i + T265 + RTAB-Map ──
 #   ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265 --rtabmap
+#
+#   ── Hardware mode + D435i + T265 odom (skip VO) + RTAB-Map ──
+#   ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265-odom --rtabmap
+
+#   ── Hardware mode + D435i + VINS odom + RTAB-Map ──
+#   ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --vins-odom --rtabmap
+
+#   ── Hardware mode + VINS odom only (T265 only, no depth camera) ──
+#   ./scripts/start_ros2_nodes.sh --hw --vins-odom
+#
+#   ── Gazebo + VINS odom + RTAB-Map ──
+#   ./scripts/start_ros2_nodes.sh --vins-odom --rtabmap
 #
 #   ── Hardware mode + VO bridge to real PX4 ──
 #   ./scripts/start_ros2_nodes.sh --hw --rtabmap --vo-bridge --bridge=speed_steering
@@ -105,8 +124,11 @@ source "${SCRIPT_DIR}/lib/dc.sh"
 
 # Defaults
 HW="false"
-DEPTH_CAMERA="l515"
+DEPTH_CAMERA=""
+DEPTH_CAMERA_EXPLICIT="false"
 HW_T265="false"
+HW_T265_ODOM="false"
+VINS_ODOM="false"
 PX4="false"
 RTABMAP="false"
 NAV2="false"
@@ -124,8 +146,10 @@ BUILD_PKGS=""
 for arg in "$@"; do
     case "$arg" in
         --hw)              HW="true"; RVIZ="false" ;;
-        --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
+        --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}"; DEPTH_CAMERA_EXPLICIT="true" ;;
         --t265)            HW_T265="true" ;;
+        --t265-odom)       HW_T265="true"; HW_T265_ODOM="true" ;;
+        --vins-odom)       VINS_ODOM="true" ;;
         --px4)          PX4="true" ;;
         --rtabmap)      RTABMAP="true" ;;
         --nav2)         NAV2="true" ;;
@@ -144,7 +168,7 @@ for arg in "$@"; do
             exit 0 ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
+            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
             exit 1
             ;;
     esac
@@ -157,6 +181,17 @@ if [[ "${PX4}" == "true" ]]; then
     VO_BRIDGE="true"
 fi
 
+# Auto-resolve depth camera: default to 'none' when only T265/VINS is needed,
+# otherwise fall back to 'l515'.
+if [[ -z "${DEPTH_CAMERA}" ]]; then
+    if [[ "${DEPTH_CAMERA_EXPLICIT}" == "false" && "${RTABMAP}" == "false" \
+          && ( "${VINS_ODOM}" == "true" || "${HW_T265}" == "true" || "${HW_T265_ODOM}" == "true" ) ]]; then
+        DEPTH_CAMERA="none"
+    else
+        DEPTH_CAMERA="l515"
+    fi
+fi
+
 # ── Build step (if requested) ──
 if [[ "${BUILD}" == "true" ]]; then
     BUILD_CMD="source /opt/ros/\$ROS_DISTRO/setup.bash && cd /workspace && colcon build --symlink-install"
@@ -165,7 +200,8 @@ if [[ "${BUILD}" == "true" ]]; then
         BUILD_CMD+=" --packages-select ${BUILD_PKGS//,/ }"
         echo "Building packages: ${BUILD_PKGS}..."
     else
-        echo "Building all packages..."
+        BUILD_CMD+=" --packages-ignore-regex '^example_.*' --packages-ignore px4_ros2_py"
+        echo "Building all workspace packages (skipping PX4 example packages and px4_ros2_py)..."
     fi
     dcomp exec ackermann_slam bash -c "${BUILD_CMD}"
     echo ""
@@ -178,13 +214,17 @@ fi
 echo "Launching ROS 2 nodes inside Docker container..."
 if [[ "${HW}" == "true" ]]; then
     echo "  Mode:         hardware (real cameras)"
-    echo "  Depth camera: ${DEPTH_CAMERA}"
+    if [[ "${DEPTH_CAMERA}" != "none" ]]; then
+        echo "  Depth camera: ${DEPTH_CAMERA}"
+    fi
     echo "  T265:         ${HW_T265}"
+    echo "  T265 odom:    ${HW_T265_ODOM}"
 else
     echo "  Mode:         simulation (Gazebo)"
     echo "  Depth camera: ${DEPTH_CAMERA}"
     echo "  PX4 SITL:     ${PX4}"
 fi
+echo "  VINS odom:    ${VINS_ODOM}"
 echo "  RTAB-Map:     ${RTABMAP}"
 echo "  Nav2:         ${NAV2}"
 echo "  RViz:         ${RVIZ}"
@@ -205,9 +245,11 @@ if [[ "${HW}" == "true" ]]; then
     LAUNCH_CMD+=" use_gazebo:=false"
     LAUNCH_CMD+=" use_sim_time:=false"
     LAUNCH_CMD+=" hw_enable_t265:=${HW_T265}"
+    LAUNCH_CMD+=" use_t265_odom:=${HW_T265_ODOM}"
 else
     LAUNCH_CMD+=" enable_px4_sitl:=${PX4}"
 fi
+LAUNCH_CMD+=" use_vins_odom:=${VINS_ODOM}"
 LAUNCH_CMD+=" rtabmap:=${RTABMAP}"
 LAUNCH_CMD+=" nav2:=${NAV2}"
 LAUNCH_CMD+=" rviz:=${RVIZ}"

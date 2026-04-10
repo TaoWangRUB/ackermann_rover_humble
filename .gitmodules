@@ -4,3 +4,7 @@
 [submodule "src/px4-ros2-interface-lib"]
 	path = src/px4-ros2-interface-lib
 	url = https://github.com/Auterion/px4-ros2-interface-lib.git
+[submodule "src/VINS-Fusion"]
+	path = src/VINS-Fusion
+	url = https://github.com/zinuok/VINS-Fusion-ROS2.git
+	branch = main
