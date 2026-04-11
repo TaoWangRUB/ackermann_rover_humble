@@ -22,6 +22,11 @@ Hardware — D435i + VINS-Fusion:
   ros2 launch robot_bringup robot_bringup.launch.py \\
       use_gazebo:=false use_sim_time:=false \\
       depth_camera:=d435i use_vins_odom:=true rtabmap:=true
+
+Hardware — D435i + cuVSLAM:
+  ros2 launch robot_bringup robot_bringup.launch.py \\
+      use_gazebo:=false use_sim_time:=false \\
+      depth_camera:=d435i use_cuvslam_odom:=true rtabmap:=true
 """
 
 import os
@@ -202,6 +207,12 @@ ARGUMENTS = [
         description='Use VINS-Fusion odometry sourced from the T265 fisheye cameras and IMU.',
     ),
     DeclareLaunchArgument(
+        'use_cuvslam_odom',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Use cuVSLAM odometry sourced from the T265 fisheye cameras and IMU.',
+    ),
+    DeclareLaunchArgument(
         'rover_monitor',
         default_value='false',
         choices=['true', 'false'],
@@ -236,12 +247,14 @@ def generate_launch_description() -> LaunchDescription:
     hw_enable_t265 = LaunchConfiguration('hw_enable_t265')
     use_t265_odom = LaunchConfiguration('use_t265_odom')
     use_vins_odom = LaunchConfiguration('use_vins_odom')
+    use_cuvslam_odom = LaunchConfiguration('use_cuvslam_odom')
 
     robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
     nav2_bringup_share = get_package_share_directory('ackermann_nav2_bringup')
     realsense_bringup_share = get_package_share_directory('realsense_camera_bringup')
     vins_fusion_bringup_share = get_package_share_directory('vins_fusion_bringup')
+    cuvslam_bringup_share = get_package_share_directory('cuvslam_bringup')
     xacro_file = os.path.join(
         robot_description_share, 'models', 'ackermann_rover', 'ackermann_rover.urdf'
     )
@@ -253,11 +266,15 @@ def generate_launch_description() -> LaunchDescription:
         use_t265_odom,
         '" == "true" or "',
         use_vins_odom,
+        '" == "true" or "',
+        use_cuvslam_odom,
         '" == "true" else "false"'
     ])
     t265_enable_fisheye = PythonExpression([
         '"true" if "',
         use_vins_odom,
+        '" == "true" or "',
+        use_cuvslam_odom,
         '" == "true" else "false"'
     ])
 
@@ -355,6 +372,16 @@ def generate_launch_description() -> LaunchDescription:
         }.items(),
     )
 
+    cuvslam_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(cuvslam_bringup_share, 'launch', 'cuvslam.launch.py')
+        ),
+        condition=IfCondition(use_cuvslam_odom),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+        }.items(),
+    )
+
     # -----------------------------------------------------------------------
     # RTAB-Map — topic names derived from depth_camera in both modes.
     #
@@ -378,6 +405,7 @@ def generate_launch_description() -> LaunchDescription:
             'rtabmap_viz': rtabmap_viz,
             'use_t265_odom': use_t265_odom,
             'use_vins_odom': use_vins_odom,
+            'use_cuvslam_odom': use_cuvslam_odom,
             'rgb_image_topic': PythonExpression([
                 '"', depth_camera, '/color/image_raw"'
                 ' if "', use_gazebo, '" == "false"'
@@ -457,6 +485,7 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(hw_cameras_launch)
     # Common
     ld.add_action(vins_launch)
+    ld.add_action(cuvslam_launch)
     ld.add_action(rtabmap_launch)
     ld.add_action(nav2_launch)
     ld.add_action(rviz_delayed)

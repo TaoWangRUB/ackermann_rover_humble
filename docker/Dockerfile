@@ -165,24 +165,24 @@ RUN cd /tmp && \
 RUN cd /tmp && \
     git clone --depth 1 --branch v2.51.1 https://github.com/IntelRealSense/librealsense.git && \
     find /tmp/librealsense \( -name "*.h" -o -name "*.cpp" \) \
-        -exec sed -i "s/\xe2\x80\x98/'/g; s/\xe2\x80\x99/'/g" {} + && \
+    -exec sed -i "s/\xe2\x80\x98/'/g; s/\xe2\x80\x99/'/g" {} + && \
     # Patch the connectivity check so a flaky Intel URL never silently disables T265 (TM2) support.
     # BUILD_WITH_TM2 requires internet for firmware download; if no internet, cmake will error
     # explicitly rather than silently compiling a library without T265 support.
     sed -i 's/set(INTERNET_CONNECTION OFF)/set(INTERNET_CONNECTION ON)/' \
-        /tmp/librealsense/CMake/connectivity_check.cmake && \
+    /tmp/librealsense/CMake/connectivity_check.cmake && \
     cd librealsense && mkdir build && cd build && \
     cmake .. \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DFORCE_RSUSB_BACKEND=ON \
-        -DBUILD_EXAMPLES=OFF \
-        -DBUILD_GRAPHICAL_EXAMPLES=OFF \
-        -DBUILD_WITH_CUDA=OFF \
-        -DBUILD_WITH_TM2=ON \
-        -DIMPORT_DEPTH_CAM_FW=ON \
-        -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DFORCE_RSUSB_BACKEND=ON \
+    -DBUILD_EXAMPLES=OFF \
+    -DBUILD_GRAPHICAL_EXAMPLES=OFF \
+    -DBUILD_WITH_CUDA=OFF \
+    -DBUILD_WITH_TM2=ON \
+    -DIMPORT_DEPTH_CAM_FW=ON \
+    -DCMAKE_INSTALL_PREFIX=/usr/local && \
     make -j$(nproc) && make install && ldconfig
-    # Source tree kept at /tmp/librealsense — allows runtime cmake rebuild inside container if needed
+# Source tree kept at /tmp/librealsense — allows runtime cmake rebuild inside container if needed
 
 # (Optional) Install package dependencies for any repos brought in via ros2.repos.
 # Your bind-mounted project can run rosdep / colcon inside the container.
@@ -221,7 +221,7 @@ RUN set -eux; \
     getent group video >/dev/null || groupadd --system video; \
     groupadd --gid "${user_gid}" "${username}" 2>/dev/null || true; \
     useradd --uid "${user_uid}" --gid "${user_gid}" -m -s /bin/bash "${username}" || \
-      usermod --uid "${user_uid}" --gid "${user_gid}" "${username}"; \
+    usermod --uid "${user_uid}" --gid "${user_gid}" "${username}"; \
     usermod -aG dialout,video "${username}"; \
     echo "${username} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${username}"; \
     chmod 0440 "/etc/sudoers.d/${username}"

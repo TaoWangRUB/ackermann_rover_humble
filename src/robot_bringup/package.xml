@@ -14,6 +14,7 @@
   <exec_depend>description_robot</exec_depend>
   <exec_depend>rtabmap_bringup</exec_depend>
   <exec_depend>vins_fusion_bringup</exec_depend>
+  <exec_depend>cuvslam_bringup</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

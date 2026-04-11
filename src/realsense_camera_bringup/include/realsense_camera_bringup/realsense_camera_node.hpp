@@ -135,6 +135,12 @@ private:
   std::atomic<bool> running_{false};
   rs2::frame last_accel_frame_;
   rs2::sensor imu_sensor_;  // direct motion sensor (separate from pipeline)
+
+  // Last published T265 fisheye frame numbers. Used to deduplicate fisheye
+  // frames re-emitted by the librealsense pipeline sync module alongside new
+  // pose/IMU samples (see on_frame).
+  unsigned long long last_fisheye1_frame_number_{0};
+  unsigned long long last_fisheye2_frame_number_{0};
 };
 
 } // namespace realsense_camera_bringup
