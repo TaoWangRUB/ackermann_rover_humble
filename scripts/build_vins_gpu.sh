@@ -3,7 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-OPENCV_PREFIX="${OPENCV_PREFIX:-/workspace/docker_cache/opencv-cuda/current}"
+_ARCH="$(uname -m)"
+OPENCV_PREFIX="${OPENCV_PREFIX:-/workspace/docker_cache/opencv-cuda/${_ARCH}/current}"
 OPENCV_DIR="${OPENCV_DIR:-${OPENCV_PREFIX}/lib/cmake/opencv4}"
 
 if [[ ! -f "${OPENCV_DIR}/OpenCVConfig.cmake" ]]; then
