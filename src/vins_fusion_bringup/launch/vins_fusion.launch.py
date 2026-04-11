@@ -78,17 +78,10 @@ def generate_launch_description() -> LaunchDescription:
         },
         remappings=[
             ('odometry', raw_odom_topic),
-            ('path', '/vins/path'),
-            ('point_cloud', '/vins/point_cloud'),
             ('margin_cloud', '/vins/margin_cloud'),
-            ('key_poses', '/vins/key_poses'),
-            ('camera_pose', '/vins/camera_pose'),
-            ('camera_pose_visual', '/vins/camera_pose_visual'),
             ('keyframe_pose', '/vins/keyframe_pose'),
             ('keyframe_point', '/vins/keyframe_point'),
             ('extrinsic', '/vins/extrinsic'),
-            ('image_track', '/vins/image_track'),
-            ('imu_propagate', '/vins/imu_propagate'),
         ],
     )
 
