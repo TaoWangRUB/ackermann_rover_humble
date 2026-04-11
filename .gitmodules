@@ -8,3 +8,6 @@
 	path = src/VINS-Fusion
 	url = https://github.com/zinuok/VINS-Fusion-ROS2.git
 	branch = main
+[submodule "src/cuVSLAM"]
+	path = src/cuVSLAM
+	url = https://github.com/nvidia-isaac/cuVSLAM.git
