@@ -6,7 +6,8 @@
 - [x] 1.4 Add a phase-0 smoke test that links against the built cuVSLAM library and confirms the library can be loaded after the dependency build completes.
     - See src/cuvslam_bringup/test/smoke_test_cuvslam.cpp and smoke_test_cuvslam.sh for implementation. The test loads libcuvslam.so and prints success/failure.
 - [x] 1.5 Run the phase-0 source-build workflow on the supported x86_64 and Jetson Xavier paths and record whether the change can proceed past the stop/go gate.
-    - Phase-0 workflow: Build cuVSLAM and run the smoke test on x86_64 (see test/smoke_test_cuvslam.sh). Jetson path reserved for next phase. Results: x86_64 build and library load test pass; Jetson path not yet validated.
+    - Phase-0 workflow: Build cuVSLAM and run the smoke test on x86_64 and Jetson Xavier (see test/smoke_test_cuvslam.sh / scripts/build_cuvslam.sh).
+    - Results: x86_64 build and library load test pass; Jetson Xavier aarch64 path also passes with CUDA 11.4 inside `jazzy_slam_aarch64`, and `smoke_test_cuvslam` successfully dlopens `/workspace/src/cuVSLAM/build/bin/libcuvslam.so`.
 
 ## 2. cuVSLAM bringup package
 
@@ -40,7 +41,7 @@
 
 ## 4. Verification and comparison
 
-- [ ] 4.1 Run the required Docker-side workspace build and test commands after the cuVSLAM integration changes land.
+- [x] 4.1 Run the required Docker-side workspace build and test commands after the cuVSLAM integration changes land.
 - [x] 4.2 Validate standalone T265 + cuVSLAM operation, including `/cuvslam_odom`, `/odometry/filtered`, TF stability, and retained comparison topics.
     - Verified on x86_64 Docker (`jazzy_slam_x86_64`) with a physical Intel RealSense T265 via `./scripts/start_ros2_nodes.sh --hw --cuvslam-odom`.
     - `/t265/fisheye1/image_raw` ≈ 27–30 Hz (shutter rate), `/cuvslam/raw_odometry` ≈ 22–24 Hz, IMU @ 200 Hz; frame IDs `odom → ackermann/base_link` confirmed on both raw and relayed topics; `odom_tf_relay` runs with `publish_tf=False` (downstream SLAM/EKF owns the TF edge).
@@ -57,4 +58,9 @@
     - CPU under full stack: `cuvslam_odom_node` 6–14 %, `ekf_filter_node` 2–10 %, each `odom_tf_relay` 1–10 %, `rtabmap` / `rgbd_odometry` idle (0–3 %) because no depth camera is attached. Nothing overloaded.
     - Gap / not a blocker: `/map` is not produced because RTAB-Map is waiting on `/l515/color/image_raw` + `/l515/aligned_depth_to_color/image_raw` — the bench only has a T265. A full mapping smoke (4.4 extended) will need a D435i / L515 on the bench. The VIO + EKF portion of the stack (which is what 4.4 requires) is healthy.
     - Lesson captured during this run: the earlier `/cuvslam_odom` rate spike (48 Hz, min-interval 0) was caused by an orphaned `cuvslam_odom_relay` from a previous launch that `./scripts/start_ros2_nodes.sh` did not sweep before relaunching. After killing orphans the steady-state rate is 21 Hz with a single publisher — no stack-level bug. Always sweep stale ROS nodes before a fresh launch.
-- [ ] 4.5 Bring up the Jetson aarch64 path: build cuVSLAM with JetPack CUDA 11.4, run the phase-0 smoke test, and validate standalone T265 + cuVSLAM (same checks as 4.2) inside `jazzy_slam_aarch64`.
+- [x] 4.5 Bring up the Jetson aarch64 path: build cuVSLAM with JetPack CUDA 11.4, run the phase-0 smoke test, and validate standalone T265 + cuVSLAM (same checks as 4.2) inside `jazzy_slam_aarch64`.
+    - Verified on the connected Jetson Xavier via SSH (`jetson`, repo at `~/workspace/ackermann_rover_humble`) using the running `jazzy_slam_aarch64` container. Rebuilt with `./scripts/build_cuvslam.sh`, which reconfigured cuVSLAM against CUDA 11.4 (`Build cuda_11.4.r11.4/compiler.31964100_0`), rebuilt `cuvslam_bringup` + `robot_bringup` + `rtabmap_bringup` + `description_robot` + `realsense_camera_bringup`, and re-ran `smoke_test_cuvslam` successfully.
+    - Hardware inventory inside the container confirms both Intel RealSense D435i and T265 are visible. Standalone validation used `./scripts/start_ros2_nodes.sh --hw --cuvslam-odom --no-rviz` after sweeping stale ROS nodes. T265 fisheye streams initialized at 848x800 @ 30 fps, `cuvslam_odom_node` initialized in inertial mode, and both `t265_odom_relay` and `cuvslam_odom_relay` came up cleanly.
+    - Jetson steady-state topic rates: `/t265/fisheye1/image_raw` ≈ 29.7 Hz, `/t265/fisheye2/image_raw` ≈ 29.2 Hz, `/t265/imu` ≈ 200.1 Hz, `/t265/odom_base` ≈ 200.1 Hz, `/cuvslam/raw_odometry` ≈ 29.1 Hz, `/cuvslam_odom` ≈ 29.1 Hz. `smoke_test_cuvslam` and `ros2 topic echo --once /cuvslam/raw_odometry` confirm `frame_id=odom` and `child_frame_id=ackermann/base_link`.
+    - Jetson stationary metrics over a warm 10 s window on `/cuvslam_odom`: net drift ≈ 4.3 mm, with bounding-box spans of ~4.2 cm (x), ~4.0 cm (y), and ~5.6 cm (z). This is good enough to confirm the Xavier path is functional, but notably noisier than the x86 stationary result and worth follow-up tuning/investigation before calling the Jetson path fully performance-equivalent.
+    - Jetson resource sample during the same stationary window: `realsense_camera_node` ≈ 44.1 % CPU / 63.9 MB RSS, `cuvslam_odom_node` ≈ 32.5 % CPU / 851.5 MB RSS. `tegrastats` over 10 s showed RAM ~2.64-2.71 GB / 6.85 GB and `GR3D_FREQ` mostly 0-22 % with one brief spike to 87 % (about 17.6 % average across the sample).
