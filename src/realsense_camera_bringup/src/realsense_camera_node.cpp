@@ -696,15 +696,32 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
       }
 
       // T265 fisheye (only when enabled)
+      //
+      // librealsense's pipeline sync module re-emits a frameset every time
+      // any configured stream (pose / accel / gyro) has a new sample, and
+      // each such frameset contains the *most recent* fisheye pair — not
+      // necessarily a new one. Without deduplication, the fisheye topics get
+      // published at the IMU rate (~200 Hz) instead of the shutter rate
+      // (30 Hz), and downstream stereo synchronizers (e.g. cuvslam) see pairs
+      // with identical timestamps, tripping cuVSLAM's strictly-increasing
+      // frame-timestamp guard. Deduplicate by frame number.
       if (camera_model_ == CameraModel::T265 && enable_fisheye_) {
         fs.foreach_rs([this](rs2::frame f) {
           if (auto vf = f.as<rs2::video_frame>()) {
             if (vf.get_profile().stream_type() == RS2_STREAM_FISHEYE) {
               int idx = vf.get_profile().stream_index();
-              if (idx == 1)
-                publish_video_frame(vf, fisheye1_image_pub_, fisheye1_info_pub_, fisheye1_info_msg_);
-              else if (idx == 2)
-                publish_video_frame(vf, fisheye2_image_pub_, fisheye2_info_pub_, fisheye2_info_msg_);
+              const auto fn = vf.get_frame_number();
+              if (idx == 1) {
+                if (fn != last_fisheye1_frame_number_) {
+                  last_fisheye1_frame_number_ = fn;
+                  publish_video_frame(vf, fisheye1_image_pub_, fisheye1_info_pub_, fisheye1_info_msg_);
+                }
+              } else if (idx == 2) {
+                if (fn != last_fisheye2_frame_number_) {
+                  last_fisheye2_frame_number_ = fn;
+                  publish_video_frame(vf, fisheye2_image_pub_, fisheye2_info_pub_, fisheye2_info_msg_);
+                }
+              }
             }
           }
         });

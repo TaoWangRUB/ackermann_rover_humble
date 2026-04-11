@@ -41,6 +41,13 @@ ARGUMENTS = [
                     'while keeping VO/ICP published on their own topics.'
     ),
     DeclareLaunchArgument(
+        'use_cuvslam_odom',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Use cuVSLAM as the odometry source for EKF and RTAB-Map '
+                    'while keeping VO/ICP published on their own topics.'
+    ),
+    DeclareLaunchArgument(
         't265_odom_topic',
         default_value='/t265/odom_base',
         description='T265 odometry topic (used when use_t265_odom:=true).'
@@ -49,6 +56,11 @@ ARGUMENTS = [
         'vins_odom_topic',
         default_value='/vins_odom',
         description='VINS odometry topic (used when use_vins_odom:=true).'
+    ),
+    DeclareLaunchArgument(
+        'cuvslam_odom_topic',
+        default_value='/cuvslam_odom',
+        description='cuVSLAM odometry topic (used when use_cuvslam_odom:=true).'
     ),
     DeclareLaunchArgument(
         'rtabmap_viz',
@@ -99,16 +111,19 @@ def generate_launch_description() -> LaunchDescription:
     vision = LaunchConfiguration('vision')
     rtabmap_viz = LaunchConfiguration('rtabmap_viz')
     use_vins_odom = LaunchConfiguration('use_vins_odom')
+    use_cuvslam_odom = LaunchConfiguration('use_cuvslam_odom')
     use_t265_odom = LaunchConfiguration('use_t265_odom')
     t265_odom_topic = LaunchConfiguration('t265_odom_topic')
     vins_odom_topic = LaunchConfiguration('vins_odom_topic')
+    cuvslam_odom_topic = LaunchConfiguration('cuvslam_odom_topic')
 
-    # Priority: VINS-Fusion > T265 built-in > RGB-D VO > ICP.
+    # Priority: cuVSLAM > VINS-Fusion > T265 built-in > RGB-D VO > ICP.
     # VO/ICP remain available on their own topics for debugging or comparison.
     odom_topic = PythonExpression([
-        '"', vins_odom_topic, '" if "', use_vins_odom, '" == "true"'
+        '"', cuvslam_odom_topic, '" if "', use_cuvslam_odom, '" == "true"'
+        ' else ("', vins_odom_topic, '" if "', use_vins_odom, '" == "true"'
         ' else ("', t265_odom_topic, '" if "', use_t265_odom, '" == "true"'
-        ' else ("/vo_odom" if "', vision, '" == "true" else "/icp_odom"))'
+        ' else ("/vo_odom" if "', vision, '" == "true" else "/icp_odom")))'
     ])
 
     # Always launch VO/ICP based on vision mode (even when use_t265_odom).
@@ -223,7 +238,8 @@ def generate_launch_description() -> LaunchDescription:
         # When T265 provides the primary odom source, keep VO independent from
         # the D435i IMU's arbitrary startup yaw so /vo_odom remains comparable.
         'wait_imu_to_init': PythonExpression([
-            'False if "', use_vins_odom, '" == "true" or "', use_t265_odom, '" == "true" else True'
+            'False if "', use_cuvslam_odom, '" == "true" or "', use_vins_odom,
+            '" == "true" or "', use_t265_odom, '" == "true" else True'
         ]),
         'use_sim_time': use_sim_time,
         'approx_sync': True,
@@ -315,8 +331,10 @@ def generate_launch_description() -> LaunchDescription:
                         False, False, False,   # roll, pitch, yaw (VO owns heading)
                         False, False, False,   # x, y, z velocity
                         False, False, PythonExpression([
-                            'False if "', use_vins_odom, '" == "true" or "', use_t265_odom, '" == "true" else True'
-                        ]),    # yaw rate: skip when T265 odom is used
+                            'False if "', use_cuvslam_odom, '" == "true" or "',
+                            use_vins_odom, '" == "true" or "', use_t265_odom,
+                            '" == "true" else True'
+                        ]),    # yaw rate: skip when external VIO owns heading
                         False, False, False],  # x, y, z acceleration
         'imu0_queue_size': 10,
         'imu0_nodelay': False,

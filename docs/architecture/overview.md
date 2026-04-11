@@ -268,6 +268,16 @@ type long commands.
 # ── Hardware RTAB-Map with D435i + T265 odom source ──
 ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265-odom --rtabmap
 
+# ── Hardware RTAB-Map with D435i + cuVSLAM odom source ──
+./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --cuvslam-odom --rtabmap
+
+# ── Gazebo + cuVSLAM odom + RTAB-Map ──
+./scripts/start_ros2_nodes.sh --cuvslam-odom --rtabmap
+
+# ── Build cuVSLAM in Docker, then launch it ──
+./scripts/build_cuvslam.sh
+./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --cuvslam-odom --rtabmap
+
 # ── Gazebo only (ros2_control) ──
 ./scripts/start_ros2_nodes.sh
 
@@ -327,6 +337,8 @@ type long commands.
 | `--depth-camera=NAME` | Select hardware/sim depth camera (`d435i` or `l515`)                |
 | `--t265`            | Hardware mode only: enable T265 + odom relay                           |
 | `--t265-odom`       | Hardware mode only: route RTAB-Map / EKF odom input to `/t265/odom_base` |
+| `--vins-odom`       | Use VINS-Fusion as the RTAB-Map / EKF odom source                      |
+| `--cuvslam-odom`    | Use cuVSLAM as the RTAB-Map / EKF odom source                          |
 | `--rtabmap`         | Launch RTAB-Map SLAM                                                   |
 | `--nav2`            | Launch Nav2 navigation stack                                           |
 | `--bridge[=MODE]`   | Launch PX4 mode node only (default: `manual`; options: `speed_steering`, `trajectory`, `speed_attitude`) |
@@ -349,6 +361,14 @@ With `--t265-odom`, the T265 relay publishes `/t265/odom_base` in the standard
 that topic. RTAB-Map VO/ICP remain independent on `/vo_odom` or `/icp_odom`
 for debugging and side-by-side comparison.
 
+With `--cuvslam-odom`, `robot_bringup` auto-enables the T265 plus fisheye
+streams, starts `cuvslam_bringup`, and routes EKF plus RTAB-Map to
+`/cuvslam_odom`. RTAB-Map VO/ICP remain published on `/vo_odom` or `/icp_odom`
+for debugging and side-by-side comparison, and `scripts/debug_vio.sh`
+auto-detects the cuVSLAM raw and adapted odom topics. See
+`docs/architecture/cuvslam_vio.md` for the cuVSLAM-specific build and launch
+workflow.
+
 #### VIO Debug Probe
 
 The helper script `scripts/debug_vio.sh` probes the live camera / IMU /
@@ -363,9 +383,10 @@ by `scripts/start_ros2_nodes.sh`.
 HZ_WINDOW=5 ECHO_TIMEOUT=3 ./scripts/debug_vio.sh
 ```
 
-It auto-detects D435i, L515, T265, IMU, VO, EKF, `rgbd_image`, and `map`
-topics, prints timestamp samples, and ends with a per-topic statistics summary.
-Absent cameras are treated as optional and reported as `not published`.
+It auto-detects D435i, L515, T265, VINS, cuVSLAM, IMU, VO, EKF, `rgbd_image`,
+and `map` topics, prints timestamp samples, and ends with a per-topic
+statistics summary. Absent cameras are treated as optional and reported as
+`not published`.
 
 For PX4 co-simulation you still need to start MicroXRCEAgent and PX4 SITL in
 separate terminals **before** `--bridge` can register with the FMU:

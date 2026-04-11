@@ -1,14 +1,46 @@
 # t265_stereo_fisheye.yaml
-# cuVSLAM wrapper config for T265 stereo fisheye + IMU
+# cuVSLAM wrapper config for Intel RealSense T265 stereo fisheye + IMU.
+#
+# Topic names match the realsense_camera_bringup publisher layout
+# (camera_name defaults to "t265") and can be overridden at launch time via
+# launch arguments or remappings.  Frame IDs follow the rover's standard
+# odom -> ackermann/base_link contract after passing through odom_tf_relay.
 
-cuvslam_bringup:
+cuvslam_odom_node:
   ros__parameters:
-    left_image_topic: "/t265/fisheye1/image_raw"
-    right_image_topic: "/t265/fisheye2/image_raw"
-    left_camera_info_topic: "/t265/fisheye1/camera_info"
+    # ─── topic configuration ─────────────────────────────────────────────
+    left_image_topic:        "/t265/fisheye1/image_raw"
+    right_image_topic:       "/t265/fisheye2/image_raw"
+    left_camera_info_topic:  "/t265/fisheye1/camera_info"
     right_camera_info_topic: "/t265/fisheye2/camera_info"
-    imu_topic: "/t265/imu"
-    odom_frame_id: "odom"
-    base_frame_id: "ackermann/base_link"
-    publish_rate: 30.0
-    debug: false
+    imu_topic:               "/t265/imu"
+    raw_odom_topic:          "/cuvslam/raw_odometry"
+
+    # ─── frame configuration ─────────────────────────────────────────────
+    # Parent frame of the raw odometry and the rig frame used to initialize
+    # cuVSLAM. In the normal path the rig frame is already the rover base
+    # frame, so odom_tf_relay becomes a pass-through. If TF lookup for rig
+    # extrinsics times out, the wrapper falls back to publishing the left
+    # fisheye optical frame as child_frame_id so odom_tf_relay can still
+    # adapt it to ackermann/base_link using the static TF tree.
+    odom_frame_id:   "odom"
+    rig_frame_id:    "ackermann/base_link"
+    imu_frame_id:    ""
+
+    # ─── tracker configuration ───────────────────────────────────────────
+    use_imu:               true            # enable inertial fusion (IMU required)
+    enable_observations:   false           # cuVSLAM debug export flags
+    enable_landmarks:      false
+    async_sba:             true
+    use_motion_model:      true
+    use_denoising:         false
+    max_frame_delta_s:     0.5
+    fallback_stereo_baseline_m: 0.0642
+
+    # ─── stereo sync policy ──────────────────────────────────────────────
+    sync_queue_size:       10
+    sync_slop_s:           0.01            # approximate-time sync tolerance
+    rig_init_timeout_s:    10.0            # how long to wait for CameraInfo pair
+
+    # ─── diagnostics ─────────────────────────────────────────────────────
+    debug:                 false           # cuVSLAM SetVerbosity(0 or 1)

@@ -2,20 +2,32 @@
 <package format="3">
   <name>cuvslam_bringup</name>
   <version>0.1.0</version>
-  <description>ROS 2 bringup and wrapper for cuVSLAM-based stereo VIO</description>
+  <description>
+    ROS 2 bringup and thin C++ wrapper for cuVSLAM-based stereo visual-inertial
+    odometry using the Intel RealSense T265 fisheye stereo pair and IMU.
+    Publishes raw odometry and relies on odom_tf_relay (from
+    realsense_camera_bringup) to adapt it into the rover's
+    odom -> ackermann/base_link contract.
+  </description>
   <maintainer email="maintainer@example.com">Ackermann Rover Team</maintainer>
   <license>Apache-2.0</license>
+
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <build_depend>rclcpp</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>nav_msgs</build_depend>
-  <build_depend>geometry_msgs</build_depend>
-  <build_depend>std_msgs</build_depend>
-  <exec_depend>rclcpp</exec_depend>
-  <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>nav_msgs</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>std_msgs</exec_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>message_filters</depend>
+  <depend>cv_bridge</depend>
+  <depend>libopencv-dev</depend>
+
+  <exec_depend>realsense_camera_bringup</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
+
   <export>
     <build_type>ament_cmake</build_type>
   </export>

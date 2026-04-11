@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Debug RTAB-Map / VIO pipeline alignment issues for D435i, L515, and T265.
+# Debug RTAB-Map / VIO pipeline alignment issues for D435i, L515, T265, VINS, and cuVSLAM.
 
 set -uo pipefail
 
@@ -73,6 +73,8 @@ declare -A LABELS=(
     [t265_odom_base]="T265 odom base"
     [vins_raw_odom]="VINS raw odom"
     [vins_odom]="VINS adapted odom"
+    [cuvslam_raw_odom]="cuVSLAM raw odom"
+    [cuvslam_odom]="cuVSLAM adapted odom"
     [imu_raw_transformed]="IMU transformed"
     [imu_data]="IMU filtered"
     [rgbd_image]="RGBD image"
@@ -88,7 +90,7 @@ TOPIC_KEYS=(
     d435i_color d435i_depth d435i_color_info d435i_depth_info d435i_imu
     l515_color l515_depth l515_color_info l515_depth_info l515_imu
     t265_fisheye1 t265_fisheye2 t265_fisheye1_info t265_fisheye2_info
-    t265_odom t265_odom_base vins_raw_odom vins_odom imu_raw_transformed imu_data
+    t265_odom t265_odom_base vins_raw_odom vins_odom cuvslam_raw_odom cuvslam_odom imu_raw_transformed imu_data
     rgbd_image vo_odom ekf_odom map rtabmap_info
     d435i_extrinsics l515_extrinsics
 )
@@ -96,14 +98,14 @@ TOPIC_KEYS=(
 STAMP_KEYS=(
     d435i_color d435i_depth d435i_imu
     l515_color l515_depth l515_imu
-    t265_fisheye1 t265_fisheye2 t265_odom t265_odom_base vins_raw_odom vins_odom
+    t265_fisheye1 t265_fisheye2 t265_odom t265_odom_base vins_raw_odom vins_odom cuvslam_raw_odom cuvslam_odom
     imu_raw_transformed imu_data vo_odom ekf_odom rgbd_image
 )
 
 STAT_KEYS=(
     d435i_color d435i_depth d435i_imu
     l515_color l515_depth l515_imu
-    t265_fisheye1 t265_fisheye2 t265_odom t265_odom_base vins_raw_odom vins_odom
+    t265_fisheye1 t265_fisheye2 t265_odom t265_odom_base vins_raw_odom vins_odom cuvslam_raw_odom cuvslam_odom
     imu_raw_transformed imu_data
     rgbd_image vo_odom ekf_odom map
 )
@@ -152,6 +154,8 @@ resolve_topic t265_odom /t265/odom /t265/odom/sample
 resolve_topic t265_odom_base /t265/odom_base /t265_odom_base
 resolve_topic vins_raw_odom /vins/raw_odometry /vins/odometry
 resolve_topic vins_odom /vins_odom /vins/odom_base
+resolve_topic cuvslam_raw_odom /cuvslam/raw_odometry
+resolve_topic cuvslam_odom /cuvslam_odom
 resolve_topic imu_raw_transformed /imu/raw_transformed
 resolve_topic imu_data /imu/data
 resolve_topic rgbd_image /rgbd_image
