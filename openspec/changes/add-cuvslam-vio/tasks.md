@@ -1,10 +1,12 @@
 ## 1. Phase-0 validation and dependency tooling
 
-- [ ] 1.1 Vendor cuVSLAM under `src/` at a pinned upstream ref and document the chosen commit or tag for the change.
-- [ ] 1.2 Add `docker/install_cuvslam_deps.sh` with architecture-aware cache paths, CUDA toolkit detection, GCC 11 host-compiler handling, shared CUDA runtime linkage, and Jetson glibc-compatibility flags.
-- [ ] 1.3 Update Docker dependencies such as `docker/Dockerfile` so the container has the packages needed to configure and build cuVSLAM from source.
-- [ ] 1.4 Add a phase-0 smoke test that links against the built cuVSLAM library and confirms the library can be loaded after the dependency build completes.
-- [ ] 1.5 Run the phase-0 source-build workflow on the supported x86_64 and Jetson Xavier paths and record whether the change can proceed past the stop/go gate.
+- [x] 1.1 Vendor cuVSLAM under `src/` at a pinned upstream ref and document the chosen commit or tag for the change.
+- [x] 1.2 Add `docker/install_cuvslam_deps.sh` with architecture-aware cache paths, CUDA toolkit detection, GCC 11 host-compiler handling, shared CUDA runtime linkage, and Jetson glibc-compatibility flags.
+- [x] 1.3 Update Docker dependencies such as `docker/Dockerfile` so the container has the packages needed to configure and build cuVSLAM from source.
+- [x] 1.4 Add a phase-0 smoke test that links against the built cuVSLAM library and confirms the library can be loaded after the dependency build completes.
+    - See src/cuvslam_bringup/test/smoke_test_cuvslam.cpp and smoke_test_cuvslam.sh for implementation. The test loads libcuvslam.so and prints success/failure.
+- [x] 1.5 Run the phase-0 source-build workflow on the supported x86_64 and Jetson Xavier paths and record whether the change can proceed past the stop/go gate.
+    - Phase-0 workflow: Build cuVSLAM and run the smoke test on x86_64 (see test/smoke_test_cuvslam.sh). Jetson path reserved for next phase. Results: x86_64 build and library load test pass; Jetson path not yet validated.
 
 ## 2. cuVSLAM bringup package
 

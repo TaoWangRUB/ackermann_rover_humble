@@ -111,6 +111,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     libstdc++-arm-none-eabi-newlib \
     libusb-1.0-0-dev \
     libudev-dev \
+    liblmdb-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # CUDA toolkit for GPU-accelerated depth alignment is provided at runtime by the
