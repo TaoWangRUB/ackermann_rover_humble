@@ -24,8 +24,8 @@ export CU_VSLAM_CUDA_LINKAGE="shared"
 
 # --- JETSON GLIBC COMPATIBILITY FLAGS ---
 if [[ $ARCH == "aarch64" ]]; then
-    export CFLAGS="$CFLAGS -D_FORCE_INLINES -D__GLIBC_USE_LIB_EXT2=1"
-    export LDFLAGS="$LDFLAGS -Wl,--unresolved-symbols=ignore-in-object-files"
+    export CFLAGS="${CFLAGS:-} -D_FORCE_INLINES -D__GLIBC_USE_LIB_EXT2=1"
+    export LDFLAGS="${LDFLAGS:-} -Wl,--unresolved-symbols=ignore-in-object-files"
 fi
 
 # --- ARCHITECTURE-AWARE CACHE PATHS ---
@@ -70,9 +70,30 @@ if [[ "${ARCH}" == "x86_64" ]]; then
     echo "[x86_64] cuVSLAM build complete. Installed to ${CUVSLAM_INSTALL_DIR}"
     
 elif [[ "${ARCH}" == "aarch64" ]]; then
-    echo "[aarch64] Jetson Xavier build path is reserved for Phase 2."
-    echo "Will enforce GCC 11, CUDA 11.4, and shared CUDA runtime linkage here later."
-    # exit 0 for now so it doesn't break CI/CD if triggered incidentally
+    CUVSLAM_SRC="${CUVSLAM_SRC:-/workspace/src/cuVSLAM}"
+    CUVSLAM_BUILD_DIR="${CUVSLAM_SRC}/build"
+    CUVSLAM_INSTALL_DIR="${CUVSLAM_CACHE_DIR}/install"
+    mkdir -p "${CUVSLAM_BUILD_DIR}" "${CUVSLAM_INSTALL_DIR}"
+
+    echo "[aarch64] Initializing Jetson CUDA integration path..."
+
+    if [[ ! -x "/usr/local/cuda/bin/nvcc" ]]; then
+        echo "WARNING: /usr/local/cuda/bin/nvcc not found."
+        echo "Ensure the JetPack CUDA toolkit is mounted into the container via docker-compose."
+    else
+        echo "CUDA Toolkit found:"
+        /usr/local/cuda/bin/nvcc --version
+    fi
+
+    # The operator build script (scripts/build_cuvslam.sh) handles the three
+    # Jetson-specific workarounds at build time:
+    #   1) -arch=all -> -arch=sm_72 (or sm_87) for CUDA < 11.5
+    #   2) Empty librt.a stub replacement for glibc 2.34+ / nvlink 11.4
+    #   3) liblmdb-dev installation if missing
+    # This dependency script only ensures the base toolchain is present.
+
+    echo "[aarch64] Jetson dependency setup complete."
+    echo "Run ./scripts/build_cuvslam.sh to build cuVSLAM from source."
 else
     echo "Unsupported architecture: ${ARCH}"
     exit 1

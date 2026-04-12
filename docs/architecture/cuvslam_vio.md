@@ -1,7 +1,7 @@
 ---
 title: cuVSLAM Visual-Inertial Odometry
 status: Draft
-last_updated: 2026-04-11
+last_updated: 2026-04-12
 doc_type: architecture
 ---
 
@@ -48,9 +48,30 @@ Use the Docker-aware helper from the host:
 This script:
 
 1. enters the `ackermann_slam` container if needed
-2. builds vendored `src/cuVSLAM` with `gcc-11` / `g++-11`
-3. builds `cuvslam_bringup`, `robot_bringup`, `rtabmap_bringup`, and related packages
-4. runs the cuVSLAM smoke test
+2. on Jetson (aarch64), applies three build workarounds automatically (see below)
+3. builds vendored `src/cuVSLAM` with `gcc-11` / `g++-11`
+4. builds `cuvslam_bringup`, `robot_bringup`, `rtabmap_bringup`, and related packages
+5. runs the cuVSLAM smoke test
+
+### Jetson aarch64 Build Workarounds
+
+`scripts/build_cuvslam.sh` detects aarch64 and applies three workarounds that
+are needed because JetPack 5.x ships CUDA 11.4, while the cuVSLAM upstream
+source targets CUDA 12+:
+
+1. **`-arch=all` -> `-arch=sm_XX`** — CUDA 11.4 does not support
+   `-arch=all` (added in 11.5). The script auto-detects the Jetson SoC from
+   `/proc/device-tree/compatible` and patches the cuVSLAM cuda_kernels
+   CMakeLists to target `sm_72` (Xavier NX / AGX Xavier) or `sm_87` (Orin).
+
+2. **Empty `librt.a` stub** — glibc 2.34+ merged librt into libc, leaving
+   an empty 8-byte archive at `/usr/lib/aarch64-linux-gnu/librt.a`. nvlink
+   11.4 cannot open a zero-member archive. The script replaces it with a
+   valid dummy archive containing a single stub symbol.
+
+3. **`liblmdb-dev`** — required by cuVSLAM for the landmark database but
+   not installed by default in the container image. The script installs it
+   via `apt-get` if `/usr/include/lmdb.h` is missing.
 
 ## Launch
 
@@ -247,14 +268,19 @@ apples-to-apples on the same host and sensor.
 
 ## Current Status
 
-The x86_64 Docker path is integrated, measured, and verified against
-VINS-Fusion and the T265 built-in VIO under stationary conditions. The Jetson
-Xavier aarch64 path is now also validated for source build + smoke test +
-standalone T265 bringup inside `jazzy_slam_aarch64` (see
-[`openspec/changes/add-cuvslam-vio/tasks.md`](../../openspec/changes/add-cuvslam-vio/tasks.md)
-task 4.5).
+Both platforms are integrated, measured, and verified:
+
+- **x86_64**: fully validated against VINS-Fusion and T265 built-in VIO
+  under stationary conditions. Lowest drift (1.8 mm / 30 s), lowest CPU
+  (~19%), lowest GPU (0-1%) of all host-side VIO options.
+- **Jetson Xavier (aarch64)**: source build, phase-0 smoke test, and
+  standalone T265 + cuVSLAM bringup all pass inside `jazzy_slam_aarch64`.
+  Three build workarounds (CUDA arch flag, librt.a stub, liblmdb-dev) are
+  now codified in `scripts/build_cuvslam.sh` so the Jetson path is
+  reproducible.
 
 The remaining caveat is quality, not basic functionality: Xavier currently
-tracks at the expected rate, but its stationary pose wanders much more than the
-x86 desktop run. That makes the Jetson path ready for continued tuning and
-comparison work, but not yet a drop-in "same as x86" result.
+tracks at the expected rate (~29 Hz), but its stationary pose wanders inside
+a 4-6 cm box versus sub-centimeter on x86. That makes the Jetson path ready
+for continued tuning and comparison work, but not yet performance-equivalent
+to the x86 desktop result.

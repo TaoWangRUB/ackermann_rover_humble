@@ -40,6 +40,51 @@ else
     BUILD_JOBS="${BUILD_JOBS:-$(nproc)}"
 fi
 
+# ---------------------------------------------------------------------------
+# Jetson (aarch64) workarounds
+# ---------------------------------------------------------------------------
+if [[ "${ARCH}" == "aarch64" ]]; then
+    CUDA_MAJOR=$(/usr/local/cuda/bin/nvcc --version | sed -n 's/.*release \([0-9]*\)\.\([0-9]*\).*/\1/p')
+    CUDA_MINOR=$(/usr/local/cuda/bin/nvcc --version | sed -n 's/.*release \([0-9]*\)\.\([0-9]*\).*/\2/p')
+
+    # 1) -arch=all is only supported from CUDA 11.5+. On JetPack 5.x (CUDA 11.4)
+    #    we must replace it with an explicit SM target. Xavier NX/AGX = sm_72,
+    #    Orin = sm_87. Auto-detect from /proc/device-tree/compatible.
+    if (( CUDA_MAJOR < 12 && CUDA_MINOR < 5 )); then
+        if grep -q "tegra234" /proc/device-tree/compatible 2>/dev/null; then
+            SM_ARCH="sm_87"   # Orin
+        else
+            SM_ARCH="sm_72"   # Xavier NX / AGX Xavier
+        fi
+        CUDA_KERNELS_CMAKE="${CUVSLAM_SRC_DIR}/libs/cuda_modules/cuda_kernels/CMakeLists.txt"
+        if grep -q '\-arch=all' "${CUDA_KERNELS_CMAKE}"; then
+            echo "[aarch64] Patching -arch=all -> -arch=${SM_ARCH} for CUDA ${CUDA_MAJOR}.${CUDA_MINOR}"
+            sed -i "s|-arch=all|-arch=${SM_ARCH}|g" "${CUDA_KERNELS_CMAKE}"
+        fi
+    fi
+
+    # 2) glibc 2.34+ merged librt into libc, leaving an empty 8-byte librt.a
+    #    stub that nvlink 11.4 cannot open. Replace with a valid dummy archive.
+    LIBRT_A="/usr/lib/aarch64-linux-gnu/librt.a"
+    if [[ -f "${LIBRT_A}" ]]; then
+        LIBRT_SIZE=$(stat -c%s "${LIBRT_A}")
+        if (( LIBRT_SIZE < 64 )); then
+            echo "[aarch64] Replacing empty librt.a (${LIBRT_SIZE} bytes) with a stub archive"
+            TMP_STUB=$(mktemp -d)
+            echo 'void __cuvslam_librt_stub(void) {}' > "${TMP_STUB}/stub.c"
+            gcc -c "${TMP_STUB}/stub.c" -o "${TMP_STUB}/stub.o"
+            ar rcs "${LIBRT_A}" "${TMP_STUB}/stub.o"
+            rm -rf "${TMP_STUB}"
+        fi
+    fi
+
+    # 3) liblmdb-dev is required by cuVSLAM but not always installed.
+    if [[ ! -f /usr/include/lmdb.h ]]; then
+        echo "[aarch64] Installing liblmdb-dev"
+        apt-get update -qq && apt-get install -y liblmdb-dev
+    fi
+fi
+
 echo "Building cuVSLAM from ${CUVSLAM_SRC_DIR}"
 echo "  build dir: ${CUVSLAM_DST_DIR}"
 echo "  arch:      ${ARCH}"
