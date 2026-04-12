@@ -75,160 +75,8 @@ index 480f51a..6b204f5 100755
      }
  }
  
-diff --git a/loop_fusion/CMakeLists.txt b/loop_fusion/CMakeLists.txt
-index aff3409..e29f5b5 100755
---- a/loop_fusion/CMakeLists.txt
-+++ b/loop_fusion/CMakeLists.txt
-@@ -16,7 +16,7 @@ find_package(nav_msgs REQUIRED)
- find_package(cv_bridge REQUIRED)
- find_package(camera_models REQUIRED)
- 
--find_package(OpenCV)
-+find_package(OpenCV REQUIRED)
- find_package(Ceres REQUIRED)
- set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
- find_package(Eigen3)
-@@ -43,7 +43,7 @@ add_executable(loop_fusion_node
- 
-     
- # added from DEBUG
--ament_target_dependencies(loop_fusion_node camera_models rclcpp ament_index_cpp std_msgs sensor_msgs visualization_msgs nav_msgs cv_bridge OpenCV) # roslib) # does 'roslib' really need ??
-+ament_target_dependencies(loop_fusion_node camera_models rclcpp ament_index_cpp std_msgs sensor_msgs visualization_msgs nav_msgs cv_bridge) # roslib) # does 'roslib' really need ??
- 
- target_link_libraries(loop_fusion_node ${OpenCV_LIBS} ${CERES_LIBRARIES} ) #${catkin_LIBRARIES}  )
- 
-diff --git a/loop_fusion/src/parameters.h b/loop_fusion/src/parameters.h
-index ba661f7..77a4e1f 100755
---- a/loop_fusion/src/parameters.h
-+++ b/loop_fusion/src/parameters.h
-@@ -20,7 +20,7 @@
- #include <sensor_msgs/msg/point_cloud.hpp>
- // #include <sensor_msgs/image_encodings.h>
- #include "image_encodings.hpp"
--#include <cv_bridge/cv_bridge.h>
-+#include <cv_bridge/cv_bridge.hpp>
- 
- extern camodocal::CameraPtr m_camera;
- extern Eigen::Vector3d tic;
-@@ -35,4 +35,3 @@ extern int COL;
- extern std::string VINS_RESULT_PATH;
- extern int DEBUG_IMAGE;
- 
--
-diff --git a/loop_fusion/src/pose_graph.h b/loop_fusion/src/pose_graph.h
-index 93b2137..8417847 100755
---- a/loop_fusion/src/pose_graph.h
-+++ b/loop_fusion/src/pose_graph.h
-@@ -21,8 +21,8 @@
- #include <queue>
- #include <assert.h>
- #include <nav_msgs/msg/path.hpp>
--#include <geometry_msgs/msg/point_stamped.h>
--#include <nav_msgs/msg/odometry.h>
-+#include <geometry_msgs/msg/point_stamped.hpp>
-+#include <nav_msgs/msg/odometry.hpp>
- #include <stdio.h>
- #include <rclcpp/rclcpp.hpp>
- #include "keyframe.h"
-@@ -337,4 +337,4 @@ struct RelativeRTError
- 	double q_w, q_x, q_y, q_z;
- 	double t_var, q_var;
- 
--};
-\ No newline at end of file
-+};
-diff --git a/loop_fusion/src/pose_graph_node.cpp b/loop_fusion/src/pose_graph_node.cpp
-index 152d045..3ff4be9 100755
---- a/loop_fusion/src/pose_graph_node.cpp
-+++ b/loop_fusion/src/pose_graph_node.cpp
-@@ -19,7 +19,7 @@
- #include "image_encodings.hpp"
- #include <visualization_msgs/msg/marker.hpp>
- #include <std_msgs/msg/bool.hpp>
--#include <cv_bridge/cv_bridge.h>
-+#include <cv_bridge/cv_bridge.hpp>
- #include <iostream>
- // #include <ros/package.h>
- #include <ament_index_cpp/get_package_share_directory.hpp>
-diff --git a/loop_fusion/src/utility/CameraPoseVisualization.h b/loop_fusion/src/utility/CameraPoseVisualization.h
-index dbfae11..ef8164b 100755
---- a/loop_fusion/src/utility/CameraPoseVisualization.h
-+++ b/loop_fusion/src/utility/CameraPoseVisualization.h
-@@ -10,7 +10,7 @@
- #pragma once
- 
- #include <rclcpp/rclcpp.hpp>
--#include <std_msgs/msg/color_rgba.h>
-+#include <std_msgs/msg/color_rgba.hpp>
- #include <visualization_msgs/msg/marker.hpp>
- #include <visualization_msgs/msg/marker_array.hpp>
- #include <Eigen/Dense>
-diff --git a/vins/CMakeLists.txt b/vins/CMakeLists.txt
-index bcc560f..729c6f9 100755
---- a/vins/CMakeLists.txt
-+++ b/vins/CMakeLists.txt
-@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 14)
- add_compile_options(-Wextra -Wpedantic)
- 
- set(CMAKE_BUILD_TYPE Release)
-+option(VINS_GPU_MODE "Enable CUDA-based feature tracking in vins" OFF)
- 
- # find dependencies
- find_package(ament_cmake REQUIRED)
-@@ -19,6 +20,7 @@ find_package(tf2_ros REQUIRED)
- find_package(cv_bridge REQUIRED)
- find_package(camera_models REQUIRED)
- find_package(image_transport REQUIRED)
-+find_package(message_filters REQUIRED)
- 
- 
- find_package(OpenCV REQUIRED)
-@@ -54,11 +56,17 @@ add_library(vins_lib
-     src/initial/initial_ex_rotation.cpp
-     src/featureTracker/feature_tracker.cpp)
- target_link_libraries(vins_lib  ${OpenCV_LIBS} ${CERES_LIBRARIES})
-+if(VINS_GPU_MODE)
-+  target_compile_definitions(vins_lib PRIVATE GPU_MODE)
-+  message(STATUS "vins GPU feature tracking enabled")
-+else()
-+  message(STATUS "vins GPU feature tracking disabled")
-+endif()
- 
- ament_target_dependencies(vins_lib rclcpp rcpputils std_msgs visualization_msgs geometry_msgs nav_msgs tf2 tf2_ros cv_bridge camera_models image_transport)
- 
- add_executable(vins_node src/rosNodeTest.cpp)
--ament_target_dependencies(vins_node rclcpp rcpputils std_msgs visualization_msgs geometry_msgs nav_msgs tf2 tf2_ros cv_bridge camera_models image_transport)
-+ament_target_dependencies(vins_node rclcpp rcpputils std_msgs visualization_msgs geometry_msgs nav_msgs tf2 tf2_ros cv_bridge camera_models image_transport message_filters)
- target_link_libraries(vins_node vins_lib) 
- 
- add_executable(kitti_odom_test src/KITTIOdomTest.cpp)
-diff --git a/vins/package.xml b/vins/package.xml
-index b79c04c..08b0e25 100755
---- a/vins/package.xml
-+++ b/vins/package.xml
-@@ -20,6 +20,7 @@
-   <depend>cv_bridge</depend>
-   <depend>camera_models</depend>
-   <depend>image_transport</depend>
-+  <depend>message_filters</depend>
- 
-   <test_depend>ament_lint_auto</test_depend>
-   <test_depend>ament_lint_common</test_depend>
-diff --git a/vins/src/KITTIOdomTest.cpp b/vins/src/KITTIOdomTest.cpp
-index d5ae538..d625bde 100755
---- a/vins/src/KITTIOdomTest.cpp
-+++ b/vins/src/KITTIOdomTest.cpp
-@@ -16,7 +16,7 @@
- #include <string>
- #include <rclcpp/rclcpp.hpp>
- #include <sensor_msgs/msg/image.hpp>
--#include <cv_bridge/cv_bridge.h>
-+#include <cv_bridge/cv_bridge.hpp>
- #include "estimator/estimator.h"
- #include "utility/visualization.h"
- 
 diff --git a/vins/src/estimator/estimator.cpp b/vins/src/estimator/estimator.cpp
-index 45d90c7..5d54f2d 100755
+index e606bb7..5d54f2d 100755
 --- a/vins/src/estimator/estimator.cpp
 +++ b/vins/src/estimator/estimator.cpp
 @@ -174,14 +174,7 @@ void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
@@ -254,15 +102,6 @@ index 45d90c7..5d54f2d 100755
          mPropagate.unlock();
      }
  }
-@@ -348,7 +340,7 @@ void Estimator::processMeasurements()
-             printStatistics(*this, 0);
- 
-             std_msgs::msg::Header header;
--            header.frame_id = "world";
-+            header.frame_id = ODOM_FRAME;
- 
-             int sec_ts = (int)feature.first;
-             uint nsec_ts = (uint)((feature.first - sec_ts) * 1e9);
 @@ -356,17 +348,9 @@ void Estimator::processMeasurements()
              header.stamp.nanosec = nsec_ts;
  
@@ -337,21 +176,6 @@ index 45d90c7..5d54f2d 100755
  
      double2vector();
      //printf("frame_count: %d \n", frame_count);
-diff --git a/vins/src/estimator/estimator.h b/vins/src/estimator/estimator.h
-index bf27b8c..f025c4a 100755
---- a/vins/src/estimator/estimator.h
-+++ b/vins/src/estimator/estimator.h
-@@ -11,8 +11,8 @@
-  
- #include <thread>
- #include <mutex>
--#include <std_msgs/msg/header.h>
--#include <std_msgs/msg/float32.h>
-+#include <std_msgs/msg/header.hpp>
-+#include <std_msgs/msg/float32.hpp>
- #include <ceres/ceres.h>
- #include <unordered_map>
- #include <queue>
 diff --git a/vins/src/estimator/feature_manager.cpp b/vins/src/estimator/feature_manager.cpp
 index d6022a4..e7bd4d1 100755
 --- a/vins/src/estimator/feature_manager.cpp
@@ -366,62 +190,8 @@ index d6022a4..e7bd4d1 100755
          {
              it_per_id.solve_flag = 2;
          }
-diff --git a/vins/src/estimator/parameters.cpp b/vins/src/estimator/parameters.cpp
-index 82992e9..b2562f3 100755
---- a/vins/src/estimator/parameters.cpp
-+++ b/vins/src/estimator/parameters.cpp
-@@ -34,6 +34,8 @@ std::string EX_CALIB_RESULT_PATH;
- std::string VINS_RESULT_PATH;
- std::string OUTPUT_FOLDER;
- std::string IMU_TOPIC;
-+std::string ODOM_FRAME;
-+std::string BODY_FRAME;
- int ROW, COL;
- double TD;
- int NUM_OF_CAM;
-@@ -97,6 +99,14 @@ void readParameters(std::string config_file)
-     USE_GPU = fsSettings["use_gpu"];
-     USE_GPU_ACC_FLOW = fsSettings["use_gpu_acc_flow"];
-     USE_GPU_CERES = fsSettings["use_gpu_ceres"];
-+#ifndef GPU_MODE
-+    if (USE_GPU || USE_GPU_ACC_FLOW)
-+    {
-+        ROS_WARN("GPU tracking requested in config, but vins was built without VINS_GPU_MODE. Falling back to CPU tracking.");
-+        USE_GPU = 0;
-+        USE_GPU_ACC_FLOW = 0;
-+    }
-+#endif
- 
-     USE_IMU = fsSettings["imu"];
-     printf("USE_IMU: %d\n", USE_IMU);
-@@ -117,6 +127,8 @@ void readParameters(std::string config_file)
-     MIN_PARALLAX = MIN_PARALLAX / FOCAL_LENGTH;
- 
-     fsSettings["output_path"] >> OUTPUT_FOLDER;
-+    if (OUTPUT_FOLDER.empty())
-+        OUTPUT_FOLDER = "/tmp";
-     VINS_RESULT_PATH = OUTPUT_FOLDER + "/vio.csv";
-     std::cout << "result path " << VINS_RESULT_PATH << std::endl;
-     std::ofstream fout(VINS_RESULT_PATH, std::ios::out);
-@@ -198,6 +210,16 @@ void readParameters(std::string config_file)
-     COL = fsSettings["image_width"];
-     ROS_INFO("ROW: %d COL: %d ", ROW, COL);
- 
-+    if (!fsSettings["odom_frame"].isNone())
-+        fsSettings["odom_frame"] >> ODOM_FRAME;
-+    else
-+        ODOM_FRAME = "world";
-+
-+    if (!fsSettings["body_frame"].isNone())
-+        fsSettings["body_frame"] >> BODY_FRAME;
-+    else
-+        BODY_FRAME = "body";
-+
-     if(!USE_IMU)
-     {
-         ESTIMATE_EXTRINSIC = 0;
 diff --git a/vins/src/estimator/parameters.h b/vins/src/estimator/parameters.h
-index 50ba1af..fb6dc83 100755
+index bdd505b..fb6dc83 100755
 --- a/vins/src/estimator/parameters.h
 +++ b/vins/src/estimator/parameters.h
 @@ -27,7 +27,7 @@ using namespace std;
@@ -433,15 +203,6 @@ index 50ba1af..fb6dc83 100755
  
  extern double INIT_DEPTH;
  extern double MIN_PARALLAX;
-@@ -52,6 +52,8 @@ extern std::string EX_CALIB_RESULT_PATH;
- extern std::string VINS_RESULT_PATH;
- extern std::string OUTPUT_FOLDER;
- extern std::string IMU_TOPIC;
-+extern std::string ODOM_FRAME;
-+extern std::string BODY_FRAME;
- extern double TD;
- extern int ESTIMATE_TD;
- extern int ROLLING_SHUTTER;
 diff --git a/vins/src/factor/projectionOneFrameTwoCamFactor.cpp b/vins/src/factor/projectionOneFrameTwoCamFactor.cpp
 index 8e24cfa..492b2ed 100755
 --- a/vins/src/factor/projectionOneFrameTwoCamFactor.cpp
@@ -762,168 +523,8 @@ index 3508bc0..8153ff3 100755
              }
              else
                  pts_velocity.push_back(cv::Point2f(0, 0));
-diff --git a/vins/src/rosNodeTest.cpp b/vins/src/rosNodeTest.cpp
-index 37bd75c..5267f6a 100755
---- a/vins/src/rosNodeTest.cpp
-+++ b/vins/src/rosNodeTest.cpp
-@@ -13,10 +13,14 @@
- #include <queue>
- #include <map>
- #include <thread>
-+#include <atomic>
- #include <mutex>
- #include <rclcpp/rclcpp.hpp>
--#include <cv_bridge/cv_bridge.h>
-+#include <cv_bridge/cv_bridge.hpp>
- #include <opencv2/opencv.hpp>
-+#include <message_filters/subscriber.h>
-+#include <message_filters/synchronizer.h>
-+#include <message_filters/sync_policies/approximate_time.h>
- #include "estimator/estimator.h"
- #include "estimator/parameters.h"
- #include "utility/visualization.h"
-@@ -28,6 +32,7 @@ queue<sensor_msgs::msg::PointCloud::ConstPtr> feature_buf;
- queue<sensor_msgs::msg::Image::ConstPtr> img0_buf;
- queue<sensor_msgs::msg::Image::ConstPtr> img1_buf;
- std::mutex m_buf;
-+std::atomic<bool> sync_running{true};
- 
- // header: 1403715278
- void img0_callback(const sensor_msgs::msg::Image::SharedPtr img_msg)
-@@ -38,11 +43,16 @@ void img0_callback(const sensor_msgs::msg::Image::SharedPtr img_msg)
-     m_buf.unlock();
- }
- 
--void img1_callback(const sensor_msgs::msg::Image::SharedPtr img_msg)
-+// Stereo synchronized callback: called by message_filters when both images
-+// arrive with matching timestamps. Pushes them to the queues atomically so
-+// sync_process always finds a ready matched pair (no timestamp comparison needed).
-+void stereo_img_callback(
-+    const sensor_msgs::msg::Image::ConstSharedPtr& img0_msg,
-+    const sensor_msgs::msg::Image::ConstSharedPtr& img1_msg)
- {
-     m_buf.lock();
--    // std::cout << "Right: " << img_msg->header.stamp.sec << "." << img_msg->header.stamp.nanosec << endl;
--    img1_buf.push(img_msg);
-+    img0_buf.push(img0_msg);
-+    img1_buf.push(img1_msg);
-     m_buf.unlock();
- }
- 
-@@ -73,7 +83,7 @@ cv::Mat getImageFromMsg(const sensor_msgs::msg::Image::ConstPtr &img_msg)
- // extract images with same timestamp from two topics
- void sync_process()
- {
--    while(1)
-+    while(sync_running.load())
-     {
-         if(STEREO)
-         {
-@@ -83,34 +93,19 @@ void sync_process()
-             m_buf.lock();
-             if (!img0_buf.empty() && !img1_buf.empty())
-             {
--                double time0 = img0_buf.front()->header.stamp.sec + img0_buf.front()->header.stamp.nanosec * (1e-9);
--                double time1 = img1_buf.front()->header.stamp.sec + img1_buf.front()->header.stamp.nanosec * (1e-9);
--
--                // 0.003s sync tolerance
--                if(time0 < time1 - 0.003)
--                {
--                    img0_buf.pop();
--                    printf("throw img0\n");
--                }
--                else if(time0 > time1 + 0.003)
--                {
--                    img1_buf.pop();
--                    printf("throw img1\n");
--                }
--                else
-+                // Images are pre-synchronized by message_filters::ApproximateTime;
-+                // no timestamp comparison needed here.
-+                time = img0_buf.front()->header.stamp.sec + img0_buf.front()->header.stamp.nanosec * (1e-9);
-+                header = img0_buf.front()->header;
-+                image0 = getImageFromMsg(img0_buf.front());
-+                img0_buf.pop();
-+                image1 = getImageFromMsg(img1_buf.front());
-+                img1_buf.pop();
-+                // Drop old buffered frames to keep up with real-time
-+                while(img0_buf.size() > 1 && img1_buf.size() > 1)
-                 {
--                    time = img0_buf.front()->header.stamp.sec + img0_buf.front()->header.stamp.nanosec * (1e-9);
--                    header = img0_buf.front()->header;
--                    image0 = getImageFromMsg(img0_buf.front());
-                     img0_buf.pop();
--                    image1 = getImageFromMsg(img1_buf.front());
-                     img1_buf.pop();
--                    // Drop old buffered frames to keep up with real-time
--                    while(img0_buf.size() > 1 && img1_buf.size() > 1)
--                    {
--                        img0_buf.pop();
--                        img1_buf.pop();
--                    }
-                 }
-             }
-             m_buf.unlock();
-@@ -279,12 +274,29 @@ int main(int argc, char **argv)
-         sub_imu = n->create_subscription<sensor_msgs::msg::Imu>(IMU_TOPIC, rclcpp::SensorDataQoS().keep_last(2000), imu_callback);
-     }
-     auto sub_feature = n->create_subscription<sensor_msgs::msg::PointCloud>("/feature_tracker/feature", rclcpp::QoS(rclcpp::KeepLast(2000)), feature_callback);
--    auto sub_img0 = n->create_subscription<sensor_msgs::msg::Image>(IMAGE0_TOPIC, rclcpp::SensorDataQoS(), img0_callback);
-+    // For stereo: use message_filters::ApproximateTimeSynchronizer so both
-+    // fisheye images are always delivered as a matched pair regardless of DDS
-+    // subscription jitter. For mono: use a plain subscription.
-+    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_img0_mono;
-+    std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Image>> sub_img0_sync, sub_img1_sync;
-+    using SyncPolicy = message_filters::sync_policies::ApproximateTime<
-+        sensor_msgs::msg::Image, sensor_msgs::msg::Image>;
-+    std::shared_ptr<message_filters::Synchronizer<SyncPolicy>> stereo_sync;
- 
--    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_img1 = NULL;
-     if(STEREO)
-     {
--        sub_img1 = n->create_subscription<sensor_msgs::msg::Image>(IMAGE1_TOPIC, rclcpp::SensorDataQoS(), img1_callback);
-+        sub_img0_sync = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
-+            n, IMAGE0_TOPIC, rmw_qos_profile_sensor_data);
-+        sub_img1_sync = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
-+            n, IMAGE1_TOPIC, rmw_qos_profile_sensor_data);
-+        stereo_sync = std::make_shared<message_filters::Synchronizer<SyncPolicy>>(
-+            SyncPolicy(10), *sub_img0_sync, *sub_img1_sync);
-+        stereo_sync->registerCallback(stereo_img_callback);
-+    }
-+    else
-+    {
-+        sub_img0_mono = n->create_subscription<sensor_msgs::msg::Image>(
-+            IMAGE0_TOPIC, rclcpp::SensorDataQoS(), img0_callback);
-     }
- 
-     auto sub_restart = n->create_subscription<std_msgs::msg::Bool>("/vins_restart", rclcpp::QoS(rclcpp::KeepLast(100)), restart_callback);
-@@ -292,9 +304,11 @@ int main(int argc, char **argv)
-     auto sub_cam_switch = n->create_subscription<std_msgs::msg::Bool>("/vins_cam_switch", rclcpp::QoS(rclcpp::KeepLast(100)), cam_switch_callback);
- 
-     std::thread sync_thread{sync_process};
-+    sync_thread.detach();
-     rclcpp::executors::MultiThreadedExecutor executor;
-     executor.add_node(n);
-     executor.spin();
-+    sync_running.store(false);
- 
-     return 0;
- }
-diff --git a/vins/src/utility/CameraPoseVisualization.h b/vins/src/utility/CameraPoseVisualization.h
-index f6a3a71..b0b1bb5 100755
---- a/vins/src/utility/CameraPoseVisualization.h
-+++ b/vins/src/utility/CameraPoseVisualization.h
-@@ -10,7 +10,7 @@
- #pragma once
- 
- #include <rclcpp/rclcpp.hpp>
--#include <std_msgs/msg/color_rgba.h>
-+#include <std_msgs/msg/color_rgba.hpp>
- #include <visualization_msgs/msg/marker.hpp>
- #include <visualization_msgs/msg/marker_array.hpp>
- #include <Eigen/Dense>
 diff --git a/vins/src/utility/visualization.cpp b/vins/src/utility/visualization.cpp
-index 98422b2..9121de3 100755
+index df53026..9121de3 100755
 --- a/vins/src/utility/visualization.cpp
 +++ b/vins/src/utility/visualization.cpp
 @@ -11,21 +11,13 @@
@@ -950,7 +551,7 @@ index 98422b2..9121de3 100755
  static double sum_of_path = 0;
  static Vector3d last_path(0.0, 0.0, 0.0);
  
-@@ -33,59 +25,11 @@ size_t pub_counter = 0;
+@@ -33,60 +25,11 @@ size_t pub_counter = 0;
  
  void registerPub(rclcpp::Node::SharedPtr n)
  {
@@ -980,7 +581,8 @@ index 98422b2..9121de3 100755
 -    odometry.header.stamp.sec = sec_ts;
 -    odometry.header.stamp.nanosec = nsec_ts;
 -
--    odometry.header.frame_id = "world";
+-    odometry.header.frame_id = ODOM_FRAME;
+-    odometry.child_frame_id = BODY_FRAME;
 -    odometry.pose.pose.position.x = P.x();
 -    odometry.pose.pose.position.y = P.y();
 -    odometry.pose.pose.position.z = P.z();
@@ -997,7 +599,7 @@ index 98422b2..9121de3 100755
 -void pubTrackImage(const cv::Mat &imgTrack, const double t)
 -{
 -    std_msgs::msg::Header header;
--    header.frame_id = "world";
+-    header.frame_id = ODOM_FRAME;
 -
 -    int sec_ts = (int)t;
 -    uint nsec_ts = (uint)((t - sec_ts) * 1e9);
@@ -1010,34 +612,23 @@ index 98422b2..9121de3 100755
  }
  
  
-@@ -138,8 +82,8 @@ void pubOdometry(const Estimator &estimator, const std_msgs::msg::Header &header
-     {
-         nav_msgs::msg::Odometry odometry;
-         odometry.header = header;
--        odometry.header.frame_id = "world";
--        odometry.child_frame_id = "world";
-+        odometry.header.frame_id = ODOM_FRAME;
-+        odometry.child_frame_id = BODY_FRAME;
-         Quaterniond tmp_Q;
-         tmp_Q = Quaterniond(estimator.Rs[WINDOW_SIZE]);
-         odometry.pose.pose.position.x = estimator.Ps[WINDOW_SIZE].x();
-@@ -154,15 +98,6 @@ void pubOdometry(const Estimator &estimator, const std_msgs::msg::Header &header
+@@ -155,15 +98,6 @@ void pubOdometry(const Estimator &estimator, const std_msgs::msg::Header &header
          odometry.twist.twist.linear.z = estimator.Vs[WINDOW_SIZE].z();
          pub_odometry->publish(odometry);
  
 -        geometry_msgs::msg::PoseStamped pose_stamped;
 -        pose_stamped.header = header;
--        pose_stamped.header.frame_id = "world";
+-        pose_stamped.header.frame_id = ODOM_FRAME;
 -        pose_stamped.pose = odometry.pose.pose;
 -        path.header = header;
--        path.header.frame_id = "world";
+-        path.header.frame_id = ODOM_FRAME;
 -        path.poses.push_back(pose_stamped);
 -        pub_path->publish(path);
 -
          // write result to file
          ofstream foutC(VINS_RESULT_PATH, ios::app);
          foutC.setf(ios::fixed, ios::floatfield);
-@@ -181,111 +116,16 @@ void pubOdometry(const Estimator &estimator, const std_msgs::msg::Header &header
+@@ -182,112 +116,16 @@ void pubOdometry(const Estimator &estimator, const std_msgs::msg::Header &header
                << estimator.Vs[WINDOW_SIZE].z() << "," << endl;
          foutC.close();
          Eigen::Vector3d tmp_T = estimator.Ps[WINDOW_SIZE];
@@ -1054,7 +645,7 @@ index 98422b2..9121de3 100755
 -        return;
 -    visualization_msgs::msg::Marker key_poses;
 -    key_poses.header = header;
--    key_poses.header.frame_id = "world";
+-    key_poses.header.frame_id = ODOM_FRAME;
 -    key_poses.ns = "key_poses";
 -    key_poses.type = visualization_msgs::msg::Marker::SPHERE_LIST;
 -    key_poses.action = visualization_msgs::msg::Marker::ADD;
@@ -1094,7 +685,8 @@ index 98422b2..9121de3 100755
 -
 -        nav_msgs::msg::Odometry odometry;
 -        odometry.header = header;
--        odometry.header.frame_id = "world";
+-        odometry.header.frame_id = ODOM_FRAME;
+-        odometry.child_frame_id = BODY_FRAME;
 -        odometry.pose.pose.position.x = P.x();
 -        odometry.pose.pose.position.y = P.y();
 -        odometry.pose.pose.position.z = P.z();
@@ -1151,7 +743,7 @@ index 98422b2..9121de3 100755
      sensor_msgs::msg::PointCloud margin_cloud;
      margin_cloud.header = header;
  
-@@ -322,7 +162,6 @@ void pubTF(const Estimator &estimator, const std_msgs::msg::Header &header)
+@@ -324,7 +162,6 @@ void pubTF(const Estimator &estimator, const std_msgs::msg::Header &header)
      return; // tmp.
  
  
@@ -1159,7 +751,7 @@ index 98422b2..9121de3 100755
      if( estimator.solver_flag != Estimator::SolverFlag::NON_LINEAR)
          return;
  
-@@ -333,30 +172,25 @@ void pubTF(const Estimator &estimator, const std_msgs::msg::Header &header)
+@@ -335,17 +172,15 @@ void pubTF(const Estimator &estimator, const std_msgs::msg::Header &header)
      // body frame
      Vector3d correct_t;
      Quaterniond correct_q;
@@ -1181,12 +773,7 @@ index 98422b2..9121de3 100755
  
  
      // transform.header.stamp = header.stamp;
--    transform.header.frame_id = "world";
--    transform.child_frame_id = "body";
-+    transform.header.frame_id = ODOM_FRAME;
-+    transform.child_frame_id = BODY_FRAME;
- 
-     transform.transform.translation.x = correct_t(0);
+@@ -356,9 +191,6 @@ void pubTF(const Estimator &estimator, const std_msgs::msg::Header &header)
      transform.transform.translation.y = correct_t(1);
      transform.transform.translation.z = correct_t(2);
  
@@ -1196,7 +783,7 @@ index 98422b2..9121de3 100755
      q.setW(correct_q.w());
      q.setX(correct_q.x());
      q.setY(correct_q.y());
-@@ -366,18 +200,11 @@ void pubTF(const Estimator &estimator, const std_msgs::msg::Header &header)
+@@ -368,15 +200,8 @@ void pubTF(const Estimator &estimator, const std_msgs::msg::Header &header)
      transform.transform.rotation.z = q.z();
      transform.transform.rotation.w = q.w();
  
@@ -1211,12 +798,8 @@ index 98422b2..9121de3 100755
 -
      // camera frame
      transform_cam.header.stamp = header.stamp;
--    transform_cam.header.frame_id = "body";
-+    transform_cam.header.frame_id = BODY_FRAME;
-     transform_cam.child_frame_id = "camera";
- 
- 
-@@ -397,12 +224,9 @@ void pubTF(const Estimator &estimator, const std_msgs::msg::Header &header)
+     transform_cam.header.frame_id = BODY_FRAME;
+@@ -399,9 +224,6 @@ void pubTF(const Estimator &estimator, const std_msgs::msg::Header &header)
  
      // br->sendTransform(transform_cam);
  
@@ -1225,12 +808,8 @@ index 98422b2..9121de3 100755
 -    
      nav_msgs::msg::Odometry odometry;
      odometry.header = header;
--    odometry.header.frame_id = "world";
-+    odometry.header.frame_id = ODOM_FRAME;
-     odometry.pose.pose.position.x = estimator.tic[0].x();
-     odometry.pose.pose.position.y = estimator.tic[0].y();
-     odometry.pose.pose.position.z = estimator.tic[0].z();
-@@ -412,9 +236,7 @@ void pubTF(const Estimator &estimator, const std_msgs::msg::Header &header)
+     odometry.header.frame_id = ODOM_FRAME;
+@@ -414,9 +236,7 @@ void pubTF(const Estimator &estimator, const std_msgs::msg::Header &header)
      odometry.pose.pose.orientation.z = tmp_q.z();
      odometry.pose.pose.orientation.w = tmp_q.w();
  
@@ -1240,48 +819,10 @@ index 98422b2..9121de3 100755
  
  }
  
-@@ -488,7 +310,7 @@ void pubKeyframe(const Estimator &estimator)
-         odometry.header.stamp.sec = sec_ts;
-         odometry.header.stamp.nanosec = nsec_ts;
- 
--        odometry.header.frame_id = "world";
-+        odometry.header.frame_id = ODOM_FRAME;
-         odometry.pose.pose.position.x = P.x();
-         odometry.pose.pose.position.y = P.y();
-         odometry.pose.pose.position.z = P.z();
-@@ -508,7 +330,7 @@ void pubKeyframe(const Estimator &estimator)
-         point_cloud.header.stamp.sec = sec_ts;
-         point_cloud.header.stamp.nanosec = nsec_ts;
- 
--        point_cloud.header.frame_id = "world";
-+        point_cloud.header.frame_id = ODOM_FRAME;
-         for (auto &it_per_id : estimator.f_manager.feature)
-         {
-             int frame_size = it_per_id.feature_per_frame.size();
-@@ -538,4 +360,4 @@ void pubKeyframe(const Estimator &estimator)
-         }
-         pub_keyframe_point->publish(point_cloud);
-     }
--}
-\ No newline at end of file
-+}
 diff --git a/vins/src/utility/visualization.h b/vins/src/utility/visualization.h
-index ab31748..d5914f5 100755
+index 6a13585..d5914f5 100755
 --- a/vins/src/utility/visualization.h
 +++ b/vins/src/utility/visualization.h
-@@ -18,10 +18,10 @@
- #include <sensor_msgs/msg/image.hpp>
- // #include <sensor_msgs/image_encodings.h>
- #include "image_encodings.hpp"
--#include <cv_bridge/cv_bridge.h>
-+#include <cv_bridge/cv_bridge.hpp>
- #include <nav_msgs/msg/path.hpp>
- #include <nav_msgs/msg/odometry.hpp>
--#include <geometry_msgs/msg/point_stamped.h>
-+#include <geometry_msgs/msg/point_stamped.hpp>
- #include <visualization_msgs/msg/marker.hpp>
- #include <tf2_ros/transform_broadcaster.h>
- #include <tf2/LinearMath/Quaternion.h>
 @@ -33,31 +33,17 @@
  #include <fstream>
  
