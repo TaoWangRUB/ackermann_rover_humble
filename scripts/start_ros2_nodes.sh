@@ -159,7 +159,7 @@ BUILD_PKGS=""
 # Parse arguments
 for arg in "$@"; do
     case "$arg" in
-        --hw)              HW="true"; RVIZ="false" ;;
+        --hw)              HW="true" ;;
         --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}"; DEPTH_CAMERA_EXPLICIT="true" ;;
         --t265)            HW_T265="true" ;;
         --t265-odom)       HW_T265="true"; HW_T265_ODOM="true" ;;
