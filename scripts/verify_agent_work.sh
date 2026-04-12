@@ -76,7 +76,7 @@ echo -e "${GREEN}=== Running Build ===${NC}"
 # Stage 1: Build px4_msgs then px4_ros2_cpp (px4_ros2_cpp needs px4_msgs at configure time)
 $DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install $COLCON_SKIP_ARGS --packages-up-to px4_ros2_cpp"
 # Stage 2: Source stage-1 artifacts, then build the project's own packages
-$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && colcon build --symlink-install $COLCON_SKIP_ARGS --packages-up-to ackermann_control safety px4_bringup robot_bringup ackermann_nav2_bringup rtabmap_bringup description_robot"
+$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && colcon build --symlink-install $COLCON_SKIP_ARGS --packages-up-to ackermann_control safety px4_bringup robot_bringup ackermann_nav2_bringup rtabmap_bringup cuvslam_bringup description_robot"
 
 echo -e "${GREEN}=== Running Unit Tests ===${NC}"
 # Clear stale test result XMLs from previous broader workspace runs so the
@@ -90,6 +90,8 @@ echo -e "${GREEN}=== Validating Simulation & Launch (Dry Run/Topology Check) ===
 # we test the node composition and launch argument validity.
 # We also include a slightly longer timeout (25s) to allow Nav2 and RViz to stand up, then kill the process tree cleanly.
 $DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && timeout --preserve-status 25 ros2 launch robot_bringup robot_bringup.launch.py rtabmap:=true nav2:=true || true"
+# Also validate the cuVSLAM odometry launch path (metadata-only build — no GPU needed).
+$DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && source install/setup.bash && timeout --preserve-status 25 ros2 launch robot_bringup robot_bringup.launch.py use_cuvslam_odom:=true rtabmap:=true nav2:=true || true"
 
 echo -e "${GREEN}=== Running Safety Checks & Linting ===${NC}"
 $DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && cd /workspace && ament_lint_cmake \
@@ -101,6 +103,7 @@ $DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source
     src/ackermann_nav2_bringup \
     src/robot_bringup \
     src/vins_fusion_bringup \
+    src/cuvslam_bringup \
     src/px4_bringup || true"
 $DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && cd /workspace && ament_flake8 \
     scripts \
@@ -110,11 +113,13 @@ $DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source
     src/rtabmap_bringup \
     src/robot_bringup \
     src/vins_fusion_bringup \
+    src/cuvslam_bringup \
     src/px4_bringup || true"
 $DOCKER_COMPOSE -f docker/docker-compose.yml exec ackermann_slam bash -c "source /opt/ros/jazzy/setup.bash && cd /workspace && ament_cpplint \
     src/ackermann_control \
     src/safety \
     src/description_robot \
+    src/cuvslam_bringup \
     src/px4_bringup || true"
 
 echo -e "${GREEN}=== Tear Down ===${NC}"

@@ -1,3 +1,6 @@
+// Copyright 2026 The Ackermann Rover Authors
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * cuvslam_odom_node.cpp
  *
