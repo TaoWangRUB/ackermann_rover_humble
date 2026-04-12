@@ -369,6 +369,12 @@ auto-detects the cuVSLAM raw and adapted odom topics. See
 `docs/architecture/cuvslam_vio.md` for the cuVSLAM-specific build and launch
 workflow.
 
+cuVSLAM builds on both **x86_64** (CUDA 12.x) and **Jetson Xavier aarch64**
+(JetPack 5.x / CUDA 11.4). The build script `scripts/build_cuvslam.sh`
+auto-detects the platform and applies three Jetson-specific workarounds
+(`-arch=all` patch, `librt.a` stub, `liblmdb-dev` install). See
+`docs/architecture/cuvslam_vio.md` §Build for details.
+
 #### VIO Debug Probe
 
 The helper script `scripts/debug_vio.sh` probes the live camera / IMU /
