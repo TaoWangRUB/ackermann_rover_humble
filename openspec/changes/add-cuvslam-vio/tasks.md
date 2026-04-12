@@ -1,3 +1,18 @@
+---
+status: archived
+completed: 2026-04-12
+branch: integrate_cuvslam
+---
+
+# cuVSLAM VIO Integration — Task Tracker (Archived)
+
+All phases complete. Deliverables: cuVSLAM bringup package, top-level
+launch integration, x86_64 and Jetson Xavier HW validation, performance
+comparison vs VINS-Fusion and T265 built-in. See
+`docs/architecture/cuvslam_vio.md` for the final architecture doc.
+
+---
+
 ## 1. Phase-0 validation and dependency tooling
 
 - [x] 1.1 Vendor cuVSLAM under `src/` at a pinned upstream ref and document the chosen commit or tag for the change.

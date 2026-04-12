@@ -36,6 +36,148 @@ T265 Fisheye (848x800) + IMU
 | `src/description_robot/launch/gazebo_bringup.launch.py` | Sim-side T265 fisheye/IMU ROS bridges |
 | `scripts/build_cuvslam.sh` | Docker-aware operator build helper |
 | `scripts/debug_vio.sh` | Runtime probe for T265, cuVSLAM, EKF, and RTAB-Map topics |
+| `patches/` | (none — cuVSLAM submodule is used unmodified; Jetson arch patches applied at build time by sed) |
+
+## Software Architecture
+
+### Algorithm Overview
+
+cuVSLAM is NVIDIA's stereo visual-inertial SLAM library (closed source,
+vendored at `src/cuVSLAM` as a git submodule pinned to v15.0.0). It runs
+feature tracking, stereo matching, and bundle adjustment on the GPU via
+CUDA, exposing a C++ API through `cuvslam::Odometry`. The ROS 2 wrapper
+(`cuvslam_odom_node`) is intentionally thin — it handles message conversion,
+timestamp ordering, and IMU buffering, delegating all estimation to the
+library.
+
+### Node Lifecycle and Call Sequence
+
+```text
+                             ┌────────────────────┐
+                             │ cuvslam_odom_node   │
+                             │   (ROS 2 lifecycle) │
+                             └────────┬───────────┘
+                                      │
+  1. SUBSCRIBE                        ▼
+     /t265/fisheye{1,2}/camera_info ──► leftInfoCallback / rightInfoCallback
+     (one-shot: store CameraInfo,       │
+      call tryInitRig once both ready)  │
+                                        ▼
+  2. RIG INIT (tryInitRig)
+     a. lookupExtrinsicsFromTf():
+        TF buffer lookup for rig_frame → left_cam, right_cam, imu
+        (timeout: rig_init_timeout_s = 10 s; fallback: identity + hardcoded baseline)
+     b. buildCuvslamCamera() × 2:
+        Extract fx, fy, cx, cy from K matrix
+        Detect distortion model (equidistant/plumb_bob/rational_polynomial/pinhole)
+        Set rig_from_camera pose from TF
+     c. Configure cuvslam::ImuCalibration:
+        rig_from_imu, noise densities, random walks, frequency
+     d. Configure cuvslam::OdometryConfiguration:
+        mode = Inertial (with IMU) or Multicamera (without)
+        use_gpu = true, async_sba, use_motion_model
+     e. cuvslam::WarmUpGPU()
+     f. tracker_ = make_unique<cuvslam::Odometry>(rig, config)
+                                        │
+  3. SUBSCRIBE (after init)             ▼
+     /t265/fisheye1/image_raw ──┐
+     /t265/fisheye2/image_raw ──┤── message_filters::ApproximateTime
+     /t265/imu ─────────────────┤      (queue=10, slop=0.01 s)
+                                │
+  4. IMU PATH (imuCallback)     ▼
+     a. Validate timestamp > last_imu_received_ts
+     b. Create cuvslam::ImuMeasurement {timestamp_ns, accel[3], gyro[3]}
+     c. Append to pending_imu_ deque
+                                │
+  5. STEREO PATH (stereoCallback)
+     a. Guard: drop if tracker_ not initialized
+     b. Extract timestamps; warn if L/R delta > 1 ms
+     c. Monotonic guard: drop if left_ts_ns <= last_track_ts_ns_
+     d. flushImuMeasurements(left_ts_ns):
+        for each pending IMU with ts > last_track_ts:
+          tracker_->RegisterImuMeasurement(0, meas)
+     e. cv_bridge → MONO8; build cuvslam::Image structs (CPU mem)
+     f. tracker_->Track({left_image, right_image})
+        → returns cuvslam::PoseEstimate { world_from_rig (optional) }
+     g. last_track_ts_ns_ = left_ts_ns
+     h. publishOdometry(world_from_rig, stamp)
+                                │
+  6. PUBLISH                    ▼
+     /cuvslam/raw_odometry (nav_msgs/Odometry)
+       frame_id: odom
+       child_frame_id: ackermann/base_link (or left optical frame fallback)
+       pose: position + quaternion from PoseEstimate
+       covariance: 6×6 rotated from cuVSLAM order (rot,trans) to ROS order (pos,rot)
+                                │
+  7. RELAY (odom_tf_relay)      ▼
+     /cuvslam_odom (nav_msgs/Odometry)
+       Pose composition: T_WB = T_WC × T_CB (from cached TF)
+       Origin latch: subtract first pose for (0,0,0) start
+       Velocity: lever-arm corrected
+       Covariance: rotated to base frame
+       publish_tf = false (EKF owns odom→base_link TF)
+```
+
+### cuVSLAM C++ API Calls Used
+
+| API Call | Where | Purpose |
+|----------|-------|---------|
+| `cuvslam::WarmUpGPU()` | tryInitRig | Pre-allocate GPU context |
+| `cuvslam::Odometry(rig, cfg)` | tryInitRig | Create tracker with stereo rig and config |
+| `tracker_->Track(ImageSet)` | stereoCallback | Process stereo pair, return `PoseEstimate` |
+| `tracker_->RegisterImuMeasurement(idx, meas)` | flushImuMeasurements | Buffer IMU sample for next Track |
+| `cuvslam::SetVerbosity(level)` | constructor | 0=quiet, 1=debug (from `debug` param) |
+
+### Distortion Model Mapping
+
+| ROS `distortion_model` | cuVSLAM `Distortion::Model` | Coefficients |
+|-------------------------|------------------------------|-------------|
+| `"equidistant"` (T265 fisheye) | `Fisheye` | 4 (k1-k4 Kannala-Brandt) |
+| `"plumb_bob"` | `Brown` | 5 (k1, k2, p1, p2, k3) |
+| `"rational_polynomial"` | `Polynomial` | 8 |
+| `""` / `"none"` | `Pinhole` | 0 |
+
+### Timestamp Ordering Contract
+
+cuVSLAM throws an exception if stereo frame timestamps are not strictly
+ascending. Two layers enforce this:
+
+1. **realsense_camera_node** fisheye dedup (upstream fix): librealsense
+   pipeline sync re-emits the most recent fisheye pair whenever a new
+   pose/accel/gyro frame arrives. `last_fisheye{1,2}_frame_number_` members
+   in the T265 frameset branch skip re-emissions by comparing
+   `rs2::video_frame::get_frame_number()`.
+
+2. **cuvslam_odom_node** monotonic guard: `stereoCallback` drops pairs
+   where `left_ts_ns <= last_track_ts_ns_` with a throttled WARN log.
+   Acts as a defensive fallback if upstream dedup misses an edge case.
+
+### IMU Noise Model Defaults
+
+Seeded from BMI055 (T265 internal IMU) datasheet values:
+
+| Parameter | Value | Unit |
+|-----------|-------|------|
+| Gyroscope noise density | 1.7e-4 | rad/(s·√Hz) |
+| Gyroscope random walk | 2.0e-5 | rad/(s²·√Hz) |
+| Accelerometer noise density | 2.0e-3 | m/(s²·√Hz) |
+| Accelerometer random walk | 3.0e-3 | m/(s³·√Hz) |
+| IMU frequency | 200.0 | Hz |
+
+### CMake Library Discovery
+
+`src/cuvslam_bringup/CMakeLists.txt` searches for `libcuvslam.so` in priority
+order:
+
+1. `-DCUVSLAM_PREFIX=<path>` (CMake override)
+2. `CUVSLAM_PREFIX` environment variable
+3. `/docker_cache/cuvslam/*/install`
+4. `/workspace/docker_cache/cuvslam/*/install`
+5. `/usr/local` (system install)
+6. `../cuVSLAM/build/bin` (vendored source build — the default path)
+
+If none found, the package builds in metadata-only mode (launch files and
+config installed, but no executables).
 
 ## Build
 
