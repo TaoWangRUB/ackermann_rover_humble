@@ -24,3 +24,4 @@ rm -rf "${VINS_DIR}"
 git clone --depth 1 --branch "${VINS_REF}" "${VINS_URL}" "${VINS_DIR}"
 
 bash scripts/apply_vins_fusion_patch.sh
+bash scripts/apply_px4_ros2_patch.sh
