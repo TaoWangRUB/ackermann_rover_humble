@@ -1,7 +1,7 @@
 ---
 title: VINS-Fusion Visual-Inertial Odometry
 status: Draft
-last_updated: 2026-04-11
+last_updated: 2026-04-12
 doc_type: architecture
 ---
 
@@ -36,6 +36,179 @@ T265 Fisheye (848x800 @30 Hz) + IMU (@200 Hz)
 | `patches/vins-fusion-ros2-jazzy.patch` | ROS 2 Jazzy compatibility patch |
 | `docker/install_vins_gpu_deps.sh` | CUDA OpenCV builder (per-arch cached) |
 | `scripts/build_vins_gpu.sh` | Two-phase colcon build (VINS core + bringup) |
+
+## Software Architecture
+
+### Algorithm Overview
+
+VINS-Fusion is an open-source tightly-coupled stereo visual-inertial
+state estimator (HKUST). It fuses stereo image features with IMU
+pre-integration in a sliding-window Ceres optimization. The rover
+integration uses the stereo-inertial mode with the T265's Kannala-Brandt
+fisheye cameras and BMI055 IMU.
+
+The code is vendored as a git submodule at `src/VINS-Fusion` with a local
+patch (`patches/vins-fusion-ros2-jazzy.patch`) applied for ROS 2 Jazzy
+compatibility and fisheye numerical fixes.
+
+### Node Lifecycle and Call Sequence
+
+```text
+                             ┌───────────────────┐
+                             │  vins_node         │
+                             │  (rosNodeTest.cpp) │
+                             └───────┬───────────┘
+                                     │
+  1. INIT
+     a. Parse config YAML from command-line argument
+     b. readParameters(config_file):
+        Load camera models (Kannala-Brandt), extrinsics, IMU noise, solver params
+     c. estimator.setParameter():
+        Initialize camera calibration, set IMU noise model
+     d. registerPub(node):
+        Create publishers: odometry, margin_cloud, keyframe_pose/point, extrinsic
+                                     │
+  2. SUBSCRIBE                       ▼
+     /t265/imu ──────────────────► imu_callback
+     /t265/fisheye1/image_raw ──┐
+     /t265/fisheye2/image_raw ──┤── message_filters::ApproximateTime(queue=10)
+                                │      ──► stereo_img_callback
+                                │
+  3. IMU PATH (imu_callback)
+     a. Extract timestamp, accel[3], gyro[3] from sensor_msgs/Imu
+     b. estimator.inputIMU(t, acc, gyr):
+        - Locks mBuf, pushes to accBuf/gyrBuf
+        - If solver_flag == NON_LINEAR: fastPredictIMU() for pose prediction
+                                     │
+  4. IMAGE PATH (stereo_img_callback + sync_process thread)
+     a. stereo_img_callback: push synced pair to img0_buf/img1_buf (mutex)
+     b. sync_process (dedicated thread, 2ms poll):
+        - Pop oldest pair from buffers
+        - Drop excess buffered frames to keep real-time
+        - estimator.inputImage(time, img0, img1)
+                                     │
+  5. ESTIMATOR PIPELINE (processMeasurements)
+     a. FEATURE TRACKING (feature_tracker.cpp):
+        - Detect GoodFeaturesToTrack (Shi-Tomasi corners)
+        - Track via calcOpticalFlowPyrLK (KLT sparse optical flow)
+        - Optional GPU acceleration (use_gpu=1): cv::cuda::GoodFeaturesToTrackDetector,
+          cv::cuda::SparsePyrLKOpticalFlow
+        - Fundamental matrix RANSAC outlier rejection
+        - Return feature observations per frame
+     b. IMU PRE-INTEGRATION:
+        - Integrate accel/gyro between consecutive image timestamps
+        - Produces delta_p, delta_v, delta_q, Jacobians, covariance
+        - Used as IMU factor in optimization
+     c. INITIALIZATION (first ~10 frames):
+        - initialStructure(): SfM with 5-point relative pose
+        - visualInitialAlign(): gyroscope bias estimation, velocity recovery,
+          gravity direction refinement, visual-inertial alignment
+        - Sets solver_flag = NON_LINEAR once converged
+     d. SLIDING-WINDOW OPTIMIZATION (optimization):
+        - Ceres solver with factors:
+          · IMU pre-integration factor (between consecutive keyframes)
+          · Visual reprojection factors:
+            - projectionTwoFrameOneCamFactor (same camera, two frames)
+            - projectionTwoFrameTwoCamFactor (stereo cross, two frames)
+            - projectionOneFrameTwoCamFactor (stereo cross, same frame)
+          · Marginalization factor (Schur complement of removed states)
+        - Solver budget: max_solver_time (25 ms), max_num_iterations (4)
+     e. SLIDE WINDOW (slideWindow):
+        - Remove oldest frame from sliding window
+        - Marginalize old observations into prior
+        - Update feature manager: remove out-of-window features
+     f. PUBLISH:
+        - nav_msgs/Odometry on /vins/raw_odometry (remapped from 'odometry')
+          frame_id from config, child_frame_id = body_frame
+                                     │
+  6. RELAY (odom_tf_relay)           ��
+     /vins_odom (nav_msgs/Odometry)
+       Same relay pattern as cuVSLAM:
+       Pose composition T_WB = T_WC × T_CB, origin latch, lever-arm velocity
+       child_frame_id = ackermann/base_link, publish_tf = false
+```
+
+### Key Algorithm Parameters
+
+| Parameter | Default | Meaning |
+|-----------|---------|---------|
+| `max_cnt` | 80 (Jetson tuned) | Max features to track per frame |
+| `min_dist` | 25 | Min pixel distance between features |
+| `freq` | 20 | Feature tracking frequency cap (Hz) |
+| `max_solver_time` | 0.025 | Ceres solver budget (seconds) |
+| `max_num_iterations` | 4 | Ceres max iterations per frame |
+| `keyframe_parallax` | 10.0 | Parallax threshold for keyframe insertion (pixels) |
+| `use_gpu` | 1 | Enable CUDA feature tracking |
+| `use_gpu_acc_flow` | 1 | GPU-accelerated optical flow |
+| `estimate_extrinsic` | 0 | Fixed extrinsics (from hardware calibration) |
+| `estimate_td` | 0 | Fixed time delay (T265 has hardware sync) |
+
+### Submodule Patch System
+
+VINS-Fusion is vendored at `src/VINS-Fusion` (git submodule). Local
+modifications for ROS 2 Jazzy compatibility and Jetson tuning are
+maintained as a single patch file:
+
+```
+patches/vins-fusion-ros2-jazzy.patch
+```
+
+**Patch contents** (10 files modified):
+
+| File | Change | Reason |
+|------|--------|--------|
+| `camera_models/.../EquidistantCamera.cc` | Newton-Raphson fisheye distortion inversion | Faster, more stable than eigenvalue polynomial solver for Kannala-Brandt model |
+| `vins/src/estimator/estimator.cpp` | Solver iteration / timing adjustments | Jetson real-time budget tuning |
+| `vins/src/estimator/feature_manager.cpp` | Minor fix | Feature lifetime handling |
+| `vins/src/estimator/parameters.h` | Header fix | ROS 2 compatibility |
+| `vins/src/factor/projection*Factor.cpp` (3 files) | Numerical guard improvements | Prevent NaN in reprojection Jacobians with fisheye distortion |
+| `vins/src/featureTracker/feature_tracker.cpp` | GPU flow parameter tuning | Better tracking on 848x800 fisheye images |
+| `vins/src/utility/visualization.cpp` | Strip ROS 1 marker code | Unused in headless rover; reduces binary size |
+| `vins/src/utility/visualization.h` | Remove unused declarations | Matches .cpp cleanup |
+
+**Applying the patch** (done automatically by `scripts/build_vins_gpu.sh`):
+
+```bash
+cd src/VINS-Fusion
+git checkout .              # reset to upstream
+git apply ../../patches/vins-fusion-ros2-jazzy.patch
+```
+
+**Regenerating the patch** after editing VINS source:
+
+```bash
+git -C src/VINS-Fusion diff HEAD > patches/vins-fusion-ros2-jazzy.patch
+```
+
+### Shared Relay Pattern (odom_tf_relay)
+
+Both cuVSLAM and VINS-Fusion use the same `odom_tf_relay` executable from
+`realsense_camera_bringup` to adapt raw VIO output to the rover frame
+contract:
+
+1. **Pose composition**: `T_world_base = T_world_sensor × T_sensor_base`
+   (static TF from sensor frame to `ackermann/base_link`, cached after
+   first lookup)
+2. **Origin latch**: first output pose is subtracted from all subsequent
+   poses so odometry starts at (0,0,0) — matches EKF origin expectation
+3. **Velocity lever-arm**: `v_base = R_sensor_base × (v_sensor + ω × r)`
+4. **Covariance rotation**: 6×6 covariance rotated to base frame
+5. **publish_tf = false**: EKF owns the `odom → ackermann/base_link` TF
+
+### EKF Integration and Odometry Source Selection
+
+`rtabmap_slam.launch.py` resolves the odom topic with a priority cascade:
+
+```
+cuVSLAM → VINS-Fusion → T265 built-in → RGB-D VO → ICP
+```
+
+When any external VIO (cuVSLAM, VINS, T265) is selected:
+- EKF `imu0_config` yaw rate is **disabled** (all-false) to prevent
+  double-counting heading from both IMU and the VIO's internal IMU fusion
+- EKF `odom0` points to the selected `/cuvslam_odom` or `/vins_odom` topic
+- EKF `publish_tf` is true (EKF owns the TF edge), except when T265
+  built-in odom is used (T265 driver publishes TF directly)
 
 ---
 

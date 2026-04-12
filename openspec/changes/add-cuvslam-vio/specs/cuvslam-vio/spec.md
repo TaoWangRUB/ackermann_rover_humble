@@ -57,16 +57,27 @@ The cuVSLAM integration SHALL operate as an odometry provider and SHALL not repl
 - **WHEN** cuVSLAM is selected while RTAB-Map SLAM is enabled
 - **THEN** cuVSLAM SHALL provide odometry only and RTAB-Map SHALL remain responsible for `/map` publication and the `map -> odom` transform
 
+### Requirement: Platform-staged cuVSLAM rollout
+The system SHALL stage cuVSLAM integration by establishing a working x86_64 host path before Jetson Xavier-specific enablement is treated as the next milestone.
+
+#### Scenario: x86_64 host integration first
+- **WHEN** cuVSLAM is first introduced into the rover stack
+- **THEN** the repo SHALL bring the x86_64 host build, wrapper, and launch path to a working state before Jetson Xavier support is treated as part of the active integration milestone
+
+#### Scenario: Jetson Xavier follow-on enablement
+- **WHEN** the x86_64 host integration path is already working and Jetson support work begins
+- **THEN** Jetson Xavier enablement SHALL be validated as a second platform phase with its own CUDA and OpenCV compatibility checks
+
 ### Requirement: Architecture-aware cuVSLAM source build path
-The system SHALL provide a validated source-build path for cuVSLAM in the Docker environment on both x86_64 and Jetson Xavier-class aarch64 targets.
+The system SHALL provide a validated source-build path for cuVSLAM in the Docker environment on x86_64 and Jetson Xavier-class aarch64 targets, with each platform using its own compatible CUDA and OpenCV configuration.
 
 #### Scenario: x86_64 source build
 - **WHEN** the cuVSLAM dependency build is run on an x86_64 target with the host CUDA toolkit mounted into the container
-- **THEN** the build tooling SHALL configure cuVSLAM against that toolkit, install an architecture-qualified artifact cache, and provide a smoke-testable library output
+- **THEN** the build tooling SHALL configure cuVSLAM against that toolkit, install an architecture-qualified artifact cache, use the x86_64-compatible CUDA/OpenCV dependency set, and provide a smoke-testable library output
 
 #### Scenario: Jetson Xavier source build
 - **WHEN** the cuVSLAM dependency build is run on a Jetson Xavier-class aarch64 target with CUDA 11.4-era tooling
-- **THEN** the build tooling SHALL use a compatible GCC 11 host compiler, shared CUDA runtime linkage, and the repo's CUDA/glibc compatibility pattern so the library can be compiled and smoke-tested from source
+- **THEN** the build tooling SHALL use a compatible GCC 11 host compiler, shared CUDA runtime linkage, the Jetson-compatible CUDA/OpenCV dependency set, and the repo's CUDA/glibc compatibility pattern so the library can be compiled and smoke-tested from source
 
 ### Requirement: Preserved odometry-source comparability
 The system SHALL preserve access to the existing odometry topics when cuVSLAM is introduced so operators can compare cuVSLAM with the other odometry sources.
