@@ -114,11 +114,21 @@ def generate_launch_description() -> LaunchDescription:
         PythonExpression(['"/', depth_camera, '/depth_image@sensor_msgs/msg/Image[gz.msgs.Image"']),
         PythonExpression(['"/', depth_camera, '/image@sensor_msgs/msg/Image[gz.msgs.Image"']),
         PythonExpression(['"/', depth_camera, '/imu/raw@sensor_msgs/msg/Imu[gz.msgs.IMU"']),
-        '/t265/pose/sample@nav_msgs/msg/Odometry[gz.msgs.Odometry',
         '/ackermann/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
         '/ackermann/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
         '/model/ackermann/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
         '/rplidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+    ]
+
+    # Simulated T265 feeds VIO consumers such as VINS-Fusion and cuVSLAM on x86.
+    # Bridge them only when the T265 model is enabled to avoid noisy unused bridges.
+    t265_bridge_topics = [
+        '/t265/fisheye1/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+        '/t265/fisheye1/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+        '/t265/fisheye2/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+        '/t265/fisheye2/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+        '/t265/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
+        '/t265/pose/sample@nav_msgs/msg/Odometry[gz.msgs.Odometry',
     ]
 
     parameter_bridge = Node(
@@ -127,6 +137,15 @@ def generate_launch_description() -> LaunchDescription:
         arguments=bridge_topics,
         output='screen',
         parameters=[{'use_sim_time': use_sim_time}],
+    )
+
+    t265_parameter_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=t265_bridge_topics,
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+        condition=IfCondition(enable_t265),
     )
 
     gazebo = IncludeLaunchDescription(
@@ -194,6 +213,7 @@ def generate_launch_description() -> LaunchDescription:
             set_ign_resource_path,
             set_gz_resource_path,
             parameter_bridge,
+            t265_parameter_bridge,
             gazebo,
             spawn_entity,
             #joint_state_publisher,

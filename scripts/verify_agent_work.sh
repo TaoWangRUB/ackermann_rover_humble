@@ -55,8 +55,9 @@ if [ "$CI" = "true" ]; then
     sed -i '/runtime: nvidia/d' docker/docker-compose.yml
 fi
 
-echo -e "${GREEN}=== Applying VINS-Fusion Patch ===${NC}"
+echo -e "${GREEN}=== Applying Submodule Patches ===${NC}"
 ./scripts/apply_vins_fusion_patch.sh
+./scripts/apply_px4_ros2_patch.sh
 
 echo -e "${GREEN}=== Setting up Docker Environment ===${NC}"
 # Allow local X11 connections for GUI apps (like RViz/Gazebo) inside Docker
