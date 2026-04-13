@@ -245,10 +245,12 @@ fi
 # docker/docker-compose processes to avoid killing ourselves.
 echo "Stopping old ROS nodes..."
 dcomp exec -T ackermann_slam bash -c \
-    'pgrep -f "robot_bringup|rtabmap|cuvslam|realsense|rgbd_odometry|ekf_filter|point_cloud" 2>/dev/null \
+    'SELF=$$ PARENT=$(cat /proc/$$/stat 2>/dev/null | awk "{print \$4}")
+     pgrep -f "robot_bringup|rtabmap|cuvslam|realsense|rgbd_odometry|ekf_filter|point_cloud" 2>/dev/null \
      | while read pid; do
-         cmdline=$(tr "\0" " " < /proc/$pid/cmdline 2>/dev/null)
-         case "$cmdline" in *docker*) continue ;; esac
+         [ "$pid" = "$SELF" ] || [ "$pid" = "$PARENT" ] || [ "$pid" = "1" ] && continue
+         cmdline=$(tr "\0" " " < /proc/$pid/cmdline 2>/dev/null || true)
+         case "$cmdline" in *docker*|*pgrep*) continue ;; esac
          kill -9 "$pid" 2>/dev/null
        done; sleep 1' 2>/dev/null || true
 echo "Clean."
