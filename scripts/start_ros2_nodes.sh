@@ -246,7 +246,7 @@ echo "Stopping old ROS nodes..."
 dcomp exec -T ackermann_slam bash -c "
     ps aux --no-headers \
       | grep -E 'robot_bringup|rtabmap|cuvslam|realsense|rgbd_odometry|ekf_filter|point_cloud' \
-      | grep -v 'docker\|grep\|rover_monitor' \
+      | grep -v 'docker\|grep\|bash -c\|rover_monitor' \
       | awk '{print \$2}' \
       | xargs -r kill -9 2>/dev/null || true
     sleep 1
