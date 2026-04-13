@@ -127,6 +127,12 @@ if [[ "${REVERSIBLE_DRIVE}" == true ]]; then
     PX4_BRINGUP_ARGS+=(--reversible-drive)
 fi
 
+# ── Kill old ROS nodes before starting new ones ─────────────────────
+echo "Stopping old ROS nodes..."
+dcomp exec -T ackermann_slam bash -c \
+    'kill -9 $(pgrep -f "ros2|python3.*launch|component_container|MicroXRCE" 2>/dev/null) 2>/dev/null; sleep 1' 2>/dev/null || true
+echo "Clean."
+
 # ── Create tmux session ──────────────────────────────────────────────
 tmux kill-session -t "${SESSION}" 2>/dev/null || true
 
@@ -177,6 +183,17 @@ if [[ "${ENABLE_TELEMETRY}" == true ]]; then
 fi
 
 tmux select-pane -t "${PANE_ROS2}"
+
+# ── Report HW mode to Control Center ─────────────────────────────────
+# Jetson session = all real hardware. Report after a short delay so CC
+# is ready to receive.
+if [[ "${ENABLE_TELEMETRY}" == true ]]; then
+    CC_URL="http://${BROKER_HOST}:8080"
+    (sleep 10 && curl -sf -X POST "${CC_URL}/api/hw_mode" \
+        -H 'Content-Type: application/json' \
+        -d '{"camera":"hw","t265":"hw","px4":"hw","jetson":"hw"}' \
+        >/dev/null 2>&1) &
+fi
 
 if [[ "${ATTACH}" == true && -t 1 ]]; then
     tmux attach-session -t "${SESSION}"

@@ -103,6 +103,12 @@ fi
 # ── ROS source preamble (reused in pane commands) ─────────────────────
 ROS_SRC="source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash"
 
+# ── Kill old ROS nodes before starting new ones ─────────────────────
+echo "Stopping old ROS nodes..."
+dcomp exec -T ackermann_slam bash -c \
+    'kill -9 $(pgrep -f "ros2|python3.*launch|component_container|publish_mock" 2>/dev/null) 2>/dev/null; sleep 1' 2>/dev/null || true
+echo "Clean."
+
 tmux kill-session -t "${SESSION}" 2>/dev/null || true
 
 tmux new-session -d -s "${SESSION}" -n "monitor"
