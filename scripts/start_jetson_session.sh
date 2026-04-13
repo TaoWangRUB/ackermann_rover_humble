@@ -34,6 +34,9 @@
 # Usage:
 #   ./scripts/start_jetson_session.sh
 #   ./scripts/start_jetson_session.sh --with-telemetry
+#   ./scripts/start_jetson_session.sh --cuvslam-odom --with-telemetry
+#   ./scripts/start_jetson_session.sh --vins-odom --with-telemetry
+#   ./scripts/start_jetson_session.sh --t265-odom --with-telemetry
 #   ./scripts/start_jetson_session.sh --nav2
 #   ./scripts/start_jetson_session.sh --nav2 --with-telemetry
 #   ./scripts/start_jetson_session.sh --mode-id=24
@@ -55,6 +58,9 @@ SESSION="jetson"
 ENABLE_TELEMETRY=false
 ENABLE_NAV2=false
 ENABLE_T265=false
+T265_ODOM=false
+CUVSLAM_ODOM=false
+VINS_ODOM=false
 ACTIVATE=true
 MODE_ID="23"
 ATTACH=true
@@ -69,6 +75,9 @@ for arg in "$@"; do
         --with-telemetry)  ENABLE_TELEMETRY=true ;;
         --nav2)            ENABLE_NAV2=true ;;
         --t265)            ENABLE_T265=true ;;
+        --t265-odom)       ENABLE_T265=true; T265_ODOM=true ;;
+        --cuvslam-odom)    CUVSLAM_ODOM=true ;;
+        --vins-odom)       VINS_ODOM=true ;;
         --no-activate)     ACTIVATE=false ;;
         --mode-id=*)       MODE_ID="${arg#--mode-id=}" ;;
         --mode-type=*)     PX4_MODE_TYPE="${arg#--mode-type=}" ;;
@@ -86,8 +95,16 @@ done
 
 # ── Build sub-command arguments ───────────────────────────────────────
 ROS2_ARGS="--hw --rtabmap --no-rviz --depth-camera=${DEPTH_CAMERA}"
-if [[ "${ENABLE_T265}" == true ]]; then
+if [[ "${T265_ODOM}" == true ]]; then
+    ROS2_ARGS+=" --t265-odom"
+elif [[ "${ENABLE_T265}" == true ]]; then
     ROS2_ARGS+=" --t265"
+fi
+if [[ "${CUVSLAM_ODOM}" == true ]]; then
+    ROS2_ARGS+=" --cuvslam-odom"
+fi
+if [[ "${VINS_ODOM}" == true ]]; then
+    ROS2_ARGS+=" --vins-odom"
 fi
 if [[ "${ENABLE_NAV2}" == true ]]; then
     ROS2_ARGS+=" --nav2"
@@ -125,6 +142,13 @@ fi
 PX4_BRINGUP_ARGS=(--bridge --vo-bridge --mode-type "${PX4_MODE_TYPE}")
 if [[ "${REVERSIBLE_DRIVE}" == true ]]; then
     PX4_BRINGUP_ARGS+=(--reversible-drive)
+fi
+
+# ── Ensure Docker container is running ────────────────────────────────
+if ! dcomp ps --services --filter status=running 2>/dev/null \
+        | grep -q '^ackermann_slam$'; then
+    echo "Container not running — starting ackermann_slam..."
+    dcomp up -d ackermann_slam
 fi
 
 # ── Kill old ROS nodes before starting new ones ─────────────────────

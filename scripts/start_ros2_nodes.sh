@@ -231,6 +231,13 @@ if [[ "${BUILD}" == "true" ]]; then
     fi
 fi
 
+# ── Ensure Docker container is running ────────────────────────────────
+if ! dcomp ps --services --filter status=running 2>/dev/null \
+        | grep -q '^ackermann_slam$'; then
+    echo "Container not running — starting ackermann_slam..."
+    dcomp up -d ackermann_slam
+fi
+
 # ── Kill old ROS nodes before starting new ones ─────────────────────
 echo "Stopping old ROS nodes..."
 dcomp exec -T ackermann_slam bash -c \
