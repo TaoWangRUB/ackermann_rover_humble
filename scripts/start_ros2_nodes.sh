@@ -231,6 +231,12 @@ if [[ "${BUILD}" == "true" ]]; then
     fi
 fi
 
+# ── Kill old ROS nodes before starting new ones ─────────────────────
+echo "Stopping old ROS nodes..."
+dcomp exec -T ackermann_slam bash -c \
+    'kill -9 $(pgrep -f "ros2|python3.*launch|component_container" 2>/dev/null) 2>/dev/null; sleep 1' 2>/dev/null || true
+echo "Clean."
+
 echo "Launching ROS 2 nodes inside Docker container..."
 if [[ "${HW}" == "true" ]]; then
     echo "  Mode:         hardware (real cameras)"
