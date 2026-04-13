@@ -176,35 +176,55 @@ See [System Monitor Architecture](docs/architecture/system_monitor.md) and [Cont
 ### Quick Start — Jetson (rover)
 
 ```bash
-# Start Docker container
-./scripts/start_docker.sh
-
 # Build rover_monitor (first time or after changes)
 ./scripts/start_ros2_nodes.sh --build-only=rover_monitor
 
 # Launch everything: XRCE agent + cameras + SLAM + PX4 + monitor
-./scripts/start_jetson_session.sh --depth-camera=d435i --t265 --with-telemetry --broker-host=192.168.0.225
+# (Docker container is auto-started if not already running)
+./scripts/start_jetson_session.sh --depth-camera=d435i --cuvslam-odom --with-telemetry
+
+# With VINS-Fusion odometry instead of cuVSLAM:
+./scripts/start_jetson_session.sh --depth-camera=d435i --vins-odom --with-telemetry
+
+# With T265 tracking camera (no VIO):
+./scripts/start_jetson_session.sh --depth-camera=d435i --t265 --with-telemetry
+
+# With T265 as odometry source (T265 internal VIO):
+./scripts/start_jetson_session.sh --depth-camera=d435i --t265-odom --with-telemetry
 
 # With Nav2:
-./scripts/start_jetson_session.sh --depth-camera=d435i --t265 --nav2 --with-telemetry --broker-host=192.168.0.225
+./scripts/start_jetson_session.sh --depth-camera=d435i --cuvslam-odom --nav2 --with-telemetry
 ```
 
 ### Hardware Bringup Shortcuts
 
 ```bash
-# Launch hardware SLAM directly from the host
+# D435i + cuVSLAM odometry + RTAB-Map
+./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --cuvslam-odom --rtabmap
+
+# D435i + VINS-Fusion odometry + RTAB-Map
+./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --vins-odom --rtabmap
+
+# D435i + T265 tracking + RTAB-Map (T265 internal VIO)
 ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265 --rtabmap
+
+# T265 as the odometry source for EKF (no external VIO)
+./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265-odom --rtabmap
+
+# cuVSLAM odometry only (T265 fisheye, no depth camera)
+./scripts/start_ros2_nodes.sh --hw --cuvslam-odom
+
+# VINS-Fusion odometry only (T265 fisheye, no depth camera)
+./scripts/start_ros2_nodes.sh --hw --vins-odom
 
 # Probe the live VIO / RTAB-Map pipeline from the host
 HZ_WINDOW=5 ECHO_TIMEOUT=3 ./scripts/debug_vio.sh
-
-# Try T265 as the odometry source for RTAB-Map / EKF
-./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --t265-odom --rtabmap
 ```
 
-`./scripts/debug_vio.sh` mirrors the Docker/ROS environment setup from
-`start_ros2_nodes.sh`, so it can be launched directly from the host without
-manually entering the container.
+**Odometry source priority:** cuVSLAM > VINS-Fusion > T265 > RGB-D VO > ICP.
+Both `--cuvslam-odom` and `--vins-odom` automatically enable the T265 fisheye
+streams (required for stereo VIO). When no VIO flag is given, RTAB-Map uses its
+built-in RGB-D visual odometry.
 
 With `--t265-odom`, EKF and RTAB-Map subscribe to `/t265/odom_base`, while
 `rgbd_odometry` stays independent on `/vo_odom` for debugging and comparison.
@@ -227,7 +247,10 @@ ackermann/base_link` frame chain.
 ### x86 Development (no hardware)
 
 ```bash
-# Mock mode with localhost broker:
+# Auto-detect mode (uses real cameras if connected, mocks otherwise):
+./scripts/start_system_monitor_session.sh --with-telemetry
+
+# Force mock mode with localhost broker:
 ./scripts/start_system_monitor_session.sh --mock --with-telemetry
 ```
 
