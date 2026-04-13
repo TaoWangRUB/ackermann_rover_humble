@@ -241,9 +241,16 @@ fi
 # ── Kill old ROS nodes before starting new ones ─────────────────────
 # Kill previous robot_bringup / SLAM nodes but NOT rover_monitor
 # (which may be running from a parallel tmux pane).
+# NOTE: With pid:host the container sees host PIDs, so exclude
+# docker/docker-compose processes to avoid killing ourselves.
 echo "Stopping old ROS nodes..."
 dcomp exec -T ackermann_slam bash -c \
-    'kill -9 $(pgrep -f "robot_bringup|rtabmap|cuvslam|realsense|rgbd_odometry|ekf_filter|point_cloud" 2>/dev/null) 2>/dev/null; sleep 1' 2>/dev/null || true
+    'pgrep -f "robot_bringup|rtabmap|cuvslam|realsense|rgbd_odometry|ekf_filter|point_cloud" 2>/dev/null \
+     | while read pid; do
+         cmdline=$(tr "\0" " " < /proc/$pid/cmdline 2>/dev/null)
+         case "$cmdline" in *docker*) continue ;; esac
+         kill -9 "$pid" 2>/dev/null
+       done; sleep 1' 2>/dev/null || true
 echo "Clean."
 
 echo "Launching ROS 2 nodes inside Docker container..."
