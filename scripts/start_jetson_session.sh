@@ -156,7 +156,7 @@ fi
 # docker/docker-compose processes to avoid killing ourselves.
 echo "Stopping old ROS nodes..."
 dcomp exec -T ackermann_slam bash -c \
-    'pgrep -f "ros2|python3.*launch|component_container|MicroXRCE" 2>/dev/null \
+    'pgrep -f "ros2|python3.*/workspace|component_container|MicroXRCEAgent" 2>/dev/null \
      | while read pid; do
          cmdline=$(tr "\0" " " < /proc/$pid/cmdline 2>/dev/null)
          case "$cmdline" in *docker*) continue ;; esac
