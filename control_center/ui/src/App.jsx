@@ -33,19 +33,36 @@ function StatusBadge({ health }) {
   );
 }
 
-function Panel({ title, children }) {
+function HwModeBadge({ mode }) {
+  if (!mode) return null;
+  const isHw = mode === 'hw';
+  return (
+    <span style={{
+      background: isHw ? '#3b82f6' : '#9333ea',
+      color: 'white', padding: '1px 6px', borderRadius: 4, fontSize: 10,
+      marginLeft: 6, fontWeight: 600, letterSpacing: 0.5,
+    }}>
+      {isHw ? 'HW' : 'MOCK'}
+    </span>
+  );
+}
+
+function Panel({ title, hwMode, children }) {
   return (
     <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, margin: 8 }}>
-      <h3 style={{ margin: '0 0 8px', fontSize: 14, color: '#374151' }}>{title}</h3>
+      <h3 style={{ margin: '0 0 8px', fontSize: 14, color: '#374151' }}>
+        {title}
+        <HwModeBadge mode={hwMode} />
+      </h3>
       {children}
     </div>
   );
 }
 
-function CameraPanel({ cam }) {
-  if (!cam) return <Panel title="Camera"><p>No data</p></Panel>;
+function CameraPanel({ cam, hwMode }) {
+  if (!cam) return <Panel title="Camera" hwMode={hwMode}><p>No data</p></Panel>;
   return (
-    <Panel title="Camera">
+    <Panel title="Camera" hwMode={hwMode}>
       <p>Connected: {cam.connected ? 'Yes' : 'No'}</p>
       <p>Frame Delta: {cam.frameDeltaMs?.toFixed(1)} ms</p>
       <p>Depth FPS: {cam.depthFps?.toFixed(1)}</p>
@@ -54,10 +71,10 @@ function CameraPanel({ cam }) {
   );
 }
 
-function Px4Panel({ px4 }) {
-  if (!px4) return <Panel title="PX4"><p>No data</p></Panel>;
+function Px4Panel({ px4, hwMode }) {
+  if (!px4) return <Panel title="PX4" hwMode={hwMode}><p>No data</p></Panel>;
   return (
-    <Panel title="PX4">
+    <Panel title="PX4" hwMode={hwMode}>
       <p>Connected: {px4.connected ? 'Yes' : 'No'}</p>
       <p>Armed: {px4.armed ? 'Yes' : 'No'}</p>
       <p>Armable: {px4.armable ? 'Yes' : 'No'}</p>
@@ -68,10 +85,10 @@ function Px4Panel({ px4 }) {
   );
 }
 
-function JetsonPanel({ jetson }) {
-  if (!jetson) return <Panel title="Jetson"><p>No data</p></Panel>;
+function JetsonPanel({ jetson, hwMode }) {
+  if (!jetson) return <Panel title="Jetson" hwMode={hwMode}><p>No data</p></Panel>;
   return (
-    <Panel title="Jetson">
+    <Panel title="Jetson" hwMode={hwMode}>
       <p>GPU: {jetson.gpuUsagePct?.toFixed(1)}%</p>
       <p>RAM: {jetson.ramUsedMb}/{jetson.ramTotalMb} MB</p>
       <p>Temp CPU: {jetson.tempCpuC?.toFixed(1)}C</p>
@@ -226,6 +243,19 @@ function CommandPanel() {
 
 export default function App() {
   const health = useWebSocket('/ws/health');
+  const [hwMode, setHwMode] = useState({});
+
+  useEffect(() => {
+    const fetchHwMode = () => {
+      fetch('/api/hw_mode')
+        .then(r => r.json())
+        .then(setHwMode)
+        .catch(() => {});
+    };
+    fetchHwMode();
+    const interval = setInterval(fetchHwMode, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div style={{ fontFamily: 'system-ui', maxWidth: 1000, margin: '0 auto', padding: 16 }}>
@@ -238,9 +268,9 @@ export default function App() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 0 }}>
-        <CameraPanel cam={health?.camera} />
-        <Px4Panel px4={health?.px4} />
-        <JetsonPanel jetson={health?.jetson} />
+        <CameraPanel cam={health?.camera} hwMode={hwMode.camera} />
+        <Px4Panel px4={health?.px4} hwMode={hwMode.px4} />
+        <JetsonPanel jetson={health?.jetson} hwMode={hwMode.jetson} />
         <AlertsPanel alerts={health?.activeAlerts} />
         <DrivePanel />
         <CommandPanel />
