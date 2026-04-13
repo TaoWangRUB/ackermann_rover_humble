@@ -241,18 +241,16 @@ fi
 # ── Kill old ROS nodes before starting new ones ─────────────────────
 # Kill previous robot_bringup / SLAM nodes but NOT rover_monitor
 # (which may be running from a parallel tmux pane).
-# NOTE: With pid:host the container sees host PIDs, so exclude
-# docker/docker-compose processes to avoid killing ourselves.
+# Uses ps+grep (not pgrep -f) to avoid pid:host self-match issues.
 echo "Stopping old ROS nodes..."
-dcomp exec -T ackermann_slam bash -c \
-    'SELF=$$ PARENT=$(cat /proc/$$/stat 2>/dev/null | awk "{print \$4}")
-     pgrep -f "robot_bringup|rtabmap|cuvslam|realsense|rgbd_odometry|ekf_filter|point_cloud" 2>/dev/null \
-     | while read pid; do
-         [ "$pid" = "$SELF" ] || [ "$pid" = "$PARENT" ] || [ "$pid" = "1" ] && continue
-         cmdline=$(tr "\0" " " < /proc/$pid/cmdline 2>/dev/null || true)
-         case "$cmdline" in *docker*|*pgrep*) continue ;; esac
-         kill -9 "$pid" 2>/dev/null
-       done; sleep 1' 2>/dev/null || true
+dcomp exec -T ackermann_slam bash -c "
+    ps aux --no-headers \
+      | grep -E 'robot_bringup|rtabmap|cuvslam|realsense|rgbd_odometry|ekf_filter|point_cloud' \
+      | grep -v 'docker\|grep\|rover_monitor' \
+      | awk '{print \$2}' \
+      | xargs -r kill -9 2>/dev/null || true
+    sleep 1
+" 2>/dev/null || true
 echo "Clean."
 
 echo "Launching ROS 2 nodes inside Docker container..."
