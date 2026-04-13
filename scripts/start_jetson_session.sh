@@ -152,9 +152,16 @@ if ! dcomp ps --services --filter status=running 2>/dev/null \
 fi
 
 # ── Kill old ROS nodes before starting new ones ─────────────────────
+# NOTE: With pid:host the container sees host PIDs, so exclude
+# docker/docker-compose processes to avoid killing ourselves.
 echo "Stopping old ROS nodes..."
 dcomp exec -T ackermann_slam bash -c \
-    'kill -9 $(pgrep -f "ros2|python3.*launch|component_container|MicroXRCE" 2>/dev/null) 2>/dev/null; sleep 1' 2>/dev/null || true
+    'pgrep -f "ros2|python3.*launch|component_container|MicroXRCE" 2>/dev/null \
+     | while read pid; do
+         cmdline=$(tr "\0" " " < /proc/$pid/cmdline 2>/dev/null)
+         case "$cmdline" in *docker*) continue ;; esac
+         kill -9 "$pid" 2>/dev/null
+       done; sleep 1' 2>/dev/null || true
 echo "Clean."
 
 # ── Create tmux session ──────────────────────────────────────────────
