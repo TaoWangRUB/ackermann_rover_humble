@@ -45,6 +45,7 @@ class DashboardServer:
         self._health_ws_clients: set[Any] = set()
         self._alert_ws_clients: set[Any] = set()
         self._cmd_ack_ws_clients: set[Any] = set()
+        self._hw_mode: dict[str, str] = {}
 
         if HAS_FASTAPI:
             self._build_app()
@@ -83,6 +84,19 @@ class DashboardServer:
         @self._app.get("/api/command/history")
         async def get_command_history() -> list:
             return self._ack_tracker.get_history()
+
+        @self._app.get("/api/hw_mode")
+        async def get_hw_mode() -> dict:
+            return self._hw_mode
+
+        @self._app.post("/api/hw_mode")
+        async def set_hw_mode(body: dict) -> dict:
+            self._hw_mode = {
+                k: v for k, v in body.items()
+                if isinstance(k, str) and v in ("hw", "mock")
+            }
+            logger.info("HW mode updated: %s", self._hw_mode)
+            return self._hw_mode
 
         @self._app.get("/api/health/history")
         async def get_health_history() -> dict:
