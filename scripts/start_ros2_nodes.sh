@@ -239,11 +239,11 @@ if ! dcomp ps --services --filter status=running 2>/dev/null \
 fi
 
 # ── Kill old ROS nodes before starting new ones ─────────────────────
-# Only kill ros2 launch processes and their children — NOT component_container
-# (which may be running rover_monitor from a parallel pane).
+# Kill previous robot_bringup / SLAM nodes but NOT rover_monitor
+# (which may be running from a parallel tmux pane).
 echo "Stopping old ROS nodes..."
 dcomp exec -T ackermann_slam bash -c \
-    'kill -9 $(pgrep -f "ros2.*(launch|run)|robot_bringup|rtabmap|cuvslam|realsense" 2>/dev/null) 2>/dev/null; sleep 1' 2>/dev/null || true
+    'kill -9 $(pgrep -f "robot_bringup|rtabmap|cuvslam|realsense|rgbd_odometry|ekf_filter|point_cloud" 2>/dev/null) 2>/dev/null; sleep 1' 2>/dev/null || true
 echo "Clean."
 
 echo "Launching ROS 2 nodes inside Docker container..."
