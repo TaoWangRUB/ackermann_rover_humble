@@ -60,6 +60,7 @@ ENABLE_NAV2=false
 ENABLE_T265=false
 T265_ODOM=false
 CUVSLAM_ODOM=false
+RGBD_ODOM=false
 VINS_ODOM=false
 ACTIVATE=true
 MODE_ID="23"
@@ -77,6 +78,7 @@ for arg in "$@"; do
         --t265)            ENABLE_T265=true ;;
         --t265-odom)       ENABLE_T265=true; T265_ODOM=true ;;
         --cuvslam-odom)    CUVSLAM_ODOM=true ;;
+        --rgbd-odom)       RGBD_ODOM=true ;;
         --vins-odom)       VINS_ODOM=true ;;
         --no-activate)     ACTIVATE=false ;;
         --mode-id=*)       MODE_ID="${arg#--mode-id=}" ;;
@@ -102,6 +104,9 @@ elif [[ "${ENABLE_T265}" == true ]]; then
 fi
 if [[ "${CUVSLAM_ODOM}" == true ]]; then
     ROS2_ARGS+=" --cuvslam-odom"
+fi
+if [[ "${RGBD_ODOM}" == true ]]; then
+    ROS2_ARGS+=" --rgbd-odom"
 fi
 if [[ "${VINS_ODOM}" == true ]]; then
     ROS2_ARGS+=" --vins-odom"

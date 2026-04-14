@@ -168,8 +168,9 @@ def generate_launch_description() -> LaunchDescription:
         'Grid/3D': 'false',
         'Grid/RayTracing': 'true',
         'Reg/Force3DoF': 'true',
-        'topic_queue_size': 20,
-        'sync_queue_size': 20,
+        'approx_sync_max_interval': 0.1,
+        'topic_queue_size': 30,
+        'sync_queue_size': 30,
         'RGBD/LinearUpdate': '0.05',     # Update map more often (smaller motion threshold)
         'RGBD/AngularUpdate': '0.05',
     }
@@ -212,7 +213,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{
             'approx_sync': True,
             'queue_size': 30,
-            'approx_sync_max_interval': 0.02,
+            'approx_sync_max_interval': 0.1,
             'use_sim_time': use_sim_time
         }],
         remappings=sensor_remappings,

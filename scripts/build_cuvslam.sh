@@ -111,9 +111,9 @@ colcon build --symlink-install \
 cat <<EOF
 Built cuVSLAM and related bringup packages.
 Launch with (Stereo T265):
-  ./scripts/start_ros2_nodes.sh --hw --t265 --cuvslam-odom --rtabmap
+  ./scripts/start_ros2_nodes.sh --hw --t265 --cuvslam-odom --rtabmap --no-rviz
 Launch with (RGB-D D435i):
-  ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --rgbd-odom --rtabmap
+  ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --rgbd-odom --rtabmap --no-rviz
 Debug with:
   ./scripts/debug_vio.sh
 EOF

@@ -462,7 +462,35 @@ def generate_launch_description() -> LaunchDescription:
             'bt_xml': nav2_bt_xml,
             'navigate_through_poses_bt': nav2_through_bt,
             'reversible_drive': reversible_drive,
+            'use_sim_time': use_sim_time,
         }.items()
+    )
+
+    from launch.actions import TimerAction, ExecuteProcess, RegisterEventHandler, LogInfo
+    from launch.event_handlers import OnProcessExit
+
+    # Only run the wait routine if Nav2 is requested
+    wait_for_rtabmap = ExecuteProcess(
+        condition=IfCondition(nav2_enable),
+        cmd=[
+            'bash', '-c',
+            'if [ "$0" == "true" ]; then '
+            '  echo "Waiting for RTAB-Map to stabilize (/rtabmap/info)..."; '
+            '  timeout 60 ros2 topic echo --once /rtabmap/info > /dev/null || true; '
+            'else '
+            '  sleep 5; '
+            'fi',
+            LaunchConfiguration('rtabmap')
+        ],
+        output='screen'
+    )
+
+    nav2_delayed = RegisterEventHandler(
+        condition=IfCondition(nav2_enable),
+        event_handler=OnProcessExit(
+            target_action=wait_for_rtabmap,
+            on_exit=[LogInfo(msg="Spawning Nav2 Stack..."), nav2_launch]
+        )
     )
 
     rviz_node = Node(
@@ -506,7 +534,8 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(cuvslam_launch)
     ld.add_action(cuvslam_rgbd_launch)
     ld.add_action(rtabmap_launch)
-    ld.add_action(nav2_launch)
+    ld.add_action(wait_for_rtabmap)
+    ld.add_action(nav2_delayed)
     ld.add_action(rviz_delayed)
     ld.add_action(rover_monitor_launch)
 
