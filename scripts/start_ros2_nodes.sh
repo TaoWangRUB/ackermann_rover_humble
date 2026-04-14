@@ -238,21 +238,6 @@ if ! dcomp ps --services --filter status=running 2>/dev/null \
     dcomp up -d ackermann_slam
 fi
 
-# ── Kill old ROS nodes before starting new ones ─────────────────────
-# Kill previous robot_bringup / SLAM nodes but NOT rover_monitor
-# (which may be running from a parallel tmux pane).
-# Uses ps+grep (not pgrep -f) to avoid pid:host self-match issues.
-echo "Stopping old ROS nodes..."
-dcomp exec -T ackermann_slam bash -c "
-    ps aux --no-headers \
-      | grep -E 'robot_bringup|rtabmap|cuvslam|realsense|rgbd_odometry|ekf_filter|point_cloud' \
-      | grep -v 'docker\|grep\|bash -c\|rover_monitor' \
-      | awk '{print \$2}' \
-      | xargs -r kill -9 2>/dev/null || true
-    sleep 1
-" 2>/dev/null || true
-echo "Clean."
-
 echo "Launching ROS 2 nodes inside Docker container..."
 if [[ "${HW}" == "true" ]]; then
     echo "  Mode:         hardware (real cameras)"

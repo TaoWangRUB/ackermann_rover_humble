@@ -152,7 +152,8 @@ if ! dcomp ps --services --filter status=running 2>/dev/null \
 fi
 
 # ── Kill old ROS nodes before starting new ones ─────────────────────
-"${SCRIPT_DIR}/stop_all.sh" --session="${SESSION} && sleep 30"
+"${SCRIPT_DIR}/stop_all.sh" --session="${SESSION}"
+sleep 30
 
 # ── Create tmux session ──────────────────────────────────────────────
 tmux kill-session -t "${SESSION}" 2>/dev/null || true

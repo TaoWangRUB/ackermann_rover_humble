@@ -59,7 +59,8 @@
          not publish competing TF for this frame. Only odometry data is consumed
          (fed to an EKF which owns the odom_frame -> base_link edge). -->
     <joint name="${name}_pose_joint" type="fixed">
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <!-- Maps Native t265_pose_frame (X-Right, Y-Up, Z-Back) to ROS t265_link (X-Forward, Y-Left, Z-Up) -->
+      <origin xyz="0 0 0" rpy="${M_PI/2} 0 ${-M_PI/2}"/>
       <parent link="${name}_link"/>
       <child link="${name}_pose_frame"/>
     </joint>
