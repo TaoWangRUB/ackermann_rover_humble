@@ -51,6 +51,9 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <tf2/exceptions.h>
 #include <tf2/time.h>
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Vector3.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
@@ -618,13 +621,50 @@ private:
     odom.header.frame_id = odom_frame_id_;
     odom.child_frame_id = published_child_frame_id_;
 
-    odom.pose.pose.position.x = pose_with_covariance.pose.translation[0];
-    odom.pose.pose.position.y = pose_with_covariance.pose.translation[1];
-    odom.pose.pose.position.z = pose_with_covariance.pose.translation[2];
-    odom.pose.pose.orientation.x = pose_with_covariance.pose.rotation[0];
-    odom.pose.pose.orientation.y = pose_with_covariance.pose.rotation[1];
-    odom.pose.pose.orientation.z = pose_with_covariance.pose.rotation[2];
-    odom.pose.pose.orientation.w = pose_with_covariance.pose.rotation[3];
+    tf2::Matrix3x3 R_ros_cv(
+      0,  0,  1,
+     -1,  0,  0,
+      0, -1,  0
+    );
+
+    tf2::Vector3 pos_cv(
+      pose_with_covariance.pose.translation[0],
+      pose_with_covariance.pose.translation[1],
+      pose_with_covariance.pose.translation[2]
+    );
+
+    tf2::Vector3 pos_ros = R_ros_cv * pos_cv;
+
+    tf2::Quaternion q_cv(
+      pose_with_covariance.pose.rotation[0],
+      pose_with_covariance.pose.rotation[1],
+      pose_with_covariance.pose.rotation[2],
+      pose_with_covariance.pose.rotation[3]
+    );
+
+    tf2::Quaternion q_ros_cv;
+    R_ros_cv.getRotation(q_ros_cv);
+
+    tf2::Quaternion q_ros = q_ros_cv * q_cv;
+    q_ros.normalize();
+
+    tf2::Transform current_tf(q_ros, pos_ros);
+
+    if (!origin_latched_) {
+      origin_inv_ = current_tf.inverse();
+      origin_latched_ = true;
+    }
+
+    tf2::Transform aligned_tf = origin_inv_ * current_tf;
+
+    odom.pose.pose.position.x = aligned_tf.getOrigin().x();
+    odom.pose.pose.position.y = aligned_tf.getOrigin().y();
+    odom.pose.pose.position.z = aligned_tf.getOrigin().z();
+
+    odom.pose.pose.orientation.x = aligned_tf.getRotation().x();
+    odom.pose.pose.orientation.y = aligned_tf.getRotation().y();
+    odom.pose.pose.orientation.z = aligned_tf.getRotation().z();
+    odom.pose.pose.orientation.w = aligned_tf.getRotation().w();
 
     for (int i = 0; i < 6; ++i) {
       for (int j = 0; j < 6; ++j) {
@@ -698,6 +738,9 @@ private:
   message_filters::Subscriber<Image> right_image_sub_;
   std::shared_ptr<StereoSynchronizer> sync_;
   rclcpp::Publisher<Odometry>::SharedPtr odom_pub_;
+
+  bool origin_latched_{false};
+  tf2::Transform origin_inv_;
 };
 
 }  // namespace cuvslam_bringup
