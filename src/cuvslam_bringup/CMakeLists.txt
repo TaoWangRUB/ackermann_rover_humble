@@ -137,6 +137,37 @@ if(CUVSLAM_FOUND)
   install(TARGETS cuvslam_odom_node
     DESTINATION lib/${PROJECT_NAME}
   )
+
+  # ─── cuvslam_rgbd_node ─────────────────────────────────────────────────────
+  add_executable(cuvslam_rgbd_node
+    src/cuvslam_rgbd_node.cpp
+  )
+  target_include_directories(cuvslam_rgbd_node PRIVATE
+    ${CUVSLAM_INCLUDE_DIR}
+    ${OpenCV_INCLUDE_DIRS}
+  )
+  set_target_properties(cuvslam_rgbd_node PROPERTIES
+    BUILD_RPATH "${CUVSLAM_LIBRARY_DIR}"
+    INSTALL_RPATH "${CUVSLAM_LIBRARY_DIR}"
+  )
+  target_link_libraries(cuvslam_rgbd_node
+    ${CUVSLAM_LIBRARY}
+    ${OpenCV_LIBRARIES}
+  )
+  ament_target_dependencies(cuvslam_rgbd_node
+    rclcpp
+    sensor_msgs
+    nav_msgs
+    geometry_msgs
+    std_msgs
+    tf2
+    tf2_ros
+    message_filters
+    cv_bridge
+  )
+  install(TARGETS cuvslam_rgbd_node
+    DESTINATION lib/${PROJECT_NAME}
+  )
 endif()
 
 # ─── phase-0 smoke test (optional, x86_64 dev only) ────────────────────────

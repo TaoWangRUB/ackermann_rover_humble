@@ -14,7 +14,7 @@ cuvslam_odom_node:
     left_camera_info_topic:  "/t265/fisheye1/camera_info"
     right_camera_info_topic: "/t265/fisheye2/camera_info"
     imu_topic:               "/t265/imu"
-    raw_odom_topic:          "/cuvslam/raw_odometry"
+    raw_odom_topic:          "/cuvslam/stereo/raw_odometry"
 
     # ─── frame configuration ─────────────────────────────────────────────
     # Parent frame of the raw odometry and the rig frame used to initialize

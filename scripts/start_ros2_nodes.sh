@@ -143,6 +143,7 @@ HW_T265="false"
 HW_T265_ODOM="false"
 VINS_ODOM="false"
 CUVSLAM_ODOM="false"
+RGBD_ODOM="false"
 PX4="false"
 RTABMAP="false"
 NAV2="false"
@@ -165,6 +166,7 @@ for arg in "$@"; do
         --t265-odom)       HW_T265="true"; HW_T265_ODOM="true" ;;
         --vins-odom)       VINS_ODOM="true" ;;
         --cuvslam-odom)    CUVSLAM_ODOM="true" ;;
+        --rgbd-odom)       RGBD_ODOM="true" ;;
         --px4)          PX4="true" ;;
         --rtabmap)      RTABMAP="true" ;;
         --nav2)         NAV2="true" ;;
@@ -183,7 +185,7 @@ for arg in "$@"; do
             exit 0 ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--cuvslam-odom] [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
+            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--cuvslam-odom] [--rgbd-odom] [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
             exit 1
             ;;
     esac
@@ -200,7 +202,8 @@ fi
 # otherwise fall back to 'l515'.
 if [[ -z "${DEPTH_CAMERA}" ]]; then
     if [[ "${DEPTH_CAMERA_EXPLICIT}" == "false" && "${RTABMAP}" == "false" \
-          && ( "${VINS_ODOM}" == "true" || "${CUVSLAM_ODOM}" == "true" || "${HW_T265}" == "true" || "${HW_T265_ODOM}" == "true" ) ]]; then
+          && ( "${VINS_ODOM}" == "true" || "${CUVSLAM_ODOM}" == "true" || "${HW_T265}" == "true" || "${HW_T265_ODOM}" == "true" ) \
+          && "${RGBD_ODOM}" == "false" ]]; then
         DEPTH_CAMERA="none"
     else
         DEPTH_CAMERA="l515"
@@ -209,7 +212,7 @@ fi
 
 # ── Build step (if requested) ──
 if [[ "${BUILD}" == "true" ]]; then
-    if [[ "${CUVSLAM_ODOM}" == "true" && -z "${BUILD_PKGS}" ]]; then
+    if [[ ("${CUVSLAM_ODOM}" == "true" || "${RGBD_ODOM}" == "true") && -z "${BUILD_PKGS}" ]]; then
         echo "Building cuVSLAM and related bringup packages..."
         dcomp exec ackermann_slam bash -lc "source /opt/ros/\$ROS_DISTRO/setup.bash && if [ -f /workspace/install/setup.bash ]; then source /workspace/install/setup.bash; fi && bash /workspace/scripts/build_cuvslam.sh"
     else
@@ -253,6 +256,7 @@ else
 fi
 echo "  VINS odom:    ${VINS_ODOM}"
 echo "  cuVSLAM odom: ${CUVSLAM_ODOM}"
+echo "  RGB-D odom:   ${RGBD_ODOM}"
 echo "  RTAB-Map:     ${RTABMAP}"
 echo "  Nav2:         ${NAV2}"
 echo "  RViz:         ${RVIZ}"
@@ -279,6 +283,7 @@ else
 fi
 LAUNCH_CMD+=" use_vins_odom:=${VINS_ODOM}"
 LAUNCH_CMD+=" use_cuvslam_odom:=${CUVSLAM_ODOM}"
+LAUNCH_CMD+=" use_rgbd_odom:=${RGBD_ODOM}"
 LAUNCH_CMD+=" rtabmap:=${RTABMAP}"
 LAUNCH_CMD+=" nav2:=${NAV2}"
 LAUNCH_CMD+=" rviz:=${RVIZ}"

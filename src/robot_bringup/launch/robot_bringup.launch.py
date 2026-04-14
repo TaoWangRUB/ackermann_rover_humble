@@ -213,6 +213,12 @@ ARGUMENTS = [
         description='Use cuVSLAM odometry sourced from the T265 fisheye cameras and IMU.',
     ),
     DeclareLaunchArgument(
+        'use_rgbd_odom',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Use cuVSLAM odometry sourced from the depth camera.',
+    ),
+    DeclareLaunchArgument(
         'rover_monitor',
         default_value='false',
         choices=['true', 'false'],
@@ -248,6 +254,7 @@ def generate_launch_description() -> LaunchDescription:
     use_t265_odom = LaunchConfiguration('use_t265_odom')
     use_vins_odom = LaunchConfiguration('use_vins_odom')
     use_cuvslam_odom = LaunchConfiguration('use_cuvslam_odom')
+    use_rgbd_odom = LaunchConfiguration('use_rgbd_odom')
 
     robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
@@ -382,6 +389,16 @@ def generate_launch_description() -> LaunchDescription:
         }.items(),
     )
 
+    cuvslam_rgbd_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(cuvslam_bringup_share, 'launch', 'cuvslam_rgbd.launch.py')
+        ),
+        condition=IfCondition(use_rgbd_odom),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+        }.items(),
+    )
+
     # -----------------------------------------------------------------------
     # RTAB-Map — topic names derived from depth_camera in both modes.
     #
@@ -406,6 +423,7 @@ def generate_launch_description() -> LaunchDescription:
             'use_t265_odom': use_t265_odom,
             'use_vins_odom': use_vins_odom,
             'use_cuvslam_odom': use_cuvslam_odom,
+            'use_rgbd_odom': use_rgbd_odom,
             'rgb_image_topic': PythonExpression([
                 '"', depth_camera, '/color/image_raw"'
                 ' if "', use_gazebo, '" == "false"'
@@ -486,6 +504,7 @@ def generate_launch_description() -> LaunchDescription:
     # Common
     ld.add_action(vins_launch)
     ld.add_action(cuvslam_launch)
+    ld.add_action(cuvslam_rgbd_launch)
     ld.add_action(rtabmap_launch)
     ld.add_action(nav2_launch)
     ld.add_action(rviz_delayed)
