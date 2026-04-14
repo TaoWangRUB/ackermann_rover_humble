@@ -5,16 +5,20 @@ description: Build, launch, and debug the cuVSLAM GPU-accelerated stereo fisheye
 
 # cuVSLAM Visual-Inertial Odometry Skill
 
-cuVSLAM provides a GPU-accelerated stereo fisheye + IMU visual-inertial odometry path using the Intel T265 camera. It is the **highest-priority** external VIO source in this repo, ahead of VINS-Fusion, T265 built-in odometry, RGB-D VO, and ICP.
+cuVSLAM provides GPU-accelerated visual-inertial odometry using either:
+1. **Stereo Fisheye + IMU** (e.g. Intel T265)
+2. **RGB-D + IMU** (e.g. Intel D435i)
+
+It is the **highest-priority** external VIO source in this repo, ahead of VINS-Fusion, T265 built-in odometry, RGB-D VO, and ICP.
 
 ## 1. Architecture / Data Flow
 
+
 ```
-T265 Fisheye (848x800 @30Hz) + IMU (@200Hz)
+T265 Fisheye (848x800) or D435i RGB-D + IMU (@200Hz)
   → realsense_camera_bringup (hw) or gazebo bridges (sim)
-  → /t265/fisheye1/image_raw, /t265/fisheye2/image_raw
-  → /t265/fisheye1/camera_info, /t265/fisheye2/camera_info, /t265/imu
-  → [cuvslam_odom_node]         (CameraInfo-driven rig init, stereo VIO, IMU)
+  → /camera/... (topics mapped dynamically based on config)
+  → [cuvslam_odom_node] OR [cuvslam_rgbd_node]
   → /cuvslam/raw_odometry
   → [odom_tf_relay]             (frame adaptation)
   → /cuvslam_odom               (frame_id=odom, child_frame_id=ackermann/base_link)
@@ -22,15 +26,18 @@ T265 Fisheye (848x800 @30Hz) + IMU (@200Hz)
   → /odometry/filtered → RTAB-Map / Nav2 / PX4
 ```
 
-**Odometry priority:** cuVSLAM > VINS-Fusion > T265 built-in > RGB-D VO > ICP
+**Odometry priority:** cuVSLAM > cuVSLAM RGBD > VINS-Fusion > T265 built-in > RGB-D VO > ICP
 
 ## 2. Key Files
 
 | File | Purpose |
 |------|---------|
-| `src/cuvslam_bringup/src/cuvslam_odom_node.cpp` | ROS 2 wrapper around `cuvslam::Odometry` (cuvslam2.h) |
-| `src/cuvslam_bringup/launch/cuvslam.launch.py` | Launch: cuvslam_odom_node + odom_tf_relay |
-| `src/cuvslam_bringup/config/t265_stereo_fisheye.yaml` | Wrapper config (topics, frames, sync policy) |
+| `src/cuvslam_bringup/src/cuvslam_odom_node.cpp` | ROS 2 wrapper for Stereo Fisheye |
+| `src/cuvslam_bringup/src/cuvslam_rgbd_node.cpp` | ROS 2 wrapper for RGB-D |
+| `src/cuvslam_bringup/launch/cuvslam.launch.py` | Launch for stereo fisheye |
+| `src/cuvslam_bringup/launch/cuvslam_rgbd.launch.py` | Launch for RGB-D |
+| `src/cuvslam_bringup/config/t265_stereo_fisheye.yaml` | T265 Stereo config |
+| `src/cuvslam_bringup/config/d435i_rgbd.yaml` | D435i RGBD config |
 | `src/cuvslam_bringup/test/smoke_test_cuvslam.cpp` | Links against libcuvslam.so, confirms it loads |
 | `src/cuvslam_bringup/test/smoke_test_cuvslam.sh` | Runs the smoke test from shell |
 | `src/cuVSLAM/` | Vendored cuVSLAM source tree (pinned submodule ref) |
@@ -65,19 +72,24 @@ colcon build --symlink-install --packages-select cuvslam_bringup
 
 ## 4. Launch
 
-**Hardware — T265 only with cuVSLAM:**
+**Hardware — T265 only with cuVSLAM (Stereo Fisheye):**
 ```bash
 ./scripts/start_ros2_nodes.sh --hw --cuvslam-odom
 ```
 
-**Hardware — D435i depth + cuVSLAM odom + RTAB-Map:**
+**Hardware — D435i depth + cuVSLAM (RGBD) + RTAB-Map:**
 ```bash
-./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --cuvslam-odom --rtabmap
+./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --rgbd-odom --rtabmap
 ```
 
-**Simulation — Gazebo + cuVSLAM + RTAB-Map:**
+**Simulation — Gazebo + cuVSLAM (Stereo) + RTAB-Map:**
 ```bash
 ./scripts/start_ros2_nodes.sh --cuvslam-odom --rtabmap
+```
+
+**Simulation — Gazebo + cuVSLAM (RGBD) + RTAB-Map:**
+```bash
+./scripts/start_ros2_nodes.sh --rgbd-odom --rtabmap
 ```
 
 **Manual inside container:**
@@ -86,11 +98,11 @@ colcon build --symlink-install --packages-select cuvslam_bringup
 ros2 launch cuvslam_bringup cuvslam.launch.py use_sim_time:=true
 
 # Or top-level with argument:
-ros2 launch robot_bringup robot_bringup.launch.py use_cuvslam_odom:=true rtabmap:=true nav2:=false rviz:=false
+ros2 launch robot_bringup robot_bringup.launch.py use_rgbd_odom:=true rtabmap:=true nav2:=false rviz:=false
 ```
 
-When `use_cuvslam_odom:=true`:
-- `robot_bringup` **automatically enables** the T265 hardware path and fisheye streams.
+When `use_cuvslam_odom:=true` or `use_rgbd_odom:=true`:
+- `robot_bringup` **automatically enables** the matching sensor tracking path.
 - `rtabmap_bringup` selects `/cuvslam_odom` as odom0 for both RTAB-Map and the EKF.
 - EKF IMU yaw-rate fusion is **disabled** (`imu0_config` all-false) to avoid double-counting heading.
 - Non-selected odom topics (VINS, RTAB-Map VO/ICP, T265 raw) continue publishing for debug/comparison.
@@ -99,8 +111,10 @@ When `use_cuvslam_odom:=true`:
 
 | Topic | Message Type | frame_id | child_frame_id | Notes |
 |-------|-------------|----------|----------------|-------|
-| `/cuvslam/raw_odometry` | `nav_msgs/Odometry` | sensor-native | sensor-native | Raw cuVSLAM output |
-| `/cuvslam_odom` | `nav_msgs/Odometry` | `odom` | `ackermann/base_link` | Relay-adapted, EKF/RTAB-Map input |
+| `/cuvslam/raw_odometry` | `nav_msgs/Odometry` | sensor-native | sensor-native | Raw cuVSLAM Stereo output |
+| `/cuvslam_rgbd/raw_odometry` | `nav_msgs/Odometry` | sensor-native | sensor-native | Raw cuVSLAM RGBD output |
+| `/cuvslam_odom` | `nav_msgs/Odometry` | `odom` | `ackermann/base_link` | Relay-adapted Stereo EKF/RTAB-Map input |
+| `/cuvslam_rgbd_odom` | `nav_msgs/Odometry` | `odom` | `ackermann/base_link` | Relay-adapted RGBD EKF/RTAB-Map input |
 | `/odometry/filtered` | `nav_msgs/Odometry` | `odom` | `ackermann/base_link` | EKF output → Nav2/PX4 |
 
 ## 6. Debugging
@@ -111,8 +125,8 @@ While the stack is running:
 ```
 
 The probe auto-detects and reports:
-- `/t265/fisheye1/image_raw`, `/t265/fisheye2/image_raw`, `/t265/imu`
-- `/cuvslam/raw_odometry`, `/cuvslam_odom`
+- `/t265/fisheye1/image_raw`, `/t265/fisheye2/image_raw`, `/t265/imu`, `/d435i/color/image_raw`
+- `/cuvslam/raw_odometry`, `/cuvslam_odom`, `/cuvslam_rgbd_odom`
 - `/vo_odom`, `/odometry/filtered`, `/map` (for comparison)
 
 **Manual checks:**
