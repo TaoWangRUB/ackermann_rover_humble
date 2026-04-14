@@ -35,6 +35,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+if docker compose version >/dev/null 2>&1; then
+    COMPOSE_CMD="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE_CMD="docker-compose"
+else
+    echo "No working Docker Compose command found." >&2
+    exit 1
+fi
+
 SESSION="host"
 ATTACH=true
 STOP_CONFLICTING_MOSQUITTO=true
@@ -91,11 +100,11 @@ PANE_MQTT="$(tmux split-window -v -P -F "#{pane_id}" -t "${PANE_LOGS}")"
 
 # ── Pane 0: Control Center stack ──────────────────────────────────────
 tmux send-keys -t "${PANE_CC}" \
-    "echo '--- Starting Control Center stack ---' && docker compose -f ${CC_COMPOSE} up -d && sleep 3 && python3 ${PROJECT_DIR}/control_center/scripts/setup_influxdb_dashboard.py && echo '' && echo '  Dashboard:  http://localhost:8080' && echo '  InfluxDB:   http://localhost:8086  (rover / rover-password)' && echo '  Test:       ./scripts/test_control_center.sh' && echo '' && echo '--- Control Center ready ---'" Enter
+    "echo '--- Starting Control Center stack ---' && ${COMPOSE_CMD} -f ${CC_COMPOSE} up -d && sleep 3 && python3 ${PROJECT_DIR}/control_center/scripts/setup_influxdb_dashboard.py && echo '' && echo '  Dashboard:  http://localhost:8080' && echo '  InfluxDB:   http://localhost:8086  (rover / rover-password)' && echo '  Test:       ./scripts/test_control_center.sh' && echo '' && echo '--- Control Center ready ---'" Enter
 
 # ── Pane 1: CC container logs ─────────────────────────────────────────
 tmux send-keys -t "${PANE_LOGS}" \
-    "sleep 5 && docker compose -f ${CC_COMPOSE} logs -f" Enter
+    "sleep 5 && ${COMPOSE_CMD} -f ${CC_COMPOSE} logs -f" Enter
 
 # ── Pane 2: Test / shell ─────────────────────────────────────────────
 tmux send-keys -t "${PANE_TEST}" \
@@ -103,7 +112,7 @@ tmux send-keys -t "${PANE_TEST}" \
 
 # ── Pane 3: MQTT monitor (subscribe + decode Protobuf) ────────────────
 tmux send-keys -t "${PANE_MQTT}" \
-    "sleep 8 && echo '--- MQTT monitor (rover/health/#) ---' && cd /tmp && python3 -c 'import google.protobuf' 2>/dev/null || pip3 install --quiet protobuf; protoc --python_out=/tmp -I ${PROJECT_DIR}/src/rover_monitor/proto ${PROJECT_DIR}/src/rover_monitor/proto/rover_health.proto 2>/dev/null; if command -v mosquitto_sub >/dev/null 2>&1; then mosquitto_sub -h localhost -t 'rover/health/#' -F '%x' | python3 ${PROJECT_DIR}/scripts/decode_rover_health_mqtt.py --hex; else docker run --rm -i --network host eclipse-mosquitto:2 mosquitto_sub -h localhost -t 'rover/health/#' -F '%x' | python3 ${PROJECT_DIR}/scripts/decode_rover_health_mqtt.py --hex; fi" Enter
+    "sleep 8 && bash ${PROJECT_DIR}/scripts/run_host_mqtt_monitor.sh" Enter
 
 tmux select-pane -t "${PANE_CC}"
 

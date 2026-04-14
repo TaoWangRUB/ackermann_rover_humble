@@ -1,0 +1,16 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/taowang/workspace/ackermann_rover_humble/install/example_mode_with_rclpy_py/lib/python3.12/site-packages",
+        "/home/taowang/workspace/ackermann_rover_humble/install/example_mode_goto_py/lib/python3.12/site-packages",
+        "/home/taowang/workspace/ackermann_rover_humble/install/px4_ros2_py/lib/python3.12/site-packages",
+        "/home/taowang/workspace/ackermann_rover_humble/install/px4_msgs/lib/python3.12/site-packages",
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/taowang/workspace/ackermann_rover_humble/install/example_mode_with_rclpy_py/lib/python3.12/site-packages",
+        "/home/taowang/workspace/ackermann_rover_humble/install/example_mode_goto_py/lib/python3.12/site-packages",
+        "/home/taowang/workspace/ackermann_rover_humble/install/px4_ros2_py/lib/python3.12/site-packages",
+        "/home/taowang/workspace/ackermann_rover_humble/install/px4_msgs/lib/python3.12/site-packages",
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ]
+}

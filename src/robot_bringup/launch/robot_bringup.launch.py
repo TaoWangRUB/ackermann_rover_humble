@@ -475,10 +475,14 @@ def generate_launch_description() -> LaunchDescription:
         cmd=[
             'bash', '-c',
             'if [ "$0" == "true" ]; then '
-            '  echo "Waiting for RTAB-Map to stabilize (/rtabmap/info)..."; '
-            '  timeout 60 ros2 topic echo --once /rtabmap/info > /dev/null || true; '
+            '  echo "Waiting for RTAB-Map topics and filtered odometry..."; '
+            '  timeout 60 bash -lc "until ros2 topic list | grep -qx /rtabmap/info; do sleep 1; done" || true; '
+            '  timeout 60 ros2 topic echo --once /odometry/filtered nav_msgs/msg/Odometry > /dev/null || true; '
+            '  sleep 3; '
             'else '
-            '  sleep 5; '
+            '  echo "Waiting for filtered odometry..."; '
+            '  timeout 60 ros2 topic echo --once /odometry/filtered nav_msgs/msg/Odometry > /dev/null || true; '
+            '  sleep 3; '
             'fi',
             LaunchConfiguration('rtabmap')
         ],
