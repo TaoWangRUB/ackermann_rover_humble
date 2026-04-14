@@ -26,7 +26,7 @@ private:
   void on_jetson(rover_monitor::msg::JetsonStatus::ConstSharedPtr msg);
   void on_timer();
 
-  float compute_slam_latency();
+  float compute_slam_tf_age_ms();
   std::vector<std::string> evaluate_alerts(
     const rover_monitor::msg::RoverHealth & health);
   std::string derive_overall_health(const std::vector<std::string> & alerts);
@@ -45,7 +45,7 @@ private:
   // Callback group
   rclcpp::CallbackGroup::SharedPtr cb_group_;
 
-  // TF2 for SLAM latency
+  // TF2 for map -> odom transform freshness
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
