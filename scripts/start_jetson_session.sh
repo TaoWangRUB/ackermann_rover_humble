@@ -116,6 +116,8 @@ if [[ "${ENABLE_NAV2}" == true ]]; then
 fi
 
 ROS_SRC="source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash"
+WAIT_FOR_ROS_READY="source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && echo \"Waiting for /odometry/filtered topic...\" && timeout 120 bash -lc \"until ros2 topic list | grep -qx /odometry/filtered; do sleep 1; done\" && sleep 5'"
+WAIT_FOR_PX4_READY="source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && echo \"Waiting for PX4 DDS topics...\" && timeout 120 bash -lc \"until ros2 topic list | grep -qx /fmu/out/vehicle_status_v2; do sleep 1; done\" && sleep 10'"
 
 TELEMETRY_ARG="enable_telemetry:=false"
 PUBLISHER_CONFIG_ARG=""
@@ -190,14 +192,14 @@ tmux send-keys -t "${PANE_MONITOR}" \
 tmux send-keys -t "${PANE_ROS2}" \
     "sleep 3 && ${SCRIPT_DIR}/start_ros2_nodes.sh ${ROS2_ARGS}" Enter
 
-# ── Pane: PX4 Bringup (wait for ROS nodes) ───────────────────────────
+# ── Pane: PX4 Bringup (wait for fused odometry) ──────────────────────
 tmux send-keys -t "${PANE_PX4}" \
-    "sleep 8 && ${SCRIPT_DIR}/start_px4_bringup_vo.sh ${PX4_BRINGUP_ARGS[*]}" Enter
+    "sleep 8 && ${WAIT_FOR_ROS_READY} && ${SCRIPT_DIR}/start_px4_bringup_vo.sh ${PX4_BRINGUP_ARGS[*]}" Enter
 
 # ── Pane: Mode Activation (wait for PX4 registration) ────────────────
 if [[ "${ACTIVATE}" == true ]]; then
     tmux send-keys -t "${PANE_ACTIVATE}" \
-        "echo 'Waiting 28s for PX4 mode registration...' && sleep 28 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
+        "${WAIT_FOR_PX4_READY} && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
 else
     tmux send-keys -t "${PANE_ACTIVATE}" \
         "source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
@@ -206,7 +208,7 @@ fi
 # ── Pane: MQTT verify (only with telemetry) ───────────────────────────
 if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     tmux send-keys -t "${PANE_MQTT}" \
-        "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'if ! command -v mosquitto_sub >/dev/null 2>&1; then echo \"mosquitto_sub not installed\"; exit 1; fi; if ! python3 -c \"import google.protobuf\" >/dev/null 2>&1; then echo \"protobuf not installed\"; exit 1; fi; cd /tmp && protoc --python_out=/tmp -I /workspace/src/rover_monitor/proto /workspace/src/rover_monitor/proto/rover_health.proto >/dev/null 2>&1 || true; echo \"Subscribing to MQTT broker ${BROKER_HOST}...\"; mosquitto_sub -h ${BROKER_HOST} -t \"rover/health/#\" -F \"%x\" | python3 /workspace/scripts/decode_rover_health_mqtt.py --hex'" Enter
+    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'set -o pipefail; if ! command -v mosquitto_sub >/dev/null 2>&1; then echo \"mosquitto_sub not installed\"; exit 1; fi; if ! python3 -c \"import google.protobuf\" >/dev/null 2>&1; then echo \"protobuf not installed\"; exit 1; fi; cd /tmp && protoc --python_out=/tmp -I /workspace/src/rover_monitor/proto /workspace/src/rover_monitor/proto/rover_health.proto >/dev/null 2>&1 || true; while true; do echo \"Subscribing to MQTT broker ${BROKER_HOST}...\"; mosquitto_sub -h ${BROKER_HOST} -t \"rover/health/#\" -F \"%x\" | python3 /workspace/scripts/decode_rover_health_mqtt.py --hex && break; status=$?; echo \"MQTT subscribe failed with status \${status}; retrying in 5s\"; sleep 5; done'" Enter
 fi
 
 tmux select-pane -t "${PANE_ROS2}"
