@@ -73,7 +73,7 @@ if [[ "${ARCH}" == "aarch64" ]]; then
             TMP_STUB=$(mktemp -d)
             echo 'void __cuvslam_librt_stub(void) {}' > "${TMP_STUB}/stub.c"
             gcc -c "${TMP_STUB}/stub.c" -o "${TMP_STUB}/stub.o"
-            ar rcs "${LIBRT_A}" "${TMP_STUB}/stub.o"
+            sudo ar rcs "${LIBRT_A}" "${TMP_STUB}/stub.o"
             rm -rf "${TMP_STUB}"
         fi
     fi
@@ -81,7 +81,7 @@ if [[ "${ARCH}" == "aarch64" ]]; then
     # 3) liblmdb-dev is required by cuVSLAM but not always installed.
     if [[ ! -f /usr/include/lmdb.h ]]; then
         echo "[aarch64] Installing liblmdb-dev"
-        apt-get update -qq && apt-get install -y liblmdb-dev
+        sudo apt-get update -qq && sudo apt-get install -y liblmdb-dev
     fi
 fi
 
@@ -110,8 +110,10 @@ colcon build --symlink-install \
 
 cat <<EOF
 Built cuVSLAM and related bringup packages.
-Launch with:
-  ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --cuvslam-odom --rtabmap
+Launch with (Stereo T265):
+  ./scripts/start_ros2_nodes.sh --hw --t265 --cuvslam-odom --rtabmap
+Launch with (RGB-D D435i):
+  ./scripts/start_ros2_nodes.sh --hw --depth-camera=d435i --rgbd-odom --rtabmap
 Debug with:
   ./scripts/debug_vio.sh
 EOF

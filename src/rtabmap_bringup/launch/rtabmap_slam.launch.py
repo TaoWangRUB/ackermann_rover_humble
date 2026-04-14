@@ -136,7 +136,7 @@ def generate_launch_description() -> LaunchDescription:
         ' else ("', cuvslam_rgbd_odom_topic, '" if "', use_rgbd_odom, '" == "true"'
         ' else ("', vins_odom_topic, '" if "', use_vins_odom, '" == "true"'
         ' else ("', t265_odom_topic, '" if "', use_t265_odom, '" == "true"'
-        ' else ("/vo_odom" if "', vision, '" == "true" else "/icp_odom")))'
+        ' else ("/vo_odom" if "', vision, '" == "true" else "/icp_odom"))))'
     ])
 
     # Always launch VO/ICP based on vision mode (even when use_t265_odom).
