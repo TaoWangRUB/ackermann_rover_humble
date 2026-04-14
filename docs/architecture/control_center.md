@@ -131,7 +131,7 @@ await bus.emit("evt.health", data=health_msg)
 
 | Measurement | Write Mode | Fields |
 |---|---|---|
-| `rover_telemetry` | Async batch (500ms flush) | Camera/PX4/Jetson metrics, SLAM latency |
+| `rover_telemetry` | Async batch (500ms flush) | Camera/PX4/Jetson metrics, map→odom TF age |
 | `rover_alerts` | Sync | alert_id, severity, message, timestamp |
 | `rover_commands` | Sync | cmd_id, cmd_type, issued_by, ack_status |
 
@@ -190,7 +190,7 @@ Per-CommandType precondition checks using telemetry cache:
 | `cancel_goal` | Always allowed |
 | `arm` | Non-stale telemetry + PX4 connected + battery > 20% |
 | `set_mode` | Non-stale telemetry + PX4 connected |
-| `nav_goal` | Non-stale + armed + SLAM latency < 200ms + overall health ≠ ERROR |
+| `nav_goal` | Non-stale + armed + map→odom TF age < 200ms + overall health ≠ ERROR |
 
 #### CC-6b: Command Gateway (`cmd_gateway.py`)
 

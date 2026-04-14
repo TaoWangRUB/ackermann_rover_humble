@@ -60,7 +60,7 @@ class SafetyGate:
         if not px4.armed:
             return False, "Not armed — cannot navigate"
         if health.slam_latency_ms > 200.0 and health.slam_latency_ms >= 0:
-            return False, f"SLAM latency too high ({health.slam_latency_ms:.0f}ms) — cannot navigate"
+            return False, f"map→odom TF age too high ({health.slam_latency_ms:.0f}ms) — cannot navigate"
         if health.overall_health == "ERROR":
             return False, "Overall health ERROR — cannot navigate"
 

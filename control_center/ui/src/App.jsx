@@ -33,6 +33,11 @@ function StatusBadge({ health }) {
   );
 }
 
+function formatMapOdomTfAge(slamLatencyMs) {
+  if (slamLatencyMs == null || slamLatencyMs < 0) return 'N/A';
+  return `${slamLatencyMs.toFixed(0)}ms`;
+}
+
 function HwModeBadge({ mode }) {
   if (!mode) return null;
   const isHw = mode === 'hw';
@@ -263,7 +268,7 @@ export default function App() {
         <h1 style={{ fontSize: 20, margin: 0 }}>Rover Control Center</h1>
         <StatusBadge health={health?.overallHealth} />
         {health && <span style={{ fontSize: 12, color: '#6b7280' }}>
-          SLAM: {health.slamLatencyMs?.toFixed(0)}ms | seq: {health.seq}
+          Map→odom TF age: {formatMapOdomTfAge(health.slamLatencyMs)} | seq: {health.seq}
         </span>}
       </div>
 

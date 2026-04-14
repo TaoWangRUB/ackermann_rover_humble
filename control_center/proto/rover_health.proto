@@ -54,6 +54,8 @@ message RoverHealth {
   CamStatus camera = 3;
   Px4Status px4 = 4;
   JetsonStatus jetson = 5;
+  // Legacy field name retained for compatibility.
+  // Stores the age/freshness of the latest map->odom TF in milliseconds.
   float slam_latency_ms = 6;
   string overall_health = 7;
   repeated string active_alerts = 8;

@@ -155,8 +155,9 @@ void Aggregator::on_timer()
     health->jetson.error_msg = "Jetson data stale";
   }
 
-  // SLAM latency
-  health->slam_latency_ms = compute_slam_latency();
+  // Legacy field name retained for wire compatibility.
+  // The value represents the age/freshness of the latest map -> odom TF.
+  health->slam_latency_ms = compute_slam_tf_age_ms();
 
   // Alert engine
   health->active_alerts = evaluate_alerts(*health);
@@ -165,7 +166,7 @@ void Aggregator::on_timer()
   pub_->publish(std::move(health));
 }
 
-float Aggregator::compute_slam_latency()
+float Aggregator::compute_slam_tf_age_ms()
 {
   try {
     auto tf = tf_buffer_->lookupTransform(
@@ -174,7 +175,7 @@ float Aggregator::compute_slam_latency()
     auto age = (this->now() - stamp).seconds() * 1000.0;
     return static_cast<float>(age);
   } catch (const tf2::TransformException &) {
-    return -1.0f;  // TF not available
+    return -1.0f;  // map -> odom TF not available
   }
 }
 
