@@ -14,6 +14,7 @@
 #include <condition_variable>
 #include <queue>
 #include <memory>
+#include <optional>
 
 #ifdef HAVE_CUDA
 #include "realsense_camera_bringup/cuda_align.hpp"
@@ -54,10 +55,12 @@ private:
   void publish_imu_data(const rs2::motion_frame& accel, const rs2::motion_frame& gyro);
   void publish_pose_frame(const rs2::pose_frame& frame);
 
-  // Realsense Core
-  rs2::context ctx_;
-  rs2::pipeline pipe_;
-  rs2::config cfg_;
+  // Realsense Core — deferred init to avoid USB enumeration during startup
+  // delay (T265 hardware_reset causes USB bus re-enumeration that would
+  // invalidate eagerly-created context handles → SIGSEGV).
+  std::optional<rs2::context>  ctx_;
+  std::optional<rs2::pipeline> pipe_;
+  std::optional<rs2::config>   cfg_;
   std::shared_ptr<rs2::align> align_to_color_;
 
   // Parameters — identity
