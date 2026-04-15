@@ -29,7 +29,7 @@ Aggregator::Aggregator(const rclcpp::NodeOptions & options)
   this->declare_parameter("alerts.jetson_gpu_temp_error_c", 83.0);
   this->declare_parameter("alerts.jetson_ram_warn_pct", 0.90);
   this->declare_parameter("alerts.jetson_disk_error_gb", 1.0);
-  this->declare_parameter("alerts.slam_latency_warn_ms", 100.0);
+  this->declare_parameter("alerts.slam_latency_warn_ms", 2000.0);
   this->declare_parameter("alerts.wifi_signal_warn_dbm", -75.0);
 
   double rate_hz = this->get_parameter("aggregator.publish_rate_hz").as_double();

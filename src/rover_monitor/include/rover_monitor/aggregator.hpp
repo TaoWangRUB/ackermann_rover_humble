@@ -76,7 +76,7 @@ private:
   float jetson_gpu_temp_error_c_{83.0f};
   float jetson_ram_warn_pct_{0.90f};
   float jetson_disk_error_gb_{1.0f};
-  float slam_latency_warn_ms_{100.0f};
+  float slam_latency_warn_ms_{2000.0f};
   float wifi_signal_warn_dbm_{-75.0f};
 
   int32_t seq_{0};
