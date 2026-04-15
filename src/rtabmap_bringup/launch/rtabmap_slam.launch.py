@@ -258,7 +258,7 @@ def generate_launch_description() -> LaunchDescription:
         'use_sim_time': use_sim_time,
         'approx_sync': True,
         'queue_size': 30,
-        'approx_sync_max_interval': 0.02,
+        'approx_sync_max_interval': 0.1,
         'Odom/Strategy': '0',
         'Odom/ImageDecimation': '2',
         'Vis/MinInliers': '20',

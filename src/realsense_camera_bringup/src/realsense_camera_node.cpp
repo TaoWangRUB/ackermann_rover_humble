@@ -686,9 +686,16 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
     if (auto fs = frame.as<rs2::frameset>()) {
       // Publish raw color and depth immediately so they run at full sensor fps
       // regardless of how long alignment takes (alignment is offloaded to align_worker).
+      // Compute color stamp once — the same stamp is forwarded to align_worker
+      // so aligned depth is guaranteed to carry an identical header.stamp.
+      rclcpp::Time color_stamp;
+      bool have_color_stamp = false;
       if (enable_color_) {
-        if (auto color = fs.get_color_frame())
-          publish_video_frame(color, color_image_pub_, color_info_pub_, color_info_msg_);
+        if (auto color = fs.get_color_frame()) {
+          color_stamp = frame_ros_time(color);
+          have_color_stamp = true;
+          publish_video_frame(color, color_image_pub_, color_info_pub_, color_info_msg_, color_stamp);
+        }
       }
       if (enable_depth_) {
         if (auto depth = fs.get_depth_frame())
@@ -744,12 +751,20 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
 
       // Hand off to async alignment worker (if enabled). Drop oldest frame if
       // the worker is behind to bound queue memory usage.
+      // Pass the pre-computed color stamp (or a fallback depth stamp) so the
+      // aligned depth image carries exactly the same header.stamp as the raw
+      // color image already published above — no re-derivation needed.
       if (align_depth_enable_) {
+        rclcpp::Time align_stamp = have_color_stamp
+            ? color_stamp
+            : (fs.get_depth_frame()
+                ? frame_ros_time(fs.get_depth_frame())
+                : rclcpp::Time(0, 0, RCL_SYSTEM_TIME));
         std::lock_guard<std::mutex> lock(align_mutex_);
         if (align_queue_.size() >= ALIGN_QUEUE_MAX) {
           align_queue_.pop();
         }
-        align_queue_.push(fs);
+        align_queue_.push({fs, align_stamp});
         align_cv_.notify_one();
       }
       return;
@@ -806,11 +821,14 @@ void RealsenseCameraNode::align_worker()
 {
   while (true) {
     rs2::frameset fs;
+    rclcpp::Time aligned_stamp;
     {
       std::unique_lock<std::mutex> lock(align_mutex_);
       align_cv_.wait(lock, [this] { return !align_queue_.empty() || !running_; });
       if (!running_ && align_queue_.empty()) break;
-      fs = align_queue_.front();
+      auto & front = align_queue_.front();
+      fs = front.first;
+      aligned_stamp = front.second;
       align_queue_.pop();
     }
     try {
@@ -818,8 +836,6 @@ void RealsenseCameraNode::align_worker()
       if (cuda_aligner_) {
         auto depth = fs.get_depth_frame();
         if (!depth) continue;
-        const auto color = fs.get_color_frame();
-        const auto aligned_stamp = frame_ros_time(color ? color : depth);
 
         try {
           const auto * src = reinterpret_cast<const uint16_t *>(depth.get_data());
@@ -835,9 +851,6 @@ void RealsenseCameraNode::align_worker()
       }
 
       if (align_to_color_) {
-        const auto color = fs.get_color_frame();
-        const auto depth = fs.get_depth_frame();
-        const auto aligned_stamp = frame_ros_time(color ? color : depth);
         rs2::frameset processed = align_to_color_->process(fs);
         if (auto aligned = processed.get_depth_frame())
           publish_video_frame(
@@ -848,9 +861,6 @@ void RealsenseCameraNode::align_worker()
             aligned_stamp);
       }
 #else
-      const auto color = fs.get_color_frame();
-      const auto depth = fs.get_depth_frame();
-      const auto aligned_stamp = frame_ros_time(color ? color : depth);
       rs2::frameset processed = align_to_color_->process(fs);
       if (auto aligned = processed.get_depth_frame())
         publish_video_frame(

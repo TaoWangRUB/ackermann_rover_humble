@@ -113,7 +113,7 @@ private:
   sensor_msgs::msg::CameraInfo infra1_info_msg_, infra2_info_msg_;
 
   // Async alignment worker (offloads depth alignment off the pipeline callback)
-  std::queue<rs2::frameset> align_queue_;
+  std::queue<std::pair<rs2::frameset, rclcpp::Time>> align_queue_;
   std::mutex align_mutex_;
   std::condition_variable align_cv_;
   std::thread align_thread_;
