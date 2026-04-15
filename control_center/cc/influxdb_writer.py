@@ -72,6 +72,7 @@ class InfluxDBWriter:
                 cam_p.tag("source", "aggregator")
                 cam_p.tag("camera_id", cam.camera_id or "unknown")
                 cam_p.field("cam_connected", cam.connected)
+                cam_p.field("cam_stream_fps", cam.stream_fps)
                 cam_p.field("cam_frame_delta_ms", cam.frame_delta_ms)
                 cam_p.field("cam_depth_fps", cam.depth_fps)
                 self._write_api.write(bucket=self._bucket, record=cam_p)

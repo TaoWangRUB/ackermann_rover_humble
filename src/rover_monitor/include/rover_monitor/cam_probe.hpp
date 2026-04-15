@@ -38,6 +38,7 @@ private:
   rclcpp::Time last_color_stamp_;
   float frame_delta_ms_{0.0f};
   bool first_color_frame_{true};
+  std::deque<rclcpp::Time> color_timestamps_;
 
   // Depth FPS rolling average (1-second window)
   std::deque<rclcpp::Time> depth_timestamps_;

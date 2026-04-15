@@ -62,6 +62,12 @@ void CamProbe::on_color_image(sensor_msgs::msg::Image::ConstSharedPtr /*msg*/)
   auto now = this->now();
   connected_ = true;
 
+  color_timestamps_.push_back(now);
+  auto cutoff = now - rclcpp::Duration::from_seconds(1.0);
+  while (!color_timestamps_.empty() && color_timestamps_.front() < cutoff) {
+    color_timestamps_.pop_front();
+  }
+
   if (first_color_frame_) {
     first_color_frame_ = false;
   } else {
@@ -121,6 +127,7 @@ void CamProbe::publish_status()
   status->camera_id = camera_id_;
   status->connected = connected_;
   status->frame_delta_ms = frame_delta_ms_;
+  status->stream_fps = static_cast<float>(color_timestamps_.size());
   status->depth_fps = static_cast<float>(depth_timestamps_.size());
   status->depth_quality_sampled = depth_quality_sampled_;
 
