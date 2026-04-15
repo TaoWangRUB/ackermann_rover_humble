@@ -351,10 +351,11 @@ def generate_launch_description() -> LaunchDescription:
 
     # Real RealSense cameras (D435i / L515 / T265 selected by hw_enable_* args).
     # The T265 odom_tf_relay is also started automatically when enable_t265:=true.
-    # All cameras perform a hardware_reset() on startup to clear stale USB/VPU
-    # state from previously killed sessions. When T265 is enabled, depth cameras
-    # are delayed 35s to let the T265 Movidius VPU fully reset and re-enumerate
-    # (avoids USB power-state races on the shared hub).
+    # T265 performs a hardware_reset() on startup to clear stale Movidius VPU
+    # state from previously killed sessions. D435i/L515 do NOT need hardware
+    # reset — they work fine without it and reset actually makes them worse
+    # (pipeline starts but on_frame callback never fires). When T265 is enabled,
+    # depth cameras are delayed 20s so the T265 finishes its reset cycle first.
     hw_cameras_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(realsense_bringup_share, 'launch', 'realsense_camera.launch.py')
@@ -366,16 +367,14 @@ def generate_launch_description() -> LaunchDescription:
             'enable_t265':  enable_t265,
             't265_enable_fisheye': t265_enable_fisheye,
             't265_relay_publish_tf': use_t265_odom,
-            # Hardware resets clear stale VPU/USB state from previously killed sessions.
-            # T265 Movidius VPU needs reset to recover from frozen pipeline; D435i IMU
-            # can stall after USB CLEAR_HALT events on shared hub.
+            # Only T265 needs hardware_reset (Movidius VPU freezes after kill).
+            # D435i/L515 work fine without it — reset actually causes no-frame stall.
             't265_enable_hardware_reset': 'true',
-            'd435i_enable_hardware_reset': 'true',
-            'l515_enable_hardware_reset':  'true',
-            # T265 reset + re-enumeration takes up to 30s (25s poll + 5s settle).
-            # Delay depth cameras long enough for T265 to fully recover.
-            'd435i_startup_delay_s': PythonExpression(['"35.0" if "', enable_t265, '" == "true" else "0.0"']),
-            'l515_startup_delay_s':  PythonExpression(['"35.0" if "', enable_t265, '" == "true" else "0.0"']),
+            'd435i_enable_hardware_reset': 'false',
+            'l515_enable_hardware_reset':  'false',
+            # T265 reset + re-enumeration ≈ 13s. 20s delay gives safe margin.
+            'd435i_startup_delay_s': PythonExpression(['"20.0" if "', enable_t265, '" == "true" else "0.0"']),
+            'l515_startup_delay_s':  PythonExpression(['"20.0" if "', enable_t265, '" == "true" else "0.0"']),
         }.items(),
     )
 
