@@ -88,6 +88,9 @@ class InfluxDBWriter:
             # Jetson fields
             if data.HasField("jetson"):
                 jet = data.jetson
+                if jet.cpu_usage_pct:
+                    avg_cpu = sum(jet.cpu_usage_pct) / len(jet.cpu_usage_pct)
+                    p.field("jetson_cpu_pct", avg_cpu)
                 p.field("jetson_gpu_pct", jet.gpu_usage_pct)
                 p.field("jetson_ram_used_mb", jet.ram_used_mb)
                 p.field("jetson_temp_cpu_c", jet.temp_cpu_c)

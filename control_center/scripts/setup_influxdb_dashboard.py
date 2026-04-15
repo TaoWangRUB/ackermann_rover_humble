@@ -159,8 +159,8 @@ Q_BATTERY_V = (
 Q_CAM_FPS = (
     'from(bucket: "rover_telemetry")'
     " |> range(start: v.timeRangeStart, stop: v.timeRangeStop)"
-    ' |> filter(fn: (r) => r._measurement == "rover_telemetry")'
-    ' |> filter(fn: (r) => r._field == "cam_depth_fps")'
+    ' |> filter(fn: (r) => r._measurement == "rover_cam_telemetry")'
+    ' |> filter(fn: (r) => r._field == "cam_depth_fps" or r._field == "cam_frame_delta_ms")'
     " |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
     ' |> yield(name: "mean")'
 )
@@ -179,7 +179,8 @@ Q_JETSON_GPU = (
     'from(bucket: "rover_telemetry")'
     " |> range(start: v.timeRangeStart, stop: v.timeRangeStop)"
     ' |> filter(fn: (r) => r._measurement == "rover_telemetry")'
-    ' |> filter(fn: (r) => r._field == "jetson_gpu_pct")'
+    ' |> filter(fn: (r) => r._field == "jetson_gpu_pct"'
+    ' or r._field == "jetson_cpu_pct")'
     " |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
     ' |> yield(name: "mean")'
 )
@@ -232,16 +233,16 @@ def main():
 
     # Row 2: Jetson Temperatures, Jetson GPU %, Active Alerts
     c4 = add_cell(dash_id, 0, 3, 4, 3, "Jetson Temperatures (°C)")
-    c5 = add_cell(dash_id, 4, 3, 4, 3, "Jetson GPU %")
+    c5 = add_cell(dash_id, 4, 3, 4, 3, "Jetson CPU / GPU %")
     c6 = add_cell(dash_id, 8, 3, 4, 3, "Active Alerts")
 
     # Configure views
     set_xy_view(dash_id, c1, "PX4 Battery %", Q_BATTERY_PCT)
     set_xy_view(dash_id, c2, "PX4 Battery Voltage", Q_BATTERY_V)
-    set_xy_view(dash_id, c3, "Camera Depth FPS", Q_CAM_FPS)
+    set_xy_view(dash_id, c3, "Camera FPS", Q_CAM_FPS, legend=True)
     set_xy_view(dash_id, c4, "Jetson Temperatures (°C)", Q_JETSON_TEMPS,
                 y_bounds=["30", "80"], y_label="°C", legend=True)
-    set_xy_view(dash_id, c5, "Jetson GPU %", Q_JETSON_GPU)
+    set_xy_view(dash_id, c5, "Jetson CPU / GPU %", Q_JETSON_GPU, legend=True)
     set_table_view(dash_id, c6, "Active Alerts", Q_ALERTS)
 
     print("Dashboard provisioned with 6 panels.")
