@@ -9,10 +9,19 @@ namespace realsense_camera_bringup
 {
 
 RealsenseCameraNode::RealsenseCameraNode(const rclcpp::NodeOptions & options)
-: Node("realsense_camera_node", options), pipe_(ctx_)
+: Node("realsense_camera_node", options)
 {
-  declare_parameters();
+  declare_parameters();   // includes startup_delay_s sleep
   create_publishers();
+
+  // Deferred RS context/pipeline init — done AFTER the startup delay so that
+  // USB re-enumeration triggered by other cameras' hardware_reset() (e.g.
+  // T265 Movidius VPU reset) completes before we create librealsense objects.
+  // Creating rs2::context eagerly starts background USB threads; if the bus
+  // re-enumerates mid-enumeration, the context's internal handles become stale
+  // and the process segfaults (exit code -11).
+  ctx_.emplace();
+  pipe_.emplace(*ctx_);
 
   // Retry loop — handles two classes of transient USB/firmware errors:
   //   1. "failed to set power state" / "Unable to open device" — enumeration race
@@ -64,9 +73,9 @@ RealsenseCameraNode::RealsenseCameraNode(const rclcpp::NodeOptions & options)
         // Recreate pipeline + config to avoid stale state from failed start.
         // After pipe_.start() fails, the pipeline object may hold a dead USB
         // handle; creating a fresh one forces librealsense to re-enumerate.
-        ctx_ = rs2::context();
-        pipe_ = rs2::pipeline(ctx_);
-        cfg_ = rs2::config();
+        ctx_.emplace();
+        pipe_.emplace(*ctx_);
+        cfg_.emplace();
       } else {
         RCLCPP_FATAL(get_logger(), "Failed to initialise camera: %s", what.c_str());
         throw;
@@ -102,8 +111,10 @@ RealsenseCameraNode::~RealsenseCameraNode()
     try { imu_sensor_.stop(); imu_sensor_.close(); } catch (...) {}
   }
   // Then stop the video pipeline.
-  try { pipe_.stop(); } catch (const std::exception & e) {
-    RCLCPP_WARN(get_logger(), "Pipeline stop error: %s", e.what());
+  if (pipe_) {
+    try { pipe_->stop(); } catch (const std::exception & e) {
+      RCLCPP_WARN(get_logger(), "Pipeline stop error: %s", e.what());
+    }
   }
   RCLCPP_INFO(get_logger(), "Shutdown complete.");
 }
@@ -271,7 +282,7 @@ void RealsenseCameraNode::reset_device()
 {
   // rs2::context enumerates USB devices asynchronously — give it time to complete
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
-  auto devices = ctx_.query_devices();
+  auto devices = ctx_->query_devices();
   if (devices.size() == 0) {
     throw std::runtime_error("No RealSense device found.");
   }
@@ -322,7 +333,7 @@ void RealsenseCameraNode::reset_device()
   // T265: unload the tracking module before reset so firmware releases its
   // USB handle cleanly (mirrors the official realsense-ros wrapper behaviour).
   if (camera_model_ == CameraModel::T265) {
-    try { ctx_.unload_tracking_module(); } catch (...) {}
+    try { ctx_->unload_tracking_module(); } catch (...) {}
   }
 
   RCLCPP_INFO(get_logger(), "Issuing hardware_reset() to device [%s]...", reset_serial.c_str());
@@ -349,8 +360,8 @@ void RealsenseCameraNode::reset_device()
             settle_time_s);
           std::this_thread::sleep_for(std::chrono::seconds(settle_time_s));
           // Refresh main context so start_pipeline sees the new device
-          ctx_ = rs2::context();
-          pipe_ = rs2::pipeline(ctx_);
+          ctx_.emplace();
+          pipe_.emplace(*ctx_);
           RCLCPP_INFO(get_logger(), "Device ready.");
           return;
         }
@@ -366,22 +377,22 @@ void RealsenseCameraNode::reset_device()
 // ---------------------------------------------------------------------------
 void RealsenseCameraNode::start_pipeline()
 {
-  if (!serial_no_.empty()) cfg_.enable_device(serial_no_);
+  if (!serial_no_.empty()) cfg_->enable_device(serial_no_);
 
   if (camera_model_ == CameraModel::T265) {
     if (enable_fisheye_) {
-      cfg_.enable_stream(RS2_STREAM_FISHEYE, 1, RS2_FORMAT_Y8);
-      cfg_.enable_stream(RS2_STREAM_FISHEYE, 2, RS2_FORMAT_Y8);
+      cfg_->enable_stream(RS2_STREAM_FISHEYE, 1, RS2_FORMAT_Y8);
+      cfg_->enable_stream(RS2_STREAM_FISHEYE, 2, RS2_FORMAT_Y8);
     }
-    cfg_.enable_stream(RS2_STREAM_POSE, RS2_FORMAT_6DOF);
+    cfg_->enable_stream(RS2_STREAM_POSE, RS2_FORMAT_6DOF);
     // T265 IMU is delivered through the pipeline (not direct sensor API)
-    if (enable_accel_) cfg_.enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F);
-    if (enable_gyro_) cfg_.enable_stream(RS2_STREAM_GYRO, RS2_FORMAT_MOTION_XYZ32F);
+    if (enable_accel_) cfg_->enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F);
+    if (enable_gyro_) cfg_->enable_stream(RS2_STREAM_GYRO, RS2_FORMAT_MOTION_XYZ32F);
   } else {
-    if (enable_color_) cfg_.enable_stream(RS2_STREAM_COLOR, color_width_, color_height_, RS2_FORMAT_RGB8, color_fps_);
-    if (enable_depth_) cfg_.enable_stream(RS2_STREAM_DEPTH, depth_width_, depth_height_, RS2_FORMAT_Z16, depth_fps_);
-    if (enable_infra1_) cfg_.enable_stream(RS2_STREAM_INFRARED, 1, depth_width_, depth_height_, RS2_FORMAT_Y8, depth_fps_);
-    if (enable_infra2_) cfg_.enable_stream(RS2_STREAM_INFRARED, 2, depth_width_, depth_height_, RS2_FORMAT_Y8, depth_fps_);
+    if (enable_color_) cfg_->enable_stream(RS2_STREAM_COLOR, color_width_, color_height_, RS2_FORMAT_RGB8, color_fps_);
+    if (enable_depth_) cfg_->enable_stream(RS2_STREAM_DEPTH, depth_width_, depth_height_, RS2_FORMAT_Z16, depth_fps_);
+    if (enable_infra1_) cfg_->enable_stream(RS2_STREAM_INFRARED, 1, depth_width_, depth_height_, RS2_FORMAT_Y8, depth_fps_);
+    if (enable_infra2_) cfg_->enable_stream(RS2_STREAM_INFRARED, 2, depth_width_, depth_height_, RS2_FORMAT_Y8, depth_fps_);
     // IMU is intentionally NOT added to pipeline config — opened via direct sensor API
     // below to avoid the pipeline sync module holding video frames waiting for IMU timestamps
   }
@@ -392,28 +403,28 @@ void RealsenseCameraNode::start_pipeline()
   running_ = true;
   rs2::pipeline_profile profile;
   try {
-    profile = pipe_.start(cfg_, [this](rs2::frame f) { on_frame(f); });
+    profile = pipe_->start(*cfg_, [this](rs2::frame f) { on_frame(f); });
   } catch (const rs2::error & e) {
     RCLCPP_WARN(get_logger(),
       "Pipeline start failed with requested config (%s) — retrying with auto profiles.", e.what());
-    cfg_ = rs2::config();
-    if (!serial_no_.empty()) cfg_.enable_device(serial_no_);
+    cfg_.emplace();
+    if (!serial_no_.empty()) cfg_->enable_device(serial_no_);
     if (camera_model_ == CameraModel::T265) {
       if (enable_fisheye_) {
-        cfg_.enable_stream(RS2_STREAM_FISHEYE, 1, RS2_FORMAT_Y8);
-        cfg_.enable_stream(RS2_STREAM_FISHEYE, 2, RS2_FORMAT_Y8);
+        cfg_->enable_stream(RS2_STREAM_FISHEYE, 1, RS2_FORMAT_Y8);
+        cfg_->enable_stream(RS2_STREAM_FISHEYE, 2, RS2_FORMAT_Y8);
       }
-      cfg_.enable_stream(RS2_STREAM_POSE, RS2_FORMAT_6DOF);
-      if (enable_accel_) cfg_.enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F);
-      if (enable_gyro_) cfg_.enable_stream(RS2_STREAM_GYRO, RS2_FORMAT_MOTION_XYZ32F);
+      cfg_->enable_stream(RS2_STREAM_POSE, RS2_FORMAT_6DOF);
+      if (enable_accel_) cfg_->enable_stream(RS2_STREAM_ACCEL, RS2_FORMAT_MOTION_XYZ32F);
+      if (enable_gyro_) cfg_->enable_stream(RS2_STREAM_GYRO, RS2_FORMAT_MOTION_XYZ32F);
     } else {
-      if (enable_color_) cfg_.enable_stream(RS2_STREAM_COLOR, -1, 0, 0, RS2_FORMAT_RGB8, 0);
-      if (enable_depth_) cfg_.enable_stream(RS2_STREAM_DEPTH, -1, 0, 0, RS2_FORMAT_Z16, 0);
-      if (enable_infra1_) cfg_.enable_stream(RS2_STREAM_INFRARED, 1, 0, 0, RS2_FORMAT_Y8, 0);
-      if (enable_infra2_) cfg_.enable_stream(RS2_STREAM_INFRARED, 2, 0, 0, RS2_FORMAT_Y8, 0);
+      if (enable_color_) cfg_->enable_stream(RS2_STREAM_COLOR, -1, 0, 0, RS2_FORMAT_RGB8, 0);
+      if (enable_depth_) cfg_->enable_stream(RS2_STREAM_DEPTH, -1, 0, 0, RS2_FORMAT_Z16, 0);
+      if (enable_infra1_) cfg_->enable_stream(RS2_STREAM_INFRARED, 1, 0, 0, RS2_FORMAT_Y8, 0);
+      if (enable_infra2_) cfg_->enable_stream(RS2_STREAM_INFRARED, 2, 0, 0, RS2_FORMAT_Y8, 0);
     }
     try {
-      profile = pipe_.start(cfg_, [this](rs2::frame f) { on_frame(f); });
+      profile = pipe_->start(*cfg_, [this](rs2::frame f) { on_frame(f); });
     } catch (const rs2::error & e2) {
       RCLCPP_ERROR(get_logger(), "Auto-profile fallback also failed: %s", e2.what());
       throw std::runtime_error(std::string("Pipeline cannot start: ") + e2.what());
@@ -1149,8 +1160,10 @@ void RealsenseCameraNode::restart_pipeline_with_reset()
   }
 
   // Stop video pipeline
-  try { pipe_.stop(); } catch (const std::exception & e) {
-    RCLCPP_WARN(get_logger(), "Pipeline stop during restart: %s", e.what());
+  if (pipe_) {
+    try { pipe_->stop(); } catch (const std::exception & e) {
+      RCLCPP_WARN(get_logger(), "Pipeline stop during restart: %s", e.what());
+    }
   }
 
   // Reset timestamp base so next start picks up fresh timestamps
@@ -1161,9 +1174,9 @@ void RealsenseCameraNode::restart_pipeline_with_reset()
 
   // Perform hardware reset + re-enumeration
   try {
-    ctx_ = rs2::context();
-    pipe_ = rs2::pipeline(ctx_);
-    cfg_ = rs2::config();
+    ctx_.emplace();
+    pipe_.emplace(*ctx_);
+    cfg_.emplace();
     reset_device();
   } catch (const std::exception & e) {
     RCLCPP_ERROR(get_logger(), "Hardware reset during restart failed: %s", e.what());
