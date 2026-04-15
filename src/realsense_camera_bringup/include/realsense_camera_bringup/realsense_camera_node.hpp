@@ -141,6 +141,16 @@ private:
   // pose/IMU samples (see on_frame).
   unsigned long long last_fisheye1_frame_number_{0};
   unsigned long long last_fisheye2_frame_number_{0};
+
+  // Data-flow watchdog: detects frozen T265 pipeline (VPU started but never
+  // delivers frames) and triggers automatic pipeline restart with hardware reset.
+  void start_data_flow_watchdog();
+  void restart_pipeline_with_reset();
+  std::atomic<bool> first_frame_received_{false};
+  rclcpp::TimerBase::SharedPtr data_flow_watchdog_timer_;
+  int pipeline_restart_attempts_{0};
+  static constexpr int MAX_PIPELINE_RESTARTS = 2;
+  static constexpr int DATA_FLOW_WATCHDOG_S = 15;  // seconds to wait for first frame
 };
 
 } // namespace realsense_camera_bringup
