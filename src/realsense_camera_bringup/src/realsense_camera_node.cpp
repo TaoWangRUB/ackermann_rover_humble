@@ -1148,7 +1148,7 @@ void RealsenseCameraNode::restart_pipeline_with_reset()
   // Drain the alignment queue
   {
     std::lock_guard<std::mutex> lock(align_mutex_);
-    std::queue<rs2::frameset> empty;
+    decltype(align_queue_) empty;
     std::swap(align_queue_, empty);
   }
 
