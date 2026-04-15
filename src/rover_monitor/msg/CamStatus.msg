@@ -1,6 +1,7 @@
 string camera_id
 bool connected
 float32 frame_delta_ms
+float32 stream_fps
 float32 depth_fps
 float32 depth_quality_sampled
 bool imu_active

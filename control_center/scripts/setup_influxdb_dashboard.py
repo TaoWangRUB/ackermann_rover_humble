@@ -160,7 +160,7 @@ Q_CAM_FPS = (
     'from(bucket: "rover_telemetry")'
     " |> range(start: v.timeRangeStart, stop: v.timeRangeStop)"
     ' |> filter(fn: (r) => r._measurement == "rover_cam_telemetry")'
-    ' |> filter(fn: (r) => r._field == "cam_depth_fps" or r._field == "cam_frame_delta_ms")'
+    ' |> filter(fn: (r) => r._field == "cam_stream_fps")'
     " |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
     ' |> yield(name: "mean")'
 )
@@ -226,10 +226,10 @@ def main():
     dash_id = create_dashboard(org_id)
     print(f"Created dashboard '{DASHBOARD_NAME}' (ID: {dash_id})")
 
-    # Row 1: PX4 Battery %, PX4 Battery Voltage, Camera Depth FPS
+    # Row 1: PX4 Battery %, PX4 Battery Voltage, Camera Stream FPS
     c1 = add_cell(dash_id, 0, 0, 4, 3, "PX4 Battery %")
     c2 = add_cell(dash_id, 4, 0, 4, 3, "PX4 Battery Voltage")
-    c3 = add_cell(dash_id, 8, 0, 4, 3, "Camera Depth FPS")
+    c3 = add_cell(dash_id, 8, 0, 4, 3, "Camera FPS")
 
     # Row 2: Jetson Temperatures, Jetson GPU %, Active Alerts
     c4 = add_cell(dash_id, 0, 3, 4, 3, "Jetson Temperatures (°C)")

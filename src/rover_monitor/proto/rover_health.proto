@@ -5,12 +5,13 @@ message CamStatus {
   string camera_id = 1;
   bool connected = 2;
   float frame_delta_ms = 3;
-  float depth_fps = 4;
-  float depth_quality_sampled = 5;
-  bool imu_active = 6;
-  int32 error_code = 7;
-  string error_msg = 8;
-  int64 timestamp = 9;
+  float stream_fps = 4;
+  float depth_fps = 5;
+  float depth_quality_sampled = 6;
+  bool imu_active = 7;
+  int32 error_code = 8;
+  string error_msg = 9;
+  int64 timestamp = 10;
 }
 
 message Px4Status {
