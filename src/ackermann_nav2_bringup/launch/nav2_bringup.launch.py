@@ -150,17 +150,18 @@ def launch_setup(context, *args, **kwargs):
     bt_xml = LaunchConfiguration('bt_xml')
     navigate_through_poses_bt = LaunchConfiguration('navigate_through_poses_bt')
 
+    # Minimal set for CPU-constrained platforms (Xavier NX = 6 cores).
+    # Removed: smoother_server (SmacPlannerHybrid has built-in smoothing),
+    #          route_server (graph-based routing unused),
+    #          waypoint_follower (single-goal navigation only),
+    #          docking_server (no dock configured).
     lifecycle_nodes = [
         'controller_server',
-        'smoother_server',
         'planner_server',
-        'route_server',
         'behavior_server',
         'velocity_smoother',
         'collision_monitor',
         'bt_navigator',
-        'waypoint_follower',
-        'docking_server',
     ]
 
     # Map fully qualified names to relative ones so the node's namespace can be
@@ -218,31 +219,9 @@ def launch_setup(context, *args, **kwargs):
                 remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
             ),
             Node(
-                package='nav2_smoother',
-                executable='smoother_server',
-                name='smoother_server',
-                output='screen',
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=[configured_params],
-                arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings,
-            ),
-            Node(
                 package='nav2_planner',
                 executable='planner_server',
                 name='planner_server',
-                output='screen',
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=[configured_params],
-                arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings,
-            ),
-            Node(
-                package='nav2_route',
-                executable='route_server',
-                name='route_server',
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
@@ -276,17 +255,6 @@ def launch_setup(context, *args, **kwargs):
                 remappings=remappings,
             ),
             Node(
-                package='nav2_waypoint_follower',
-                executable='waypoint_follower',
-                name='waypoint_follower',
-                output='screen',
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=[configured_params],
-                arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings,
-            ),
-            Node(
                 package='nav2_velocity_smoother',
                 executable='velocity_smoother',
                 name='velocity_smoother',
@@ -301,17 +269,6 @@ def launch_setup(context, *args, **kwargs):
                 package='nav2_collision_monitor',
                 executable='collision_monitor',
                 name='collision_monitor',
-                output='screen',
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=[configured_params],
-                arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings,
-            ),
-            Node(
-                package='opennav_docking',
-                executable='opennav_docking',
-                name='docking_server',
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
@@ -346,23 +303,9 @@ def launch_setup(context, *args, **kwargs):
                         remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
                     ),
                     ComposableNode(
-                        package='nav2_smoother',
-                        plugin='nav2_smoother::SmootherServer',
-                        name='smoother_server',
-                        parameters=[configured_params],
-                        remappings=remappings,
-                    ),
-                    ComposableNode(
                         package='nav2_planner',
                         plugin='nav2_planner::PlannerServer',
                         name='planner_server',
-                        parameters=[configured_params],
-                        remappings=remappings,
-                    ),
-                    ComposableNode(
-                        package='nav2_route',
-                        plugin='nav2_route::RouteServer',
-                        name='route_server',
                         parameters=[configured_params],
                         remappings=remappings,
                     ),
@@ -384,13 +327,6 @@ def launch_setup(context, *args, **kwargs):
                         remappings=remappings,
                     ),
                     ComposableNode(
-                        package='nav2_waypoint_follower',
-                        plugin='nav2_waypoint_follower::WaypointFollower',
-                        name='waypoint_follower',
-                        parameters=[configured_params],
-                        remappings=remappings,
-                    ),
-                    ComposableNode(
                         package='nav2_velocity_smoother',
                         plugin='nav2_velocity_smoother::VelocitySmoother',
                         name='velocity_smoother',
@@ -401,13 +337,6 @@ def launch_setup(context, *args, **kwargs):
                         package='nav2_collision_monitor',
                         plugin='nav2_collision_monitor::CollisionMonitor',
                         name='collision_monitor',
-                        parameters=[configured_params],
-                        remappings=remappings,
-                    ),
-                    ComposableNode(
-                        package='opennav_docking',
-                        plugin='opennav_docking::DockingServer',
-                        name='docking_server',
                         parameters=[configured_params],
                         remappings=remappings,
                     ),
