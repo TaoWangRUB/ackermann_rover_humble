@@ -8,6 +8,7 @@
 #include <rover_monitor/msg/jetson_status.hpp>
 #include <rover_monitor/msg/rover_health.hpp>
 
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -49,12 +50,12 @@ private:
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
-  // Latest-value caches
-  std::optional<rover_monitor::msg::CamStatus> cam_cache_;
+  // Latest-value caches (cameras keyed by camera_id)
+  std::map<std::string, rover_monitor::msg::CamStatus> cam_cache_;
+  std::map<std::string, rclcpp::Time> cam_stamps_;
   std::optional<rover_monitor::msg::Px4Status> px4_cache_;
   std::optional<rover_monitor::msg::JetsonStatus> jetson_cache_;
 
-  rclcpp::Time cam_stamp_;
   rclcpp::Time px4_stamp_;
   rclcpp::Time jetson_stamp_;
 

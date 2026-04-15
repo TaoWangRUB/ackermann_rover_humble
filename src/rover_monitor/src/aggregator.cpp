@@ -89,7 +89,6 @@ Aggregator::Aggregator(const rclcpp::NodeOptions & options)
 
   // Initialize stamps
   auto now = this->now();
-  cam_stamp_ = now;
   px4_stamp_ = now;
   jetson_stamp_ = now;
 
@@ -104,8 +103,8 @@ Aggregator::Aggregator(const rclcpp::NodeOptions & options)
 
 void Aggregator::on_cam(rover_monitor::msg::CamStatus::ConstSharedPtr msg)
 {
-  cam_cache_ = *msg;
-  cam_stamp_ = this->now();
+  cam_cache_[msg->camera_id] = *msg;
+  cam_stamps_[msg->camera_id] = this->now();
 }
 
 void Aggregator::on_px4(rover_monitor::msg::Px4Status::ConstSharedPtr msg)
@@ -128,14 +127,21 @@ void Aggregator::on_timer()
 
   auto now = this->now();
 
-  // Populate from caches (or stale defaults)
-  auto cam_age_ms = (now - cam_stamp_).seconds() * 1000.0;
-  if (cam_cache_.has_value() && cam_age_ms < cam_stale_timeout_ms_) {
-    health->camera = cam_cache_.value();
-  } else {
-    health->camera.connected = false;
-    health->camera.error_code = 1;
-    health->camera.error_msg = "Camera data stale";
+  // Populate cameras array from cache
+  for (auto & [cam_id, cam_status] : cam_cache_) {
+    auto it = cam_stamps_.find(cam_id);
+    double age_ms = (it != cam_stamps_.end())
+      ? (now - it->second).seconds() * 1000.0 : 9999.0;
+    if (age_ms < cam_stale_timeout_ms_) {
+      health->cameras.push_back(cam_status);
+    } else {
+      rover_monitor::msg::CamStatus stale;
+      stale.camera_id = cam_id;
+      stale.connected = false;
+      stale.error_code = 1;
+      stale.error_msg = "Camera data stale";
+      health->cameras.push_back(stale);
+    }
   }
 
   auto px4_age_ms = (now - px4_stamp_).seconds() * 1000.0;
@@ -184,18 +190,21 @@ std::vector<std::string> Aggregator::evaluate_alerts(
 {
   std::vector<std::string> alerts;
 
-  // Camera alerts
-  if (!health.camera.connected) {
-    alerts.push_back("CAM_DISCONNECTED");
-  }
-  if (health.camera.connected && health.camera.frame_delta_ms > cam_stutter_delta_ms_) {
-    alerts.push_back("CAM_STUTTER");
-  }
-  if (health.camera.connected &&
-    health.camera.depth_quality_sampled < cam_depth_quality_warn_ &&
-    health.camera.depth_quality_sampled >= 0.0f)
-  {
-    alerts.push_back("CAM_DEPTH_QUALITY");
+  // Camera alerts (check all cameras)
+  for (const auto & cam : health.cameras) {
+    std::string prefix = cam.camera_id.empty() ? "CAM" : cam.camera_id;
+    if (!cam.connected) {
+      alerts.push_back(prefix + "_DISCONNECTED");
+    }
+    if (cam.connected && cam.frame_delta_ms > cam_stutter_delta_ms_) {
+      alerts.push_back(prefix + "_STUTTER");
+    }
+    if (cam.connected &&
+      cam.depth_quality_sampled < cam_depth_quality_warn_ &&
+      cam.depth_quality_sampled >= 0.0f)
+    {
+      alerts.push_back(prefix + "_DEPTH_QUALITY");
+    }
   }
 
   // PX4 alerts
@@ -249,16 +258,20 @@ std::string Aggregator::derive_overall_health(const std::vector<std::string> & a
 {
   if (alerts.empty()) { return "OK"; }
 
-  // ERROR-level alerts
-  static const std::vector<std::string> error_alerts = {
-    "CAM_DISCONNECTED", "PX4_HEARTBEAT_LOST", "PX4_BATTERY_CRITICAL",
-    "JETSON_CPU_HOT", "HW_THROTTLE_THERMAL", "HW_THROTTLE_POWER",
-    "JETSON_DISK_LOW"
+  // ERROR-level alerts (suffix-matched for camera alerts with dynamic prefix)
+  static const std::vector<std::string> error_suffixes = {
+    "_DISCONNECTED", "_HEARTBEAT_LOST", "_BATTERY_CRITICAL",
+    "_CPU_HOT", "_THROTTLE_THERMAL", "_THROTTLE_POWER",
+    "_DISK_LOW"
   };
 
   for (const auto & alert : alerts) {
-    for (const auto & err : error_alerts) {
-      if (alert == err) { return "ERROR"; }
+    for (const auto & suffix : error_suffixes) {
+      if (alert.size() >= suffix.size() &&
+        alert.compare(alert.size() - suffix.size(), suffix.size(), suffix) == 0)
+      {
+        return "ERROR";
+      }
     }
   }
   return "WARN";

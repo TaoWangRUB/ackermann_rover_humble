@@ -475,17 +475,19 @@ std::string TelemetryPublisher::serialise_health(
     pb.add_active_alerts(alert);
   }
 
-  // Camera
-  auto * cam = pb.mutable_camera();
-  cam->set_camera_id(msg.camera.camera_id);
-  cam->set_connected(msg.camera.connected);
-  cam->set_frame_delta_ms(msg.camera.frame_delta_ms);
-  cam->set_depth_fps(msg.camera.depth_fps);
-  cam->set_depth_quality_sampled(msg.camera.depth_quality_sampled);
-  cam->set_imu_active(msg.camera.imu_active);
-  cam->set_error_code(msg.camera.error_code);
-  cam->set_error_msg(msg.camera.error_msg);
-  cam->set_timestamp(msg.camera.timestamp);
+  // Cameras (repeated)
+  for (const auto & cam_msg : msg.cameras) {
+    auto * cam = pb.add_cameras();
+    cam->set_camera_id(cam_msg.camera_id);
+    cam->set_connected(cam_msg.connected);
+    cam->set_frame_delta_ms(cam_msg.frame_delta_ms);
+    cam->set_depth_fps(cam_msg.depth_fps);
+    cam->set_depth_quality_sampled(cam_msg.depth_quality_sampled);
+    cam->set_imu_active(cam_msg.imu_active);
+    cam->set_error_code(cam_msg.error_code);
+    cam->set_error_msg(cam_msg.error_msg);
+    cam->set_timestamp(cam_msg.timestamp);
+  }
 
   // PX4
   auto * px4 = pb.mutable_px4();

@@ -18,13 +18,16 @@ from control_center.proto import rover_health_pb2  # noqa: E402
 
 
 def format_msg(msg: rover_health_pb2.RoverHealth) -> str:
+    cams = ', '.join(
+        f"{c.camera_id}:{'OK' if c.connected else 'OFF'}@{c.depth_fps:.0f}fps"
+        for c in msg.cameras
+    ) or 'none'
     return (
-        "seq={seq} overall={overall} cam={cam} fps={fps:.1f} px4={px4} "
+        "seq={seq} overall={overall} cams=[{cams}] px4={px4} "
         "armed={armed} mode={mode} batt={batt:.1f} alerts={alerts}".format(
             seq=msg.seq,
             overall=msg.overall_health,
-            cam=msg.camera.connected,
-            fps=msg.camera.depth_fps,
+            cams=cams,
             px4=msg.px4.connected,
             armed=msg.px4.armed,
             mode=msg.px4.nav_state_label,
