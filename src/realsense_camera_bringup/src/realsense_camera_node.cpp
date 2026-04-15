@@ -33,6 +33,7 @@ RealsenseCameraNode::RealsenseCameraNode(const rclcpp::NodeOptions & options)
         did_hardware_reset = true;
       }
       start_pipeline();
+      start_data_flow_watchdog();
       return;   // success
     } catch (const std::exception & e) {
       const std::string what = e.what();
@@ -78,6 +79,11 @@ RealsenseCameraNode::~RealsenseCameraNode()
 {
   RCLCPP_INFO(get_logger(), "Shutting down — stopping pipeline...");
   running_ = false;
+
+  // Cancel the data-flow watchdog to prevent it from firing during shutdown.
+  if (data_flow_watchdog_timer_) {
+    data_flow_watchdog_timer_->cancel();
+  }
 
   // Wake and join the alignment worker before stopping the pipeline so it
   // doesn't try to process frames after pipe_.stop() frees them.
@@ -666,6 +672,11 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
 {
   if (!running_) return;
 
+  // Signal the data-flow watchdog that we're receiving data.
+  if (!first_frame_received_.load(std::memory_order_relaxed)) {
+    first_frame_received_.store(true, std::memory_order_relaxed);
+  }
+
   try {
     // Pipeline sync module delivers color+depth as a composite frameset — unpack explicitly
     if (auto fs = frame.as<rs2::frameset>()) {
@@ -1073,6 +1084,85 @@ void RealsenseCameraNode::publish_pose_frame(const rs2::pose_frame & frame)
   }
 
   odom_pub_->publish(std::move(msg));
+}
+
+// ---------------------------------------------------------------------------
+// Data-flow watchdog — detects frozen T265 (or any camera) pipeline
+// ---------------------------------------------------------------------------
+void RealsenseCameraNode::start_data_flow_watchdog()
+{
+  // Only arm the watchdog when hardware_reset is enabled (i.e. we can actually
+  // recover) and we haven't already exhausted restart attempts.
+  if (!enable_hardware_reset_ || pipeline_restart_attempts_ >= MAX_PIPELINE_RESTARTS) {
+    return;
+  }
+
+  first_frame_received_.store(false, std::memory_order_relaxed);
+  data_flow_watchdog_timer_ = create_wall_timer(
+    std::chrono::seconds(DATA_FLOW_WATCHDOG_S),
+    [this]() {
+      // One-shot: cancel immediately so it doesn't re-fire.
+      data_flow_watchdog_timer_->cancel();
+
+      if (first_frame_received_.load(std::memory_order_relaxed)) {
+        RCLCPP_INFO(get_logger(), "Data-flow watchdog: first frame received — all good.");
+        return;
+      }
+
+      // No data arrived within the timeout window.
+      ++pipeline_restart_attempts_;
+      RCLCPP_WARN(get_logger(),
+        "Data-flow watchdog: no frames received in %d s — restarting pipeline "
+        "(attempt %d/%d)...",
+        DATA_FLOW_WATCHDOG_S, pipeline_restart_attempts_, MAX_PIPELINE_RESTARTS);
+
+      restart_pipeline_with_reset();
+    });
+}
+
+void RealsenseCameraNode::restart_pipeline_with_reset()
+{
+  // Stop current pipeline
+  running_ = false;
+  align_cv_.notify_all();
+
+  // Stop IMU sensor if running
+  if (imu_sensor_) {
+    try { imu_sensor_.stop(); imu_sensor_.close(); } catch (...) {}
+    imu_sensor_ = rs2::sensor();
+  }
+
+  // Stop video pipeline
+  try { pipe_.stop(); } catch (const std::exception & e) {
+    RCLCPP_WARN(get_logger(), "Pipeline stop during restart: %s", e.what());
+  }
+
+  // Reset timestamp base so next start picks up fresh timestamps
+  {
+    std::lock_guard<std::mutex> lock(timestamp_base_mutex_);
+    timestamp_base_initialized_ = false;
+  }
+
+  // Perform hardware reset + re-enumeration
+  try {
+    ctx_ = rs2::context();
+    pipe_ = rs2::pipeline(ctx_);
+    cfg_ = rs2::config();
+    reset_device();
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(get_logger(), "Hardware reset during restart failed: %s", e.what());
+    return;
+  }
+
+  // Restart pipeline
+  try {
+    start_pipeline();
+    RCLCPP_INFO(get_logger(), "Pipeline restarted successfully after watchdog trigger.");
+    // Re-arm watchdog for the new pipeline
+    start_data_flow_watchdog();
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(get_logger(), "Pipeline restart failed: %s — node needs manual intervention.", e.what());
+  }
 }
 
 } // namespace realsense_camera_bringup

@@ -160,7 +160,9 @@ fi
 
 # ── Kill old ROS nodes before starting new ones ─────────────────────
 "${SCRIPT_DIR}/stop_all.sh" --session="${SESSION}"
-sleep 30
+# Brief pause for process cleanup. Camera USB recovery is now handled
+# by hardware_reset() inside the realsense_camera_node itself.
+sleep 5
 
 # ── Create tmux session ──────────────────────────────────────────────
 tmux kill-session -t "${SESSION}" 2>/dev/null || true
