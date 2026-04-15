@@ -53,5 +53,5 @@
       jetson_gpu_temp_error_c: 83.0
       jetson_ram_warn_pct: 0.90
       jetson_disk_error_gb: 1.0
-      slam_latency_warn_ms: 100.0
+      slam_latency_warn_ms: 2000.0
       wifi_signal_warn_dbm: -75.0
