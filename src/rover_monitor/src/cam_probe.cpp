@@ -12,13 +12,15 @@ CamProbe::CamProbe(const rclcpp::NodeOptions & options)
     rclcpp::CallbackGroupType::MutuallyExclusive);
 
   // Parameters
+  this->declare_parameter("probes.cam.camera_id", "realsense");
   this->declare_parameter("probes.cam.color_topic", "/camera/color/image_raw");
-  this->declare_parameter("probes.cam.depth_topic", "/camera/depth/image_rect_raw");
+  this->declare_parameter("probes.cam.depth_topic", "");
   this->declare_parameter("probes.cam.imu_topic", "/camera/imu");
   this->declare_parameter("probes.cam.depth_quality_sample_interval", 10);
   this->declare_parameter("probes.cam.imu_timeout_ms", 500);
   this->declare_parameter("probes.cam.frame_stutter_threshold_ms", 99.0);
 
+  camera_id_ = this->get_parameter("probes.cam.camera_id").as_string();
   depth_quality_sample_interval_ =
     this->get_parameter("probes.cam.depth_quality_sample_interval").as_int();
   imu_timeout_ms_ = this->get_parameter("probes.cam.imu_timeout_ms").as_int();
@@ -40,9 +42,11 @@ CamProbe::CamProbe(const rclcpp::NodeOptions & options)
     color_topic, rclcpp::SensorDataQoS(),
     std::bind(&CamProbe::on_color_image, this, std::placeholders::_1), sub_opts);
 
-  depth_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
-    depth_topic, rclcpp::SensorDataQoS(),
-    std::bind(&CamProbe::on_depth_image, this, std::placeholders::_1), sub_opts);
+  if (!depth_topic.empty()) {
+    depth_sub_ = this->create_subscription<sensor_msgs::msg::Image>(
+      depth_topic, rclcpp::SensorDataQoS(),
+      std::bind(&CamProbe::on_depth_image, this, std::placeholders::_1), sub_opts);
+  }
 
   imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
     imu_topic, rclcpp::SensorDataQoS(),

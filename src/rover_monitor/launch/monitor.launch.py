@@ -19,86 +19,118 @@ def _build_container(context):
     broker_host = LaunchConfiguration('broker_host').perform(context)
 
     depth_camera = LaunchConfiguration('depth_camera').perform(context)
+    tracking_camera = LaunchConfiguration('tracking_camera').perform(context)
 
     cam_topic_overrides = {
+        'probes.cam.camera_id': depth_camera,
         'probes.cam.color_topic': '/{}/color/image_raw'.format(depth_camera),
         'probes.cam.depth_topic': '/{}/depth/image_rect_raw'.format(depth_camera),
         'probes.cam.imu_topic': '/{}/imu'.format(depth_camera),
     }
+
+    tracking_topic_overrides = {
+        'probes.cam.camera_id': tracking_camera,
+        'probes.cam.color_topic': '/{}/fisheye1/image_raw'.format(tracking_camera),
+        'probes.cam.depth_topic': '',
+        'probes.cam.imu_topic': '/{}/imu'.format(tracking_camera),
+    }
+
     telemetry_overrides = [{'use_sim_time': use_sim_time}]
     if broker_host:
         telemetry_overrides.append({'publisher.broker_host': broker_host})
+
+    composable_nodes = [
+        ComposableNode(
+            package='rover_monitor',
+            plugin='rover_monitor::CamProbe',
+            name='cam_probe_depth',
+            parameters=[
+                config_file,
+                {'use_sim_time': use_sim_time},
+                cam_topic_overrides,
+            ],
+            extra_arguments=[
+                {'use_intra_process_comms': True},
+            ],
+        ),
+    ]
+
+    if tracking_camera:
+        composable_nodes.append(
+            ComposableNode(
+                package='rover_monitor',
+                plugin='rover_monitor::CamProbe',
+                name='cam_probe_tracking',
+                parameters=[
+                    config_file,
+                    {'use_sim_time': use_sim_time},
+                    tracking_topic_overrides,
+                ],
+                extra_arguments=[
+                    {'use_intra_process_comms': True},
+                ],
+            ),
+        )
+
+    composable_nodes.extend([
+        ComposableNode(
+            package='rover_monitor',
+            plugin='rover_monitor::Px4Probe',
+            name='px4_probe',
+            parameters=[
+                config_file,
+                {'use_sim_time': use_sim_time},
+            ],
+            extra_arguments=[
+                {'use_intra_process_comms': True},
+            ],
+        ),
+        ComposableNode(
+            package='rover_monitor',
+            plugin='rover_monitor::JetsonProbe',
+            name='jetson_probe',
+            parameters=[
+                config_file,
+                {'use_sim_time': use_sim_time},
+            ],
+            extra_arguments=[
+                {'use_intra_process_comms': True},
+            ],
+        ),
+        ComposableNode(
+            package='rover_monitor',
+            plugin='rover_monitor::Aggregator',
+            name='monitor_aggregator',
+            parameters=[
+                config_file,
+                {'use_sim_time': use_sim_time},
+            ],
+            extra_arguments=[
+                {'use_intra_process_comms': True},
+            ],
+        ),
+        ComposableNode(
+            package='rover_monitor',
+            plugin='rover_monitor::TelemetryPublisher',
+            name='telemetry_publisher',
+            parameters=[
+                config_file,
+                publisher_config_file,
+                *telemetry_overrides,
+            ],
+            extra_arguments=[
+                {'use_intra_process_comms': True},
+            ],
+            condition=IfCondition(enable_telemetry),
+        ),
+    ])
 
     return [ComposableNodeContainer(
         name='monitor_container',
         namespace='',
         package='rclcpp_components',
         executable='component_container',
-        composable_node_descriptions=[
-            ComposableNode(
-                package='rover_monitor',
-                plugin='rover_monitor::CamProbe',
-                name='cam_probe',
-                parameters=[
-                    config_file,
-                    {'use_sim_time': use_sim_time},
-                    cam_topic_overrides,
-                ],
-                extra_arguments=[
-                    {'use_intra_process_comms': True},
-                ],
-            ),
-            ComposableNode(
-                package='rover_monitor',
-                plugin='rover_monitor::Px4Probe',
-                name='px4_probe',
-                parameters=[
-                    config_file,
-                    {'use_sim_time': use_sim_time},
-                ],
-                extra_arguments=[
-                    {'use_intra_process_comms': True},
-                ],
-            ),
-            ComposableNode(
-                package='rover_monitor',
-                plugin='rover_monitor::JetsonProbe',
-                name='jetson_probe',
-                parameters=[
-                    config_file,
-                    {'use_sim_time': use_sim_time},
-                ],
-                extra_arguments=[
-                    {'use_intra_process_comms': True},
-                ],
-            ),
-            ComposableNode(
-                package='rover_monitor',
-                plugin='rover_monitor::Aggregator',
-                name='monitor_aggregator',
-                parameters=[
-                    config_file,
-                    {'use_sim_time': use_sim_time},
-                ],
-                extra_arguments=[
-                    {'use_intra_process_comms': True},
-                ],
-            ),
-            ComposableNode(
-                package='rover_monitor',
-                plugin='rover_monitor::TelemetryPublisher',
-                name='telemetry_publisher',
-                parameters=[
-                    config_file,
-                    publisher_config_file,
-                    *telemetry_overrides,
-                ],
-                extra_arguments=[
-                    {'use_intra_process_comms': True},
-                ],
-                condition=IfCondition(enable_telemetry),
-            ),
-        ],
+        composable_node_descriptions=composable_nodes,
         output='screen',
     )]
 
@@ -128,5 +160,9 @@ def generate_launch_description():
             'depth_camera',
             default_value='d435i',
             description='Depth camera name — sets cam topic prefix (d435i, l515)'),
+        DeclareLaunchArgument(
+            'tracking_camera',
+            default_value='t265',
+            description='Tracking camera name — sets cam topic prefix (t265). Empty to disable.'),
         OpaqueFunction(function=_build_container),
     ])
