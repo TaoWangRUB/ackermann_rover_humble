@@ -492,7 +492,11 @@ void RealsenseCameraNode::start_pipeline()
     RCLCPP_INFO(get_logger(), "Depth alignment: CPU rs2::align (async worker thread)");
 #endif
 
-    align_thread_ = std::thread(&RealsenseCameraNode::align_worker, this);
+    // Guard: only spawn a new alignment thread if none is running
+    // (handles pipeline restart after watchdog trigger).
+    if (!align_thread_.joinable()) {
+      align_thread_ = std::thread(&RealsenseCameraNode::align_worker, this);
+    }
   }
 
   // Log USB connection type; warn if USB 2.x (bandwidth may be insufficient for full resolution)
@@ -1124,7 +1128,19 @@ void RealsenseCameraNode::restart_pipeline_with_reset()
 {
   // Stop current pipeline
   running_ = false;
+
+  // Wake and join the alignment worker so it doesn't race with the new pipeline.
   align_cv_.notify_all();
+  if (align_thread_.joinable()) {
+    align_thread_.join();
+  }
+
+  // Drain the alignment queue
+  {
+    std::lock_guard<std::mutex> lock(align_mutex_);
+    std::queue<rs2::frameset> empty;
+    std::swap(align_queue_, empty);
+  }
 
   // Stop IMU sensor if running
   if (imu_sensor_) {
