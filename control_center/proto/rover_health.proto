@@ -51,7 +51,7 @@ message JetsonStatus {
 message RoverHealth {
   int32 seq = 1;
   int64 timestamp = 2;
-  CamStatus camera = 3;
+  reserved 3;  // was singular CamStatus camera
   Px4Status px4 = 4;
   JetsonStatus jetson = 5;
   // Legacy field name retained for compatibility.
@@ -59,6 +59,7 @@ message RoverHealth {
   float slam_latency_ms = 6;
   string overall_health = 7;
   repeated string active_alerts = 8;
+  repeated CamStatus cameras = 9;
 }
 
 // --- v1.2.0: Command System ---

@@ -309,7 +309,7 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     ekf_parameters = {
-        'frequency': 15.0,
+        'frequency': 30.0,
         'predict_to_current_time': True,
         'history_length': 5.0,
         'smooth_lagged_data': True,

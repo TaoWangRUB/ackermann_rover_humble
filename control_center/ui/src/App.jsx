@@ -66,8 +66,9 @@ function Panel({ title, hwMode, children }) {
 
 function CameraPanel({ cam, hwMode }) {
   if (!cam) return <Panel title="Camera" hwMode={hwMode}><p>No data</p></Panel>;
+  const label = cam.cameraId ? `Camera (${cam.cameraId})` : 'Camera';
   return (
-    <Panel title="Camera" hwMode={hwMode}>
+    <Panel title={label} hwMode={hwMode}>
       <p>Connected: {cam.connected ? 'Yes' : 'No'}</p>
       <p>Frame Delta: {cam.frameDeltaMs?.toFixed(1)} ms</p>
       <p>Depth FPS: {cam.depthFps?.toFixed(1)}</p>
@@ -264,16 +265,27 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: 'system-ui', maxWidth: 1000, margin: '0 auto', padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, margin: 0 }}>Rover Control Center</h1>
-        <StatusBadge health={health?.overallHealth} />
-        {health && <span style={{ fontSize: 12, color: '#6b7280' }}>
-          Map→odom TF age: {formatMapOdomTfAge(health.slamLatencyMs)} | seq: {health.seq}
-        </span>}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h1 style={{ fontSize: 20, margin: 0 }}>Rover Control Center</h1>
+          <StatusBadge health={health?.overallHealth} />
+        </div>
+        {health && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, fontSize: 12, color: '#6b7280' }}>
+            <span>SLAM: {formatMapOdomTfAge(health.slamLatencyMs)}</span>
+            <span>seq: {health.seq}</span>
+            {health.cameras?.length > 0 && <span>📷 {health.cameras.map(c => c.cameraId || '?').join(', ')}</span>}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 0 }}>
-        <CameraPanel cam={health?.camera} hwMode={hwMode.camera} />
+        {(health?.cameras || []).map((cam, i) =>
+          <CameraPanel key={cam.cameraId || i} cam={cam} hwMode={hwMode.camera} />
+        )}
+        {(!health?.cameras || health.cameras.length === 0) &&
+          <CameraPanel cam={null} hwMode={hwMode.camera} />
+        }
         <Px4Panel px4={health?.px4} hwMode={hwMode.px4} />
         <JetsonPanel jetson={health?.jetson} hwMode={hwMode.jetson} />
         <AlertsPanel alerts={health?.activeAlerts} />

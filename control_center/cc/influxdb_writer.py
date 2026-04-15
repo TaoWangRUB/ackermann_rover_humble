@@ -66,12 +66,15 @@ class InfluxDBWriter:
             p = Point("rover_telemetry")
             p.tag("source", "aggregator")
 
-            # Camera fields
-            if data.HasField("camera"):
-                cam = data.camera
-                p.field("cam_connected", cam.connected)
-                p.field("cam_frame_delta_ms", cam.frame_delta_ms)
-                p.field("cam_depth_fps", cam.depth_fps)
+            # Camera fields (one point per camera)
+            for cam in data.cameras:
+                cam_p = Point("rover_cam_telemetry")
+                cam_p.tag("source", "aggregator")
+                cam_p.tag("camera_id", cam.camera_id or "unknown")
+                cam_p.field("cam_connected", cam.connected)
+                cam_p.field("cam_frame_delta_ms", cam.frame_delta_ms)
+                cam_p.field("cam_depth_fps", cam.depth_fps)
+                self._write_api.write(bucket=self._bucket, record=cam_p)
 
             # PX4 fields
             if data.HasField("px4"):
