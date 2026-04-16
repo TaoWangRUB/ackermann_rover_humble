@@ -67,6 +67,12 @@ class DashboardServer:
                     result[key] = {"data": MessageToDict(data), "stale": stale}
                 else:
                     result[key] = {"data": None, "stale": stale}
+            if MessageToDict:
+                effective_health, effective_stale = await self._cache.get_effective_health()
+                result["health"] = {
+                    "data": MessageToDict(effective_health) if effective_health is not None else None,
+                    "stale": effective_stale,
+                }
             return result
 
         @self._app.post("/api/command")
@@ -107,6 +113,9 @@ class DashboardServer:
             for key, (data, stale) in all_data.items():
                 if data is not None and MessageToDict:
                     result[key] = MessageToDict(data)
+            effective_health, _ = await self._cache.get_effective_health()
+            if effective_health is not None and MessageToDict:
+                result["health"] = MessageToDict(effective_health)
             return result
 
         # Serve React SPA static files
@@ -169,7 +178,8 @@ class DashboardServer:
     async def _broadcast_health(self, data: Any = None, **kwargs: Any) -> None:
         if not self._health_ws_clients or not MessageToDict:
             return
-        payload = json.dumps(MessageToDict(data))
+        effective_health, _ = await self._cache.get_effective_health()
+        payload = json.dumps(MessageToDict(effective_health if effective_health is not None else data))
         dead: set[Any] = set()
         for ws in self._health_ws_clients:
             try:
