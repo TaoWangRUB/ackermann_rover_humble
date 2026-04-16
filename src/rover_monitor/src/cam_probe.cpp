@@ -16,9 +16,11 @@ CamProbe::CamProbe(const rclcpp::NodeOptions & options)
   this->declare_parameter("probes.cam.color_topic", "/camera/color/image_raw");
   this->declare_parameter("probes.cam.depth_topic", "");
   this->declare_parameter("probes.cam.imu_topic", "/camera/imu");
+  this->declare_parameter("probes.cam.odom_topic", "");
   this->declare_parameter("probes.cam.depth_quality_sample_interval", 10);
   this->declare_parameter("probes.cam.imu_timeout_ms", 500);
   this->declare_parameter("probes.cam.frame_stutter_threshold_ms", 99.0);
+  this->declare_parameter("probes.cam.stream_fallback_timeout_ms", 500);
 
   camera_id_ = this->get_parameter("probes.cam.camera_id").as_string();
   depth_quality_sample_interval_ =
@@ -26,10 +28,13 @@ CamProbe::CamProbe(const rclcpp::NodeOptions & options)
   imu_timeout_ms_ = this->get_parameter("probes.cam.imu_timeout_ms").as_int();
   frame_stutter_threshold_ms_ =
     this->get_parameter("probes.cam.frame_stutter_threshold_ms").as_double();
+  stream_fallback_timeout_ms_ =
+    this->get_parameter("probes.cam.stream_fallback_timeout_ms").as_int();
 
   auto color_topic = this->get_parameter("probes.cam.color_topic").as_string();
   auto depth_topic = this->get_parameter("probes.cam.depth_topic").as_string();
   auto imu_topic = this->get_parameter("probes.cam.imu_topic").as_string();
+  auto odom_topic = this->get_parameter("probes.cam.odom_topic").as_string();
 
   // Publisher (intra-process)
   pub_ = this->create_publisher<rover_monitor::msg::CamStatus>("/monitor/cam", 1);
@@ -52,30 +57,52 @@ CamProbe::CamProbe(const rclcpp::NodeOptions & options)
     imu_topic, rclcpp::SensorDataQoS(),
     std::bind(&CamProbe::on_imu, this, std::placeholders::_1), sub_opts);
 
+  if (!odom_topic.empty()) {
+    odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      odom_topic, rclcpp::SensorDataQoS(),
+      std::bind(&CamProbe::on_odom, this, std::placeholders::_1), sub_opts);
+  }
+
   last_imu_stamp_ = this->now();
 
   RCLCPP_INFO(this->get_logger(), "CamProbe initialized");
 }
 
+void CamProbe::on_stream_sample(const rclcpp::Time & now)
+{
+  connected_ = true;
+
+  stream_timestamps_.push_back(now);
+  auto cutoff = now - rclcpp::Duration::from_seconds(1.0);
+  while (!stream_timestamps_.empty() && stream_timestamps_.front() < cutoff) {
+    stream_timestamps_.pop_front();
+  }
+
+  if (first_stream_sample_) {
+    first_stream_sample_ = false;
+  } else {
+    frame_delta_ms_ = static_cast<float>((now - last_stream_stamp_).seconds() * 1000.0);
+  }
+  last_stream_stamp_ = now;
+
+  publish_status();
+}
+
 void CamProbe::on_color_image(sensor_msgs::msg::Image::ConstSharedPtr /*msg*/)
 {
   auto now = this->now();
-  connected_ = true;
-
-  color_timestamps_.push_back(now);
-  auto cutoff = now - rclcpp::Duration::from_seconds(1.0);
-  while (!color_timestamps_.empty() && color_timestamps_.front() < cutoff) {
-    color_timestamps_.pop_front();
-  }
-
-  if (first_color_frame_) {
-    first_color_frame_ = false;
-  } else {
-    frame_delta_ms_ = static_cast<float>((now - last_color_stamp_).seconds() * 1000.0);
-  }
   last_color_stamp_ = now;
+  on_stream_sample(now);
+}
 
-  publish_status();
+void CamProbe::on_odom(nav_msgs::msg::Odometry::ConstSharedPtr /*msg*/)
+{
+  auto now = this->now();
+  auto color_age_ms = last_color_stamp_.nanoseconds() > 0 ?
+    (now - last_color_stamp_).seconds() * 1000.0 : static_cast<double>(stream_fallback_timeout_ms_ + 1);
+  if (color_age_ms > stream_fallback_timeout_ms_) {
+    on_stream_sample(now);
+  }
 }
 
 void CamProbe::on_depth_image(sensor_msgs::msg::Image::ConstSharedPtr msg)
@@ -127,7 +154,7 @@ void CamProbe::publish_status()
   status->camera_id = camera_id_;
   status->connected = connected_;
   status->frame_delta_ms = frame_delta_ms_;
-  status->stream_fps = static_cast<float>(color_timestamps_.size());
+  status->stream_fps = static_cast<float>(stream_timestamps_.size());
   status->depth_fps = static_cast<float>(depth_timestamps_.size());
   status->depth_quality_sampled = depth_quality_sampled_;
 
@@ -140,7 +167,7 @@ void CamProbe::publish_status()
   if (!connected_) {
     status->error_code = 1;
     status->error_msg = "Device disconnected";
-  } else if (frame_delta_ms_ > frame_stutter_threshold_ms_ && !first_color_frame_) {
+  } else if (frame_delta_ms_ > frame_stutter_threshold_ms_ && !first_stream_sample_) {
     status->error_code = 2;
     status->error_msg = "Camera frame delta exceeds 99 ms (below about 10 FPS)";
   } else if (depth_quality_sampled_ < 0.5f) {

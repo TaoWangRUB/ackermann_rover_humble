@@ -16,6 +16,7 @@
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
 
   <!-- TF2 for SLAM latency -->
   <depend>tf2_ros</depend>

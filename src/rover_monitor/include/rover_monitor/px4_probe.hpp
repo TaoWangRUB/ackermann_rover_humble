@@ -7,6 +7,7 @@
 #include <rover_monitor/msg/px4_status.hpp>
 
 #include <string>
+#include <vector>
 
 namespace rover_monitor
 {
@@ -28,9 +29,9 @@ private:
   rclcpp::Publisher<rover_monitor::msg::Px4Status>::SharedPtr pub_;
 
   // Subscribers
-  rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr vehicle_status_sub_;
-  rclcpp::Subscription<px4_msgs::msg::BatteryStatus>::SharedPtr battery_sub_;
-  rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr heartbeat_sub_;
+  std::vector<rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr> vehicle_status_subs_;
+  std::vector<rclcpp::Subscription<px4_msgs::msg::BatteryStatus>::SharedPtr> battery_subs_;
+  std::vector<rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr> heartbeat_subs_;
 
   // Callback group
   rclcpp::CallbackGroup::SharedPtr cb_group_;
@@ -50,6 +51,7 @@ private:
   rclcpp::Time last_heartbeat_stamp_;
   rclcpp::Time last_any_msg_stamp_;
   bool has_heartbeat_{false};
+  bool has_any_msg_{false};
 
   // Config
   int heartbeat_timeout_ms_{1000};

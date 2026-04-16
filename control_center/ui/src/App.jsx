@@ -93,8 +93,12 @@ function Px4Panel({ px4, hwMode }) {
 
 function JetsonPanel({ jetson, hwMode }) {
   if (!jetson) return <Panel title="Jetson" hwMode={hwMode}><p>No data</p></Panel>;
+  const avgCpuPct = jetson.cpuUsagePct?.length
+    ? jetson.cpuUsagePct.reduce((sum, value) => sum + value, 0) / jetson.cpuUsagePct.length
+    : null;
   return (
     <Panel title="Jetson" hwMode={hwMode}>
+      <p>CPU: {avgCpuPct?.toFixed(1) ?? 'N/A'}%</p>
       <p>GPU: {jetson.gpuUsagePct?.toFixed(1)}%</p>
       <p>RAM: {jetson.ramUsedMb}/{jetson.ramTotalMb} MB</p>
       <p>Temp CPU: {jetson.tempCpuC?.toFixed(1)}C</p>
