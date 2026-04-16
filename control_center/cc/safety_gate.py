@@ -51,10 +51,11 @@ class SafetyGate:
         return True, "Arm preconditions met"
 
     async def _check_nav_goal(self, health: Any, stale: bool) -> tuple[bool, str]:
-        if stale or health is None:
+        px4, px4_stale = await self._cache.get_effective_px4()
+
+        if px4_stale or px4 is None:
             return False, "Telemetry stale — cannot navigate"
 
-        px4 = health.px4
         if not px4.armed:
             return False, "Not armed — cannot navigate"
 
@@ -70,10 +71,11 @@ class SafetyGate:
         return True, "Set mode preconditions met"
 
     async def _check_drive(self, health: Any, stale: bool) -> tuple[bool, str]:
-        if stale or health is None:
+        px4, px4_stale = await self._cache.get_effective_px4()
+
+        if px4_stale or px4 is None:
             return False, "Telemetry stale — cannot drive"
 
-        px4 = health.px4
         if not px4.connected:
             return False, "PX4 not connected — cannot drive"
         if not px4.armed:
