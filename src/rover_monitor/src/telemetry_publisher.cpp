@@ -525,9 +525,6 @@ void TelemetryPublisher::handle_nav_goal(const std::string & cmd_id,
         nav2_status_.navigating = false;
         nav2_status_.goal_status_label = goal_status_label;
         nav2_status_.feedback_status = feedback_status;
-        nav2_status_.distance_remaining_m = 0.0f;
-        nav2_status_.eta_seconds = 0.0f;
-        nav2_status_.navigation_time_s = 0.0f;
         nav2_status_.number_of_poses_remaining = 0;
         nav2_status_.error_code = error_code;
         nav2_status_.error_msg = error_code == 0 ? std::string() : ack_message;
