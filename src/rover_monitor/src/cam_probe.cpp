@@ -1,6 +1,8 @@
 #include "rover_monitor/cam_probe.hpp"
 #include <rclcpp_components/register_node_macro.hpp>
 
+#include <algorithm>
+
 namespace rover_monitor
 {
 
@@ -17,19 +19,25 @@ CamProbe::CamProbe(const rclcpp::NodeOptions & options)
   this->declare_parameter("probes.cam.depth_topic", "");
   this->declare_parameter("probes.cam.imu_topic", "/camera/imu");
   this->declare_parameter("probes.cam.odom_topic", "");
+  this->declare_parameter("probes.cam.stream_required", true);
   this->declare_parameter("probes.cam.depth_quality_sample_interval", 10);
   this->declare_parameter("probes.cam.imu_timeout_ms", 500);
+  this->declare_parameter("probes.cam.odom_timeout_ms", 500);
   this->declare_parameter("probes.cam.frame_stutter_threshold_ms", 99.0);
   this->declare_parameter("probes.cam.stream_fallback_timeout_ms", 500);
+  this->declare_parameter("probes.cam.publish_rate_hz", 2.0);
 
   camera_id_ = this->get_parameter("probes.cam.camera_id").as_string();
+  stream_required_ = this->get_parameter("probes.cam.stream_required").as_bool();
   depth_quality_sample_interval_ =
     this->get_parameter("probes.cam.depth_quality_sample_interval").as_int();
   imu_timeout_ms_ = this->get_parameter("probes.cam.imu_timeout_ms").as_int();
+  odom_timeout_ms_ = this->get_parameter("probes.cam.odom_timeout_ms").as_int();
   frame_stutter_threshold_ms_ =
     this->get_parameter("probes.cam.frame_stutter_threshold_ms").as_double();
   stream_fallback_timeout_ms_ =
     this->get_parameter("probes.cam.stream_fallback_timeout_ms").as_int();
+  auto publish_rate_hz = this->get_parameter("probes.cam.publish_rate_hz").as_double();
 
   auto color_topic = this->get_parameter("probes.cam.color_topic").as_string();
   auto depth_topic = this->get_parameter("probes.cam.depth_topic").as_string();
@@ -64,14 +72,21 @@ CamProbe::CamProbe(const rclcpp::NodeOptions & options)
   }
 
   last_imu_stamp_ = this->now();
+  auto period = std::chrono::duration<double>(1.0 / std::max(publish_rate_hz, 0.5));
+  status_timer_ = this->create_wall_timer(
+    std::chrono::duration_cast<std::chrono::milliseconds>(period),
+    std::bind(&CamProbe::on_status_timer, this), cb_group_);
 
   RCLCPP_INFO(this->get_logger(), "CamProbe initialized");
 }
 
+void CamProbe::on_status_timer()
+{
+  publish_status();
+}
+
 void CamProbe::on_stream_sample(const rclcpp::Time & now)
 {
-  connected_ = true;
-
   stream_timestamps_.push_back(now);
   auto cutoff = now - rclcpp::Duration::from_seconds(1.0);
   while (!stream_timestamps_.empty() && stream_timestamps_.front() < cutoff) {
@@ -97,17 +112,14 @@ void CamProbe::on_color_image(sensor_msgs::msg::Image::ConstSharedPtr /*msg*/)
 
 void CamProbe::on_odom(nav_msgs::msg::Odometry::ConstSharedPtr /*msg*/)
 {
-  auto now = this->now();
-  auto color_age_ms = last_color_stamp_.nanoseconds() > 0 ?
-    (now - last_color_stamp_).seconds() * 1000.0 : static_cast<double>(stream_fallback_timeout_ms_ + 1);
-  if (color_age_ms > stream_fallback_timeout_ms_) {
-    on_stream_sample(now);
-  }
+  last_odom_stamp_ = this->now();
+  odom_active_ = true;
 }
 
 void CamProbe::on_depth_image(sensor_msgs::msg::Image::ConstSharedPtr msg)
 {
   auto now = this->now();
+  last_depth_stamp_ = now;
 
   // Rolling 1-second depth FPS
   depth_timestamps_.push_back(now);
@@ -150,30 +162,54 @@ void CamProbe::on_imu(sensor_msgs::msg::Imu::ConstSharedPtr /*msg*/)
 
 void CamProbe::publish_status()
 {
+  auto now = this->now();
+  auto cutoff = now - rclcpp::Duration::from_seconds(1.0);
+  while (!stream_timestamps_.empty() && stream_timestamps_.front() < cutoff) {
+    stream_timestamps_.pop_front();
+  }
+  while (!depth_timestamps_.empty() && depth_timestamps_.front() < cutoff) {
+    depth_timestamps_.pop_front();
+  }
+
+  auto is_recent = [&now](const rclcpp::Time & stamp, int timeout_ms) {
+    return stamp.nanoseconds() > 0 && (now - stamp).seconds() * 1000.0 < timeout_ms;
+  };
+
+  bool stream_available =
+    stream_required_ && is_recent(last_color_stamp_, stream_fallback_timeout_ms_);
+  bool depth_available =
+    depth_sub_ && is_recent(last_depth_stamp_, stream_fallback_timeout_ms_);
+  imu_active_ = is_recent(last_imu_stamp_, imu_timeout_ms_);
+  odom_active_ = odom_sub_ && is_recent(last_odom_stamp_, odom_timeout_ms_);
+  connected_ = stream_available || depth_available || imu_active_ || odom_active_;
+
   auto status = std::make_unique<rover_monitor::msg::CamStatus>();
   status->camera_id = camera_id_;
   status->connected = connected_;
   status->frame_delta_ms = frame_delta_ms_;
   status->stream_fps = static_cast<float>(stream_timestamps_.size());
+  status->stream_available = stream_available;
   status->depth_fps = static_cast<float>(depth_timestamps_.size());
   status->depth_quality_sampled = depth_quality_sampled_;
-
-  // IMU liveness check
-  auto imu_age_ms = (this->now() - last_imu_stamp_).seconds() * 1000.0;
-  imu_active_ = (imu_age_ms < imu_timeout_ms_);
   status->imu_active = imu_active_;
+  status->odom_active = odom_active_;
 
-  // Error code priority: disconnected > frame stutter > depth quality > IMU lost
+  // Error code priority: disconnected > odom lost > frame stutter > depth quality > IMU lost
   if (!connected_) {
     status->error_code = 1;
     status->error_msg = "Device disconnected";
-  } else if (frame_delta_ms_ > frame_stutter_threshold_ms_ && !first_stream_sample_) {
+  } else if (odom_sub_ && !odom_active_) {
+    status->error_code = 5;
+    status->error_msg = "Odometry stream lost";
+  } else if (stream_required_ && stream_available &&
+    frame_delta_ms_ > frame_stutter_threshold_ms_ && !first_stream_sample_)
+  {
     status->error_code = 2;
     status->error_msg = "Camera frame delta exceeds 99 ms (below about 10 FPS)";
-  } else if (depth_quality_sampled_ < 0.5f) {
+  } else if (depth_sub_ && depth_available && depth_quality_sampled_ < 0.5f) {
     status->error_code = 3;
     status->error_msg = "Depth fill ratio below 50% (sampled)";
-  } else if (!imu_active_) {
+  } else if (imu_sub_ && !imu_active_) {
     status->error_code = 4;
     status->error_msg = "IMU stream lost";
   } else {
@@ -181,7 +217,7 @@ void CamProbe::publish_status()
     status->error_msg = "";
   }
 
-  status->timestamp = this->now().nanoseconds() / 1000000;  // Unix ms
+  status->timestamp = now.nanoseconds() / 1000000;  // Unix ms
   pub_->publish(std::move(status));
 }
 

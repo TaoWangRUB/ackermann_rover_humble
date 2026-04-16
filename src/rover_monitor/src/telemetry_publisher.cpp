@@ -482,9 +482,11 @@ std::string TelemetryPublisher::serialise_health(
     cam->set_connected(cam_msg.connected);
     cam->set_frame_delta_ms(cam_msg.frame_delta_ms);
     cam->set_stream_fps(cam_msg.stream_fps);
+    cam->set_stream_available(cam_msg.stream_available);
     cam->set_depth_fps(cam_msg.depth_fps);
     cam->set_depth_quality_sampled(cam_msg.depth_quality_sampled);
     cam->set_imu_active(cam_msg.imu_active);
+    cam->set_odom_active(cam_msg.odom_active);
     cam->set_error_code(cam_msg.error_code);
     cam->set_error_msg(cam_msg.error_msg);
     cam->set_timestamp(cam_msg.timestamp);

@@ -146,6 +146,11 @@ if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     BROKER_HOST_ARG="broker_host:=${BROKER_HOST}"
 fi
 
+TRACKING_EXPECT_STREAM=false
+if [[ "${CUVSLAM_ODOM}" == true || "${VINS_ODOM}" == true ]]; then
+    TRACKING_EXPECT_STREAM=true
+fi
+
 PX4_BRINGUP_ARGS=(--bridge --vo-bridge --mode-type "${PX4_MODE_TYPE}")
 if [[ "${REVERSIBLE_DRIVE}" == true ]]; then
     PX4_BRINGUP_ARGS+=(--reversible-drive)
@@ -188,7 +193,7 @@ tmux send-keys -t "${PANE_XRCE}" \
 
 # ── Pane: System Monitor (immediate, independent) ────────────────────
 tmux send-keys -t "${PANE_MONITOR}" \
-    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ros2 launch rover_monitor monitor.launch.py use_sim_time:=false depth_camera:=${DEPTH_CAMERA} ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG} ${BROKER_HOST_ARG}'" Enter
+    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ros2 launch rover_monitor monitor.launch.py use_sim_time:=false depth_camera:=${DEPTH_CAMERA} tracking_expect_stream:=${TRACKING_EXPECT_STREAM} ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG} ${BROKER_HOST_ARG}'" Enter
 
 # ── Pane: ROS 2 Nodes (wait for XRCE) ────────────────────────────────
 tmux send-keys -t "${PANE_ROS2}" \

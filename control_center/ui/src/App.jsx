@@ -67,11 +67,22 @@ function Panel({ title, hwMode, children }) {
 function CameraPanel({ cam, hwMode }) {
   if (!cam) return <Panel title="Camera" hwMode={hwMode}><p>No data</p></Panel>;
   const label = cam.cameraId ? `Camera (${cam.cameraId})` : 'Camera';
+  const isTrackingCamera = cam.cameraId === 't265';
+  const streamFpsText = cam.streamAvailable ? cam.streamFps?.toFixed(1) : 'N/A';
   return (
     <Panel title={label} hwMode={hwMode}>
       <p>Connected: {cam.connected ? 'Yes' : 'No'}</p>
-      <p>Frame Delta: {cam.frameDeltaMs?.toFixed(1)} ms</p>
-      <p>Depth FPS: {cam.depthFps?.toFixed(1)}</p>
+      {isTrackingCamera ? (
+        <>
+          <p>Fisheye FPS: {streamFpsText}</p>
+          <p>Odom Active: {cam.odomActive ? 'Yes' : 'No'}</p>
+        </>
+      ) : (
+        <>
+          <p>Frame Delta: {cam.frameDeltaMs?.toFixed(1)} ms</p>
+          <p>Depth FPS: {cam.depthFps?.toFixed(1)}</p>
+        </>
+      )}
       <p>IMU Active: {cam.imuActive ? 'Yes' : 'No'}</p>
     </Panel>
   );

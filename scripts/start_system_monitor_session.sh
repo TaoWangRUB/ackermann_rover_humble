@@ -91,6 +91,7 @@ fi
 # ── Build launch arguments based on mode ──────────────────────────────
 TELEMETRY_ARG="enable_telemetry:=false"
 PUBLISHER_CONFIG_ARG=""
+TRACKING_EXPECT_STREAM=false
 
 if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     TELEMETRY_ARG="enable_telemetry:=true"
@@ -129,7 +130,7 @@ PANE_CC="$(tmux split-window -v -P -F "#{pane_id}" -t "${PANE_HEALTH}" -l 8)"
 
 # ── Pane 0: rover_monitor launch ──────────────────────────────────────
 tmux send-keys -t "${PANE_LAUNCH}" \
-    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ros2 launch rover_monitor monitor.launch.py use_sim_time:=false depth_camera:=${DEPTH_CAMERA} ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG}'" Enter
+    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ros2 launch rover_monitor monitor.launch.py use_sim_time:=false depth_camera:=${DEPTH_CAMERA} tracking_expect_stream:=${TRACKING_EXPECT_STREAM} ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG}'" Enter
 
 # ── Pane 1: Camera ────────────────────────────────────────────────────
 if [[ "${MOCK_CAM}" == "true" ]]; then

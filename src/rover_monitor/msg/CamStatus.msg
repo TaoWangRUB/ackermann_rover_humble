@@ -2,9 +2,11 @@ string camera_id
 bool connected
 float32 frame_delta_ms
 float32 stream_fps
+bool stream_available
 float32 depth_fps
 float32 depth_quality_sampled
 bool imu_active
+bool odom_active
 int32 error_code
 string error_msg
 int64 timestamp

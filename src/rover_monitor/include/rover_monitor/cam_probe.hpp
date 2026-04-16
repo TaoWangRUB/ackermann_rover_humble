@@ -19,6 +19,7 @@ public:
   explicit CamProbe(const rclcpp::NodeOptions & options);
 
 private:
+  void on_status_timer();
   void on_stream_sample(const rclcpp::Time & now);
   void on_color_image(sensor_msgs::msg::Image::ConstSharedPtr msg);
   void on_depth_image(sensor_msgs::msg::Image::ConstSharedPtr msg);
@@ -28,6 +29,9 @@ private:
 
   // Publishers
   rclcpp::Publisher<rover_monitor::msg::CamStatus>::SharedPtr pub_;
+
+  // Timers
+  rclcpp::TimerBase::SharedPtr status_timer_;
 
   // Subscribers
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr color_sub_;
@@ -41,6 +45,8 @@ private:
   // Frame delta tracking
   rclcpp::Time last_stream_stamp_;
   rclcpp::Time last_color_stamp_;
+  rclcpp::Time last_depth_stamp_;
+  rclcpp::Time last_odom_stamp_;
   float frame_delta_ms_{0.0f};
   bool first_stream_sample_{true};
   std::deque<rclcpp::Time> stream_timestamps_;
@@ -60,11 +66,14 @@ private:
 
   // Device state
   bool connected_{false};
+  bool stream_required_{true};
+  bool odom_active_{false};
   std::string camera_id_{"realsense"};
 
   // Thresholds
   float frame_stutter_threshold_ms_{99.0f};
   int stream_fallback_timeout_ms_{500};
+  int odom_timeout_ms_{500};
 };
 
 }  // namespace rover_monitor
