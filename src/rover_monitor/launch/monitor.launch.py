@@ -20,6 +20,7 @@ def _build_container(context):
 
     depth_camera = LaunchConfiguration('depth_camera').perform(context)
     tracking_camera = LaunchConfiguration('tracking_camera').perform(context)
+    tracking_expect_stream = LaunchConfiguration('tracking_expect_stream').perform(context)
 
     cam_topic_overrides = {
         'probes.cam.camera_id': depth_camera,
@@ -34,6 +35,7 @@ def _build_container(context):
         'probes.cam.depth_topic': '',
         'probes.cam.imu_topic': '/{}/imu'.format(tracking_camera),
         'probes.cam.odom_topic': '/{}/odom'.format(tracking_camera),
+        'probes.cam.stream_required': tracking_expect_stream.lower() == 'true',
     }
 
     telemetry_overrides = [{'use_sim_time': use_sim_time}]
@@ -165,5 +167,9 @@ def generate_launch_description():
             'tracking_camera',
             default_value='t265',
             description='Tracking camera name — sets cam topic prefix (t265). Empty to disable.'),
+        DeclareLaunchArgument(
+            'tracking_expect_stream',
+            default_value='false',
+            description='Whether the tracking camera is expected to publish fisheye image frames.'),
         OpaqueFunction(function=_build_container),
     ])

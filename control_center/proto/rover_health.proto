@@ -12,6 +12,8 @@ message CamStatus {
   int32 error_code = 8;
   string error_msg = 9;
   int64 timestamp = 10;
+  bool stream_available = 11;
+  bool odom_active = 12;
 }
 
 message Px4Status {
