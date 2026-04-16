@@ -3,6 +3,8 @@
 
 #include "rover_health.pb.h"
 
+#include <cmath>
+
 namespace rover_monitor
 {
 
@@ -16,6 +18,21 @@ std::string versioned_px4_topic(const std::string & base_topic)
     return base_topic;
   }
   return base_topic + "_v" + std::to_string(MessageT::MESSAGE_VERSION);
+}
+
+double duration_to_seconds(const builtin_interfaces::msg::Duration & duration)
+{
+  return static_cast<double>(duration.sec) +
+    static_cast<double>(duration.nanosec) / 1e9;
+}
+
+geometry_msgs::msg::Quaternion quaternion_from_yaw_deg(double yaw_deg)
+{
+  geometry_msgs::msg::Quaternion quaternion;
+  const double yaw_rad = yaw_deg * M_PI / 180.0;
+  quaternion.z = static_cast<double>(std::sin(yaw_rad * 0.5));
+  quaternion.w = static_cast<double>(std::cos(yaw_rad * 0.5));
+  return quaternion;
 }
 
 }  // namespace
@@ -62,6 +79,18 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   // E-stop twist publisher (zero velocity)
   twist_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(
     "/cmd_vel", 10);
+
+  nav2_status_pub_ = this->create_publisher<rover_monitor::msg::Nav2Status>(
+    "/monitor/nav2", 1);
+  nav2_client_ = rclcpp_action::create_client<NavigateToPose>(
+    this, "/navigate_to_pose", cb_group_);
+
+  nav2_status_.goal_status_label = "IDLE";
+  nav2_status_.feedback_status = "idle";
+
+  nav2_status_timer_ = this->create_wall_timer(
+    std::chrono::milliseconds(500),
+    std::bind(&TelemetryPublisher::on_nav2_status_timer, this), cb_group_);
 
   // Dedup eviction timer (every 10s, clean entries older than dedup_eviction_s_)
   dedup_timer_ = this->create_wall_timer(
@@ -347,15 +376,168 @@ void TelemetryPublisher::handle_nav_goal(const std::string & cmd_id,
 
   const auto & goal = cmd.nav_goal();
   RCLCPP_INFO(this->get_logger(),
-    "NAV_GOAL command: cmd_id=%s lat=%.6f lon=%.6f alt=%.1f yaw=%.1f",
+    "NAV_GOAL command: cmd_id=%s x=%.3f y=%.3f z=%.3f yaw=%.1f",
     cmd_id.c_str(), goal.latitude(), goal.longitude(),
     goal.altitude(), goal.yaw_deg());
 
-  // TODO: Send NavigateToPose action when Nav2 integration is available
-  // For now, accept the command and log it
-  send_ack(cmd_id, rover_monitor_proto::CMD_NAV_GOAL,
-    rover_monitor_proto::ACK_ACCEPTED,
-    "Nav goal accepted (Nav2 action dispatch pending)");
+  if (!nav2_client_->wait_for_action_server(std::chrono::seconds(1))) {
+    {
+      std::lock_guard<std::mutex> lock(nav2_mutex_);
+      nav2_status_.available = false;
+      nav2_status_.goal_status_label = "UNAVAILABLE";
+      nav2_status_.feedback_status = "server_unavailable";
+      nav2_status_.error_code = 1;
+      nav2_status_.error_msg = "NavigateToPose action server unavailable";
+    }
+    publish_nav2_status();
+    send_ack(cmd_id, rover_monitor_proto::CMD_NAV_GOAL,
+      rover_monitor_proto::ACK_REJECTED,
+      "Nav2 action server unavailable");
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(nav2_mutex_);
+    if (active_nav2_goal_handle_) {
+      send_ack(cmd_id, rover_monitor_proto::CMD_NAV_GOAL,
+        rover_monitor_proto::ACK_REJECTED,
+        "Nav2 goal already active — cancel it first");
+      return;
+    }
+  }
+
+  NavigateToPose::Goal nav_goal;
+  nav_goal.pose.header.stamp = this->now();
+  nav_goal.pose.header.frame_id = "map";
+  nav_goal.pose.pose.position.x = goal.latitude();
+  nav_goal.pose.pose.position.y = goal.longitude();
+  nav_goal.pose.pose.position.z = goal.altitude();
+  nav_goal.pose.pose.orientation = quaternion_from_yaw_deg(goal.yaw_deg());
+
+  {
+    std::lock_guard<std::mutex> lock(nav2_mutex_);
+    nav2_status_.available = true;
+    nav2_status_.navigating = false;
+    nav2_status_.goal_status_label = "PENDING";
+    nav2_status_.feedback_status = "pending";
+    nav2_status_.distance_remaining_m = 0.0f;
+    nav2_status_.eta_seconds = 0.0f;
+    nav2_status_.navigation_time_s = 0.0f;
+    nav2_status_.number_of_recoveries = 0;
+    nav2_status_.number_of_poses_remaining = 0;
+    nav2_status_.error_code = 0;
+    nav2_status_.error_msg.clear();
+  }
+  publish_nav2_status();
+
+  auto send_goal_options = rclcpp_action::Client<NavigateToPose>::SendGoalOptions();
+  send_goal_options.goal_response_callback =
+    [this, cmd_id](NavigateToPoseGoalHandle::SharedPtr goal_handle) {
+      if (!goal_handle) {
+        {
+          std::lock_guard<std::mutex> lock(nav2_mutex_);
+          nav2_status_.navigating = false;
+          nav2_status_.goal_status_label = "REJECTED";
+          nav2_status_.feedback_status = "rejected";
+          nav2_status_.error_code = 2;
+          nav2_status_.error_msg = "Nav2 goal rejected";
+        }
+        publish_nav2_status();
+        send_ack(cmd_id, rover_monitor_proto::CMD_NAV_GOAL,
+          rover_monitor_proto::ACK_REJECTED, "Nav2 goal rejected");
+        return;
+      }
+
+      {
+        std::lock_guard<std::mutex> lock(nav2_mutex_);
+        active_nav2_goal_handle_ = goal_handle;
+        active_nav_goal_cmd_id_ = cmd_id;
+        nav2_status_.navigating = true;
+        nav2_status_.goal_status_label = "ACCEPTED";
+        nav2_status_.feedback_status = "waiting_for_feedback";
+        nav2_status_.error_code = 0;
+        nav2_status_.error_msg.clear();
+      }
+      publish_nav2_status();
+      send_ack(cmd_id, rover_monitor_proto::CMD_NAV_GOAL,
+        rover_monitor_proto::ACK_ACCEPTED, "Nav2 goal accepted");
+    };
+  send_goal_options.feedback_callback =
+    [this](NavigateToPoseGoalHandle::SharedPtr,
+      const std::shared_ptr<const NavigateToPose::Feedback> feedback) {
+      {
+        std::lock_guard<std::mutex> lock(nav2_mutex_);
+        nav2_status_.available = true;
+        nav2_status_.navigating = true;
+        nav2_status_.goal_status_label = "EXECUTING";
+        nav2_status_.feedback_status = "active";
+        nav2_status_.distance_remaining_m = feedback->distance_remaining;
+        nav2_status_.eta_seconds = static_cast<float>(
+          duration_to_seconds(feedback->estimated_time_remaining));
+        nav2_status_.navigation_time_s = static_cast<float>(
+          duration_to_seconds(feedback->navigation_time));
+        nav2_status_.number_of_recoveries = feedback->number_of_recoveries;
+        nav2_status_.number_of_poses_remaining = 0;
+        nav2_status_.error_code = 0;
+        nav2_status_.error_msg.clear();
+      }
+      publish_nav2_status();
+    };
+  send_goal_options.result_callback =
+    [this, cmd_id](const NavigateToPoseGoalHandle::WrappedResult & result) {
+      int ack_status = rover_monitor_proto::ACK_FAILED;
+      std::string ack_message = "Nav2 goal failed";
+      std::string goal_status_label = "UNKNOWN";
+      std::string feedback_status = "unknown";
+      int error_code = 3;
+
+      switch (result.code) {
+        case rclcpp_action::ResultCode::SUCCEEDED:
+          ack_status = rover_monitor_proto::ACK_COMPLETED;
+          ack_message = "Nav2 goal completed";
+          goal_status_label = "SUCCEEDED";
+          feedback_status = "succeeded";
+          error_code = 0;
+          break;
+        case rclcpp_action::ResultCode::ABORTED:
+          ack_status = rover_monitor_proto::ACK_FAILED;
+          ack_message = "Nav2 goal aborted";
+          goal_status_label = "ABORTED";
+          feedback_status = "aborted";
+          error_code = 4;
+          break;
+        case rclcpp_action::ResultCode::CANCELED:
+          ack_status = rover_monitor_proto::ACK_COMPLETED;
+          ack_message = "Nav2 goal canceled";
+          goal_status_label = "CANCELED";
+          feedback_status = "canceled";
+          error_code = 0;
+          break;
+        default:
+          break;
+      }
+
+      {
+        std::lock_guard<std::mutex> lock(nav2_mutex_);
+        active_nav2_goal_handle_.reset();
+        active_nav_goal_cmd_id_.clear();
+        nav2_status_.available = nav2_client_->action_server_is_ready();
+        nav2_status_.navigating = false;
+        nav2_status_.goal_status_label = goal_status_label;
+        nav2_status_.feedback_status = feedback_status;
+        nav2_status_.distance_remaining_m = 0.0f;
+        nav2_status_.eta_seconds = 0.0f;
+        nav2_status_.navigation_time_s = 0.0f;
+        nav2_status_.number_of_poses_remaining = 0;
+        nav2_status_.error_code = error_code;
+        nav2_status_.error_msg = error_code == 0 ? std::string() : ack_message;
+      }
+      publish_nav2_status();
+      send_ack(cmd_id, rover_monitor_proto::CMD_NAV_GOAL,
+        ack_status, ack_message);
+    };
+
+  nav2_client_->async_send_goal(nav_goal, send_goal_options);
 }
 
 void TelemetryPublisher::handle_set_mode(const std::string & cmd_id,
@@ -388,10 +570,45 @@ void TelemetryPublisher::handle_cancel_goal(const std::string & cmd_id)
 {
   RCLCPP_INFO(this->get_logger(), "CANCEL_GOAL command: cmd_id=%s", cmd_id.c_str());
 
-  // TODO: Cancel active Nav2 goal when Nav2 integration is available
+  NavigateToPoseGoalHandle::SharedPtr goal_handle;
+  {
+    std::lock_guard<std::mutex> lock(nav2_mutex_);
+    goal_handle = active_nav2_goal_handle_;
+  }
+
+  if (!goal_handle) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_CANCEL_GOAL,
+      rover_monitor_proto::ACK_REJECTED,
+      "No active Nav2 goal to cancel");
+    return;
+  }
+
   send_ack(cmd_id, rover_monitor_proto::CMD_CANCEL_GOAL,
     rover_monitor_proto::ACK_ACCEPTED,
-    "Cancel goal accepted (Nav2 cancel dispatch pending)");
+    "Nav2 goal cancel requested");
+
+  nav2_client_->async_cancel_goal(goal_handle,
+    [this, cmd_id](
+      std::shared_future<
+        typename NavigateToPoseGoalHandle::CancelResponse::SharedPtr> future) {
+      const auto cancel_response = future.get();
+      if (!cancel_response || cancel_response->goals_canceling.empty()) {
+        send_ack(cmd_id, rover_monitor_proto::CMD_CANCEL_GOAL,
+          rover_monitor_proto::ACK_FAILED,
+          "Nav2 goal cancel rejected");
+        return;
+      }
+
+      {
+        std::lock_guard<std::mutex> lock(nav2_mutex_);
+        nav2_status_.goal_status_label = "CANCELING";
+        nav2_status_.feedback_status = "canceling";
+      }
+      publish_nav2_status();
+      send_ack(cmd_id, rover_monitor_proto::CMD_CANCEL_GOAL,
+        rover_monitor_proto::ACK_COMPLETED,
+        "Nav2 goal cancel accepted");
+    });
 }
 
 void TelemetryPublisher::handle_drive(const std::string & cmd_id,
@@ -529,6 +746,21 @@ std::string TelemetryPublisher::serialise_health(
   jetson->set_error_msg(msg.jetson.error_msg);
   jetson->set_timestamp(msg.jetson.timestamp);
 
+  auto * nav2 = pb.mutable_nav2();
+  nav2->set_available(msg.nav2.available);
+  nav2->set_navigating(msg.nav2.navigating);
+  nav2->set_localization_active(msg.nav2.localization_active);
+  nav2->set_goal_status_label(msg.nav2.goal_status_label);
+  nav2->set_feedback_status(msg.nav2.feedback_status);
+  nav2->set_distance_remaining_m(msg.nav2.distance_remaining_m);
+  nav2->set_eta_seconds(msg.nav2.eta_seconds);
+  nav2->set_navigation_time_s(msg.nav2.navigation_time_s);
+  nav2->set_number_of_recoveries(msg.nav2.number_of_recoveries);
+  nav2->set_number_of_poses_remaining(msg.nav2.number_of_poses_remaining);
+  nav2->set_error_code(msg.nav2.error_code);
+  nav2->set_error_msg(msg.nav2.error_msg);
+  nav2->set_timestamp(msg.nav2.timestamp);
+
   std::string payload;
   pb.SerializeToString(&payload);
   return payload;
@@ -538,6 +770,7 @@ void TelemetryPublisher::on_health(rover_monitor::msg::RoverHealth::ConstSharedP
 {
   // Always cache the latest health for the heartbeat timer
   latest_health_ = msg;
+  update_nav2_localization_flag();
 
   // Alert edge detection: publish immediately when alerts change
   std::vector<std::string> current_alerts(msg->active_alerts.begin(),
@@ -581,6 +814,44 @@ void TelemetryPublisher::on_heartbeat_timer()
       "MQTT heartbeat publish failed: %s", e.what());
     mqtt_connected_ = false;
   }
+}
+
+void TelemetryPublisher::update_nav2_localization_flag()
+{
+  std::lock_guard<std::mutex> lock(nav2_mutex_);
+  nav2_status_.localization_active = latest_health_ && latest_health_->slam_latency_ms >= 0.0f;
+}
+
+void TelemetryPublisher::publish_nav2_status()
+{
+  rover_monitor::msg::Nav2Status nav2_status_msg;
+  {
+    std::lock_guard<std::mutex> lock(nav2_mutex_);
+    nav2_status_.timestamp = this->now().nanoseconds() / 1000000;
+    nav2_status_msg = nav2_status_;
+  }
+  nav2_status_pub_->publish(nav2_status_msg);
+}
+
+void TelemetryPublisher::on_nav2_status_timer()
+{
+  {
+    std::lock_guard<std::mutex> lock(nav2_mutex_);
+    nav2_status_.available = nav2_client_->action_server_is_ready();
+    if (!nav2_status_.available && !nav2_status_.navigating) {
+      nav2_status_.goal_status_label = "UNAVAILABLE";
+      nav2_status_.feedback_status = "server_unavailable";
+    } else if (nav2_status_.available && !nav2_status_.navigating &&
+      (nav2_status_.goal_status_label.empty() || nav2_status_.goal_status_label == "UNAVAILABLE"))
+    {
+      nav2_status_.goal_status_label = "IDLE";
+      nav2_status_.feedback_status = "idle";
+      nav2_status_.error_code = 0;
+      nav2_status_.error_msg.clear();
+    }
+    nav2_status_.localization_active = latest_health_ && latest_health_->slam_latency_ms >= 0.0f;
+  }
+  publish_nav2_status();
 }
 
 }  // namespace rover_monitor

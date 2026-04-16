@@ -6,6 +6,7 @@
 #include <rover_monitor/msg/cam_status.hpp>
 #include <rover_monitor/msg/px4_status.hpp>
 #include <rover_monitor/msg/jetson_status.hpp>
+#include <rover_monitor/msg/nav2_status.hpp>
 #include <rover_monitor/msg/rover_health.hpp>
 
 #include <map>
@@ -25,6 +26,7 @@ private:
   void on_cam(rover_monitor::msg::CamStatus::ConstSharedPtr msg);
   void on_px4(rover_monitor::msg::Px4Status::ConstSharedPtr msg);
   void on_jetson(rover_monitor::msg::JetsonStatus::ConstSharedPtr msg);
+  void on_nav2(rover_monitor::msg::Nav2Status::ConstSharedPtr msg);
   void on_timer();
 
   float compute_slam_tf_age_ms();
@@ -39,6 +41,7 @@ private:
   rclcpp::Subscription<rover_monitor::msg::CamStatus>::SharedPtr cam_sub_;
   rclcpp::Subscription<rover_monitor::msg::Px4Status>::SharedPtr px4_sub_;
   rclcpp::Subscription<rover_monitor::msg::JetsonStatus>::SharedPtr jetson_sub_;
+  rclcpp::Subscription<rover_monitor::msg::Nav2Status>::SharedPtr nav2_sub_;
 
   // Timer
   rclcpp::TimerBase::SharedPtr timer_;
@@ -55,14 +58,17 @@ private:
   std::map<std::string, rclcpp::Time> cam_stamps_;
   std::optional<rover_monitor::msg::Px4Status> px4_cache_;
   std::optional<rover_monitor::msg::JetsonStatus> jetson_cache_;
+  std::optional<rover_monitor::msg::Nav2Status> nav2_cache_;
 
   rclcpp::Time px4_stamp_;
   rclcpp::Time jetson_stamp_;
+  rclcpp::Time nav2_stamp_;
 
   // Config
   int cam_stale_timeout_ms_{1000};
   int px4_stale_timeout_ms_{1000};
   int jetson_stale_timeout_ms_{4000};
+  int nav2_stale_timeout_ms_{2000};
   std::string slam_frame_id_{"map"};
   std::string slam_child_frame_id_{"odom"};
 

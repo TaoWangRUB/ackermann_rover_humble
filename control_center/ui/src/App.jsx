@@ -216,7 +216,156 @@ function DrivePanel() {
   );
 }
 
-function CommandPanel() {
+async function sendDashboardCommand(cmdType, params = {}) {
+  try {
+    const res = await fetch('/api/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cmd_type: cmdType, params, issued_by: 'dashboard' }),
+    });
+    const data = await res.json();
+    if (data.error) alert(`Rejected: ${data.error}`);
+  } catch (e) {
+    alert(`Failed: ${e.message}`);
+  }
+}
+
+function Px4CommandsPanel() {
+  return (
+    <Panel title="PX4 Commands">
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={() => sendDashboardCommand('arm')}>Arm</button>
+        <button onClick={() => sendDashboardCommand('disarm')}>Disarm</button>
+        <button onClick={() => sendDashboardCommand('estop')} style={{ background: '#ef4444', color: 'white' }}>
+          E-STOP
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
+function Nav2ControlPanel({ nav2 }) {
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [altitude, setAltitude] = useState('0');
+  const [yawDeg, setYawDeg] = useState('0');
+
+  const nav2Data = nav2 || {};
+  const availableText = nav2Data.available ? 'Ready' : 'Unavailable';
+  const navigatingText = nav2Data.navigating ? 'Yes' : 'No';
+  const localizationText = nav2Data.localizationActive ? 'Active' : 'Inactive';
+  const goalStatusText = nav2Data.goalStatusLabel || 'UNKNOWN';
+  const feedbackStatusText = nav2Data.feedbackStatus || 'unknown';
+  const distanceText = nav2Data.distanceRemainingM != null
+    ? `${nav2Data.distanceRemainingM.toFixed(2)} m`
+    : 'N/A';
+  const etaText = nav2Data.etaSeconds != null
+    ? `${nav2Data.etaSeconds.toFixed(1)} s`
+    : 'N/A';
+  const navigationTimeText = nav2Data.navigationTimeS != null
+    ? `${nav2Data.navigationTimeS.toFixed(1)} s`
+    : 'N/A';
+  const recoveriesText = nav2Data.numberOfRecoveries ?? 'N/A';
+
+  const inputStyle = {
+    width: '100%',
+    padding: '6px 8px',
+    border: '1px solid #d1d5db',
+    borderRadius: 6,
+    fontSize: 12,
+    boxSizing: 'border-box',
+  };
+
+  const labelStyle = {
+    display: 'block',
+    fontSize: 12,
+    color: '#374151',
+    marginBottom: 4,
+  };
+
+  const sendNavGoal = () => {
+    const parsedLatitude = Number(latitude);
+    const parsedLongitude = Number(longitude);
+    const parsedAltitude = Number(altitude || 0);
+    const parsedYawDeg = Number(yawDeg || 0);
+
+    if (!Number.isFinite(parsedLatitude) || !Number.isFinite(parsedLongitude)) {
+      alert('Latitude and longitude are required.');
+      return;
+    }
+
+    sendDashboardCommand('nav_goal', {
+      latitude: parsedLatitude,
+      longitude: parsedLongitude,
+      altitude: Number.isFinite(parsedAltitude) ? parsedAltitude : 0,
+      yaw_deg: Number.isFinite(parsedYawDeg) ? parsedYawDeg : 0,
+    });
+  };
+
+  return (
+    <Panel title="Nav2 Control">
+      <div style={{ marginBottom: 12, fontSize: 12, color: '#374151' }}>
+        <p style={{ margin: '0 0 4px' }}>Server: {availableText}</p>
+        <p style={{ margin: '0 0 4px' }}>Goal: {goalStatusText}</p>
+        <p style={{ margin: '0 0 4px' }}>Navigating: {navigatingText}</p>
+        <p style={{ margin: '0 0 4px' }}>Localization: {localizationText}</p>
+        <p style={{ margin: '0 0 4px' }}>Feedback: {feedbackStatusText}</p>
+        <p style={{ margin: '0 0 4px' }}>Distance Remaining: {distanceText}</p>
+        <p style={{ margin: '0 0 4px' }}>ETA: {etaText}</p>
+        <p style={{ margin: '0 0 4px' }}>Time Taken: {navigationTimeText}</p>
+        <p style={{ margin: 0 }}>Recoveries: {recoveriesText}</p>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginBottom: 12 }}>
+        <div>
+          <label style={labelStyle}>Map X</label>
+          <input
+            type="number"
+            step="any"
+            value={latitude}
+            onChange={(e) => setLatitude(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Map Y</label>
+          <input
+            type="number"
+            step="any"
+            value={longitude}
+            onChange={(e) => setLongitude(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Altitude</label>
+          <input
+            type="number"
+            step="any"
+            value={altitude}
+            onChange={(e) => setAltitude(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Yaw (deg)</label>
+          <input
+            type="number"
+            step="any"
+            value={yawDeg}
+            onChange={(e) => setYawDeg(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={sendNavGoal}>Send Goal</button>
+        <button onClick={() => sendDashboardCommand('cancel_goal')}>Cancel Goal</button>
+      </div>
+    </Panel>
+  );
+}
+
+function CommandLogPanel() {
   const [log, setLog] = useState([]);
   const ackData = useWebSocket('/ws/cmd_ack');
 
@@ -226,31 +375,8 @@ function CommandPanel() {
     }
   }, [ackData]);
 
-  const sendCmd = async (cmdType, params = {}) => {
-    try {
-      const res = await fetch('/api/command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cmd_type: cmdType, params, issued_by: 'dashboard' }),
-      });
-      const data = await res.json();
-      if (data.error) alert(`Rejected: ${data.error}`);
-    } catch (e) {
-      alert(`Failed: ${e.message}`);
-    }
-  };
-
   return (
-    <Panel title="Commands">
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <button onClick={() => sendCmd('arm')}>Arm</button>
-        <button onClick={() => sendCmd('disarm')}>Disarm</button>
-        <button onClick={() => sendCmd('estop')} style={{ background: '#ef4444', color: 'white' }}>
-          E-STOP
-        </button>
-        <button onClick={() => sendCmd('cancel_goal')}>Cancel Goal</button>
-      </div>
-      <h4 style={{ margin: '8px 0 4px', fontSize: 12 }}>Command Log</h4>
+    <Panel title="Command Log">
       <div style={{ maxHeight: 200, overflow: 'auto', fontSize: 11 }}>
         {log.map((entry, i) => (
           <div key={i} style={{ borderBottom: '1px solid #f3f4f6', padding: '2px 0' }}>
@@ -305,7 +431,9 @@ export default function App() {
         <JetsonPanel jetson={health?.jetson} hwMode={hwMode.jetson} />
         <AlertsPanel alerts={health?.activeAlerts} />
         <DrivePanel />
-        <CommandPanel />
+        <Px4CommandsPanel />
+        <Nav2ControlPanel nav2={health?.nav2} />
+        <CommandLogPanel />
       </div>
     </div>
   );
