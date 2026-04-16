@@ -33,6 +33,7 @@ def _build_container(context):
         'probes.cam.color_topic': '/{}/fisheye1/image_raw'.format(tracking_camera),
         'probes.cam.depth_topic': '',
         'probes.cam.imu_topic': '/{}/imu'.format(tracking_camera),
+        'probes.cam.odom_topic': '/{}/odom'.format(tracking_camera),
     }
 
     telemetry_overrides = [{'use_sim_time': use_sim_time}]
