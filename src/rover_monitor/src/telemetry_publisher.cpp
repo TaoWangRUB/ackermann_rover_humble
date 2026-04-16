@@ -588,10 +588,7 @@ void TelemetryPublisher::handle_cancel_goal(const std::string & cmd_id)
     "Nav2 goal cancel requested");
 
   nav2_client_->async_cancel_goal(goal_handle,
-    [this, cmd_id](
-      std::shared_future<
-        typename NavigateToPoseGoalHandle::CancelResponse::SharedPtr> future) {
-      const auto cancel_response = future.get();
+    [this, cmd_id](auto cancel_response) {
       if (!cancel_response || cancel_response->goals_canceling.empty()) {
         send_ack(cmd_id, rover_monitor_proto::CMD_CANCEL_GOAL,
           rover_monitor_proto::ACK_FAILED,
