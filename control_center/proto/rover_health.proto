@@ -51,6 +51,22 @@ message JetsonStatus {
   int64 timestamp = 17;
 }
 
+message Nav2Status {
+  bool available = 1;
+  bool navigating = 2;
+  bool localization_active = 3;
+  string goal_status_label = 4;
+  string feedback_status = 5;
+  float distance_remaining_m = 6;
+  float eta_seconds = 7;
+  float navigation_time_s = 8;
+  int32 number_of_recoveries = 9;
+  int32 number_of_poses_remaining = 10;
+  int32 error_code = 11;
+  string error_msg = 12;
+  int64 timestamp = 13;
+}
+
 message RoverHealth {
   int32 seq = 1;
   int64 timestamp = 2;
@@ -63,6 +79,7 @@ message RoverHealth {
   string overall_health = 7;
   repeated string active_alerts = 8;
   repeated CamStatus cameras = 9;
+  Nav2Status nav2 = 10;
 }
 
 // --- v1.2.0: Command System ---

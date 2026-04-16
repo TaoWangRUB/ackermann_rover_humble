@@ -1,8 +1,11 @@
 #pragma once
 
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
 #include <rover_monitor/msg/rover_health.hpp>
+#include <rover_monitor/msg/nav2_status.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
 
 #include <mqtt/async_client.h>
@@ -25,9 +28,15 @@ public:
   ~TelemetryPublisher() override;
 
 private:
+  using NavigateToPose = nav2_msgs::action::NavigateToPose;
+  using NavigateToPoseGoalHandle = rclcpp_action::ClientGoalHandle<NavigateToPose>;
+
   // --- Outbound telemetry ---
   void on_health(rover_monitor::msg::RoverHealth::ConstSharedPtr msg);
   void connect_mqtt();
+  void on_nav2_status_timer();
+  void publish_nav2_status();
+  void update_nav2_localization_flag();
 
   // --- Inbound command handling ---
   void on_mqtt_message(mqtt::const_message_ptr mqtt_msg);
@@ -72,6 +81,15 @@ private:
 
   // E-stop twist publisher
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_pub_;
+
+  // Nav2 goal/status bridge
+  rclcpp::Publisher<rover_monitor::msg::Nav2Status>::SharedPtr nav2_status_pub_;
+  rclcpp_action::Client<NavigateToPose>::SharedPtr nav2_client_;
+  rclcpp::TimerBase::SharedPtr nav2_status_timer_;
+  std::mutex nav2_mutex_;
+  rover_monitor::msg::Nav2Status nav2_status_;
+  NavigateToPoseGoalHandle::SharedPtr active_nav2_goal_handle_;
+  std::string active_nav_goal_cmd_id_;
 
   // Command deduplication set with timestamps
   std::mutex dedup_mutex_;

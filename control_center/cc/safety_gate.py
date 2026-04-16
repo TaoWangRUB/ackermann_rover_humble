@@ -63,6 +63,8 @@ class SafetyGate:
             return False, f"map→odom TF age too high ({health.slam_latency_ms:.0f}ms) — cannot navigate"
         if health.overall_health == "ERROR":
             return False, "Overall health ERROR — cannot navigate"
+        if not health.nav2.available:
+            return False, "Nav2 not ready — cannot navigate"
 
         return True, "Nav goal preconditions met"
 
