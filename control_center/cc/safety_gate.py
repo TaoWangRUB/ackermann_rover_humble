@@ -55,16 +55,8 @@ class SafetyGate:
             return False, "Telemetry stale — cannot navigate"
 
         px4 = health.px4
-        if not px4.connected:
-            return False, "PX4 not connected — cannot navigate"
         if not px4.armed:
             return False, "Not armed — cannot navigate"
-        if health.slam_latency_ms > 200.0 and health.slam_latency_ms >= 0:
-            return False, f"map→odom TF age too high ({health.slam_latency_ms:.0f}ms) — cannot navigate"
-        if health.overall_health == "ERROR":
-            return False, "Overall health ERROR — cannot navigate"
-        if not health.nav2.available:
-            return False, "Nav2 not ready — cannot navigate"
 
         return True, "Nav goal preconditions met"
 

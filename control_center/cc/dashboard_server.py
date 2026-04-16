@@ -53,7 +53,7 @@ class DashboardServer:
         # Subscribe to events for WS broadcast
         bus.subscribe("evt.health", self._broadcast_health)
         bus.subscribe("evt.alert", self._broadcast_alert)
-        bus.subscribe("evt.cmd_ack", self._broadcast_cmd_ack)
+        bus.subscribe("evt.cmd_ack_resolved", self._broadcast_cmd_ack)
 
     def _build_app(self) -> None:
         self._app = FastAPI(title="Rover Control Center")
@@ -79,6 +79,7 @@ class DashboardServer:
                     cmd_type, params, issued_by)
                 return {"cmd_id": cmd_id, "status": "sent"}
             except ValueError as e:
+                await self._ack_tracker.record_local_rejection(cmd_type, str(e))
                 return {"error": str(e), "status": "rejected"}
 
         @self._app.get("/api/command/history")
@@ -190,9 +191,9 @@ class DashboardServer:
         self._alert_ws_clients -= dead
 
     async def _broadcast_cmd_ack(self, data: Any = None, **kwargs: Any) -> None:
-        if not self._cmd_ack_ws_clients or not MessageToDict:
+        if not self._cmd_ack_ws_clients:
             return
-        payload = json.dumps(MessageToDict(data))
+        payload = json.dumps(data if isinstance(data, dict) else kwargs)
         dead: set[Any] = set()
         for ws in self._cmd_ack_ws_clients:
             try:

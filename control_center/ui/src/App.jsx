@@ -365,13 +365,37 @@ function Nav2ControlPanel({ nav2 }) {
   );
 }
 
+function normalizeCommandLogEntry(entry) {
+  if (!entry) return null;
+  return {
+    cmdId: entry.cmdId ?? entry.cmd_id ?? 'unknown',
+    cmdType: entry.cmdType ?? entry.cmd_type ?? 'unknown',
+    ackStatus: entry.ackStatus ?? entry.ack_status ?? 'UNKNOWN',
+    message: entry.message ?? '',
+    roundTripMs: entry.roundTripMs ?? entry.round_trip_ms ?? 0,
+  };
+}
+
 function CommandLogPanel() {
   const [log, setLog] = useState([]);
   const ackData = useWebSocket('/ws/cmd_ack');
 
   useEffect(() => {
+    fetch('/api/command/history')
+      .then(r => r.json())
+      .then(entries => Array.isArray(entries) ? entries.map(normalizeCommandLogEntry).filter(Boolean) : [])
+      .then(setLog)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (ackData) {
-      setLog(prev => [ackData, ...prev].slice(0, 50));
+      const nextEntry = normalizeCommandLogEntry(ackData);
+      if (!nextEntry) return;
+      setLog(prev => {
+        const filtered = prev.filter(entry => entry.cmdId !== nextEntry.cmdId);
+        return [nextEntry, ...filtered].slice(0, 50);
+      });
     }
   }, [ackData]);
 
