@@ -39,7 +39,7 @@ def generate_launch_description():
     enable_vo_arg = DeclareLaunchArgument(
         'enable_vo_bridge',
         default_value='false',
-        description='Launch px4_vision_odom.py to feed VO into PX4 EKF2'
+        description='Launch the PX4 visual odometry bridge to feed VO into PX4 EKF2'
     )
 
     odom_topic_arg = DeclareLaunchArgument(
@@ -89,7 +89,7 @@ def generate_launch_description():
     enable_vehicle_odometry_arg = DeclareLaunchArgument(
         'enable_vehicle_odometry',
         default_value='true',
-        description='Launch px4_vehicle_odometry.py to convert /fmu/out/vehicle_odometry → /px4_vehicle_odom'
+        description='Launch the PX4 vehicle odometry bridge to convert /fmu/out/vehicle_odometry → /px4_vehicle_odom'
     )
 
     vehicle_odom_frame_arg = DeclareLaunchArgument(
@@ -107,7 +107,7 @@ def generate_launch_description():
     # ── VO bridge: XRCE transport ─────────────────────────────────────────
     vo_xrce_node = Node(
         package='px4_bringup',
-        executable='px4_vision_odom.py',
+        executable='px4_vision_odom_node',
         name='px4_vision_odom',
         output='screen',
         parameters=[{
@@ -137,7 +137,7 @@ def generate_launch_description():
     # ── Vehicle odometry bridge ───────────────────────────────────────────
     vehicle_odom_node = Node(
         package='px4_bringup',
-        executable='px4_vehicle_odometry.py',
+        executable='px4_vehicle_odometry_node',
         name='px4_vehicle_odometry',
         output='screen',
         parameters=[{

@@ -282,6 +282,7 @@ def generate_launch_description() -> LaunchDescription:
             'base_frame':   LaunchConfiguration('t265_relay_base_frame'),
             'output_frame': LaunchConfiguration('t265_relay_output_frame'),
             'publish_tf':   LaunchConfiguration('t265_relay_publish_tf'),
+            'max_rate_hz':  30.0,
         }],
     )
     ld.add_action(t265_odom_relay)
