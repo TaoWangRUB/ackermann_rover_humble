@@ -30,7 +30,7 @@ controller_server:
     odom_topic: /odom
     current_progress_checker: "progress_checker"
     current_goal_checker: "general_goal_checker"
-    controller_frequency: 20.0
+    controller_frequency: 5.0
     costmap_update_timeout: 0.30
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.001
@@ -54,9 +54,9 @@ controller_server:
       yaw_goal_tolerance: 0.5
     FollowPath:
       plugin: "nav2_mppi_controller::MPPIController"
-      time_steps: 56
+      time_steps: 20
       model_dt: 0.05
-      batch_size: 1000
+      batch_size: 200
       ax_max: 3.0
       ax_min: -3.0
       ay_max: 3.0
@@ -75,7 +75,7 @@ controller_server:
       temperature: 0.3
       gamma: 0.015
       motion_model: "Ackermann"
-      visualize: true
+      visualize: false
       regenerate_noises: true
       TrajectoryVisualizer:
         trajectory_step: 5
@@ -242,7 +242,7 @@ map_saver:
 
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 20.0
+    expected_planner_frequency: 5.0
     planner_plugins: ["GridBased"]
     costmap_update_timeout: 1.0
     GridBased:
@@ -348,8 +348,8 @@ route_server:
 
 velocity_smoother:
   ros__parameters:
-    odom_topic: "/odometry/filtered"
-    smoothing_frequency: 20.0
+    odom_topic: "/odom"
+    smoothing_frequency: 5.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
     max_velocity: [0.5, 0.0, 2.0]
