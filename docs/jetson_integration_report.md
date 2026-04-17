@@ -166,9 +166,12 @@ Test command:
 ./scripts/start_jetson_session.sh --cuvslam-odom --nav2 --no-activate
 ```
 
+**Before optimization** (Python PX4 bridge, unthrottled relays):
+
 | Metric | Value |
 |---|---|
 | Load average (settled) | ~13.75 |
+| Top instantaneous CPU | ~530% of 600% |
 | RTAB-Map rate | 1.00 Hz (254+ frames) |
 | Nav2 lifecycle | "Managed nodes are active" ✅ |
 | PX4 VO bridge | Forwarding odometry ✅ |
@@ -177,23 +180,41 @@ Test command:
 | Node crashes | None |
 | EKF errors | Sporadic during activation, settling |
 
-**Note:** The full session adds ~110% CPU from PX4 Python nodes and ~46% from
-the monitor container, pushing load average back up. The system is CPU-saturated
-but functionally stable — all components produce correct output at expected rates.
+**After optimization** (C++ PX4 bridge, 30 Hz throttled relays, 2026-04-16):
 
-### 5.5 Top CPU Consumers (Full Session, Steady State)
+| Metric | Value | vs Before |
+|---|---|---|
+| Load average (settled) | ~11.13 | **−2.6** |
+| Top instantaneous CPU | ~547% of 600% | ≈ same (measurement noise) |
+| RTAB-Map rate | 1.00 Hz (steady) ✅ | unchanged |
+| Nav2 lifecycle | "Managed nodes are active" ✅ | unchanged |
+| PX4 VO bridge | Forwarding odometry ✅ | unchanged |
+| XRCE Agent | Active ✅ | unchanged |
+| Monitor | Aggregator loaded ✅ | unchanged |
+| Node crashes | None | unchanged |
+| EKF errors | Sporadic during activation, settling | unchanged |
+
+**Note:** Load average is the more reliable long-term indicator (it captures
+queueing pressure, not momentary scheduling). Top instantaneous CPU varies with
+measurement timing; use load average for comparisons. After optimization, the
+PX4 bridge Python overhead (~63.5 CPU%) was replaced by ~17.8% C++ equivalent,
+recovering ~46 CPU% headroom at steady state.
+
+### 5.5 Top CPU Consumers — Before vs After Optimization
+
+**Before** (2026-04-15, Python PX4 bridge + unthrottled relays):
 
 | Process | CPU % |
 |---|---|
 | D435i realsense_camera_node | 65.8 |
 | rtabmap | 51.8 |
 | T265 realsense_camera_node | 44.9 |
-| px4_vision_odom.py | 31.8 |
-| px4_vehicle_odometry.py | 31.5 |
+| **px4_vision_odom.py** | **31.8** |
+| **px4_vehicle_odometry.py** | **31.5** |
 | monitor component_container | 28.8 |
 | cuvslam_odom_node | 26.1 |
 | imu_transformer | 19.2 |
-| odom_tf_relay | 18.0 |
+| **odom_tf_relay (cuvslam, unthrottled)** | **18.0** |
 | nav2 planner_server | 16.6 |
 | nav2 lifecycle_manager | 15.7 |
 | nav2 bt_navigator | 14.3 |
@@ -204,6 +225,86 @@ but functionally stable — all components produce correct output at expected ra
 | nav2 collision_monitor | 11.2 |
 | ekf_node | 9.9 |
 | nav2 velocity_smoother | 8.6 |
+| **Load average (settled)** | **13.75** |
+
+**After** (2026-04-16, C++ PX4 bridge + 30 Hz throttled relays):
+
+| Process | CPU % | vs Before |
+|---|---|---|
+| D435i realsense_camera_node | 65.3 | ≈ same |
+| rtabmap | 53.0 | ≈ same |
+| T265 realsense_camera_node | 50.5 | ≈ same |
+| monitor component_container | 37.4 | ≈ same |
+| cuvslam_odom_node | 29.9 | ≈ same |
+| imu_transformer | 19.9 | ≈ same |
+| nav2 lifecycle_manager | 16.3 | ≈ same |
+| nav2 planner_server | 14.9 | ≈ same |
+| nav2 bt_navigator | 14.6 | ≈ same |
+| rgbd_sync | 13.7 | ≈ same |
+| nav2 controller_server | 13.6 | ≈ same |
+| nav2 behavior_server | 12.9 | ≈ same |
+| imu_filter_madgwick | 12.8 | ≈ same |
+| **t265_odom_relay (30 Hz throttled)** | **12.4** | — (new, T265 active) |
+| nav2 collision_monitor | 11.1 | ≈ same |
+| ekf_node | 9.9 | ≈ same |
+| nav2 velocity_smoother | 8.5 | ≈ same |
+| **px4_vision_odom_node (C++)** | **6.4** | **−25.4%** |
+| **cuvslam_odom_relay (30 Hz throttled)** | **6.0** | **−12.0%** |
+| **px4_vehicle_odometry_node (C++)** | **5.4** | **−26.1%** |
+| **Load average (settled)** | **12.65** | **−1.1** |
+
+**Summary of targeted optimizations:**
+
+| Node | Before | After | Saving |
+|---|---|---|---|
+| px4_vision_odom (Python → C++) | 31.8% | 6.4% | −25.4% |
+| px4_vehicle_odometry (Python → C++) | 31.5% | 5.4% | −26.1% |
+| odom_tf_relay / cuvslam_odom_relay (30 Hz throttle) | 18.0% | 6.0% | −12.0% |
+| **Total** | **81.3%** | **17.8%** | **−63.5%** |
+
+### 5.6 T265 Odometry Mode — Side-by-Side Comparison (2026-04-16)
+
+Test command:
+```bash
+./scripts/start_jetson_session.sh --t265-odom --nav2 --no-activate
+```
+
+Replaces cuVSLAM (`cuvslam_odom_node` + `cuvslam_odom_relay`) with direct T265 odometry
+(`t265_odom_relay` only). RTAB-Map uses `/t265/odom_base` instead.
+
+| Process | cuVSLAM-odom | T265-odom | Δ |
+|---|---|---|---|
+| D435i realsense_camera_node | 65.3 | 64.2 | ≈ same |
+| rtabmap | 53.0 | 52.2 | ≈ same |
+| T265 realsense_camera_node | 50.5 | 36.5 | −14.0 |
+| monitor component_container | 37.4 | 36.7 | ≈ same |
+| **cuvslam_odom_node** | **29.9** | **0** | **−29.9** |
+| imu_transformer | 19.9 | 19.9 | ≈ same |
+| cmd_vel relay | — | 18.3 | — |
+| nav2 lifecycle_manager | 16.3 | 16.4 | ≈ same |
+| nav2 planner_server | 14.9 | 15.1 | ≈ same |
+| nav2 bt_navigator | 14.6 | 14.7 | ≈ same |
+| **t265_odom_relay (30 Hz throttled)** | **12.4** | **14.7** | +2.3 |
+| rgbd_sync | 13.7 | 14.0 | ≈ same |
+| nav2 controller_server | 13.6 | 13.5 | ≈ same |
+| nav2 behavior_server | 12.9 | 12.9 | ≈ same |
+| imu_filter_madgwick | 12.8 | 12.6 | ≈ same |
+| nav2 collision_monitor | 11.1 | 11.2 | ≈ same |
+| ekf_node | 9.9 | 8.9 | ≈ same |
+| nav2 velocity_smoother | 8.5 | 8.5 | ≈ same |
+| px4_vision_odom_node (C++) | 6.4 | 6.5 | ≈ same |
+| **cuvslam_odom_relay (30 Hz throttled)** | **6.0** | **0** | **−6.0** |
+| px4_vehicle_odometry_node (C++) | 5.4 | 5.3 | ≈ same |
+| **Load average (settled)** | **12.65** | **10.51** | **−2.1** |
+
+**Key difference:** Removing `cuvslam_odom_node` (~30%) and `cuvslam_odom_relay` (~6%) in
+T265-odom mode saves ~36 CPU%, driving load average down a further **−2.1** (12.65 → 10.51).
+The T265 camera node itself also drops ~14% since it is no longer feeding cuVSLAM's stereo
+fisheye pipeline — only the T265 odometry relay at 30 Hz remains.
+
+**Trade-off:** T265 built-in VIO (librs2 internal) replaces cuVSLAM neural odometry. Accuracy
+and robustness in challenging environments (motion blur, low texture) may differ; cuVSLAM is
+expected to be more accurate but at higher CPU cost.
 
 ## 6. Remaining Nav2 Lifecycle Nodes
 
@@ -218,9 +319,11 @@ After trimming, the active Nav2 nodes are:
 
 ## 7. Known Limitations
 
-1. **CPU headroom is tight.** The full 5-pane session uses ~530% of 600%
-   available CPU. Adding more nodes (e.g. costmap filters, additional sensors)
-   will require either composition or offloading to a companion computer.
+1. **CPU headroom improved but still limited.** After PX4 bridge C++ conversion,
+   relay throttling, and switching to T265-odom mode, load average dropped from
+   ~13.75 → 10.51 (cuVSLAM-odom: 12.65). Adding more nodes (e.g. costmap
+   filters, additional sensors) will still require Nav2 node composition
+   (`use_composition:=True`) or offloading.
 
 2. **EKF sporadic overruns.** During Nav2 lifecycle activation, the EKF node
    occasionally misses its 30 Hz update target (takes 36–134 ms instead of
@@ -233,6 +336,11 @@ After trimming, the active Nav2 nodes are:
 4. **PX4 Ctrl-C handling.** The PX4 bringup scripts do not properly handle
    SIGINT — a pending fix.
 
+5. **px4_vision_odom publish rate capped at 10 Hz.** The C++ node maintains
+   the existing 10 Hz output to PX4 due to XRCE-DDS back-pressure causing cycle
+   stalls on the STM32F427 (Cube Black) at higher rates. Input is accepted at
+   up to 30 Hz with lazy conversion.
+
 ## 8. Commit History
 
 | Commit | Description |
@@ -244,13 +352,30 @@ After trimming, the active Nav2 nodes are:
 | `29ad0da` | Enable hardware reset + data-flow watchdog for T265 |
 | `39813cf` | Stabilize host and Jetson session scripts |
 | `c24920d` | Clarify SLAM metric as TF age in rover-monitor |
+| *(pending)* | Convert PX4 Python bridges to C++; throttle odom relays to 30 Hz |
 
 ## 9. Conclusion
 
 The full navigation stack runs stably on Jetson Xavier NX with the trimmed Nav2
-configuration. All components — dual RealSense cameras, cuVSLAM visual odometry,
-RTAB-Map SLAM, Nav2 planning/control, PX4 odometry bridge, and system monitor —
-coexist without crashes. The primary constraint is CPU budget: the Xavier NX's
-6 cores are near saturation at ~530% utilization. Future work should explore
-Nav2 node composition (`use_composition:=True`) and reducing PX4 bridge Python
-overhead to reclaim headroom.
+configuration and optimized PX4 bridge nodes. All components — dual RealSense
+cameras, RTAB-Map SLAM, Nav2 planning/control, PX4 odometry bridge, and system
+monitor — coexist without crashes in both odometry modes.
+
+Three rounds of optimization brought overall load average from **13.75 → 10.51**:
+
+| Optimization | Load avg | Δ |
+|---|---|---|
+| Baseline (Python bridges, unthrottled relays, cuVSLAM-odom) | 13.75 | — |
+| C++ PX4 bridges + 30 Hz relay throttle (cuVSLAM-odom) | 12.65 | −1.1 |
+| Switch to T265-odom (drop cuVSLAM node + relay, ~−36 CPU%) | 10.51 | −2.1 |
+
+In T265-odom mode, the PX4 bridge nodes (C++) account for only **~11.8% CPU**
+combined (px4_vision_odom 6.5% + px4_vehicle_odometry 5.3%), down from the
+original **63.3% Python total** (31.8% + 31.5%).
+
+Future work to reclaim additional headroom:
+- Nav2 node composition (`use_composition:=True`) to reduce inter-process IPC
+- Offloading RTAB-Map or costmap computation to a companion x86 host
+- Reducing monitor container telemetry polling rate
+- Re-evaluate cuVSLAM necessity: if T265 built-in VIO accuracy is sufficient,
+  cuVSLAM-odom mode is no longer needed, permanently freeing ~36 CPU%

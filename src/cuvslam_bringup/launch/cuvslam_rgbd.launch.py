@@ -99,6 +99,7 @@ def generate_launch_description() -> LaunchDescription:
             'output_frame': output_frame,
             'publish_tf': False,
             'use_sim_time': use_sim_time,
+            'max_rate_hz': 30.0,
         }],
     )
 

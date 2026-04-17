@@ -65,6 +65,7 @@ public:
     declare_parameter("output_frame", "");
     declare_parameter("tf_timeout_s", 1.0);
     declare_parameter("publish_tf", false);
+    declare_parameter("max_rate_hz", 0.0);
 
     input_topic_  = get_parameter("input_topic").as_string();
     output_topic_ = get_parameter("output_topic").as_string();
@@ -72,6 +73,10 @@ public:
     output_frame_ = get_parameter("output_frame").as_string();
     tf_timeout_   = get_parameter("tf_timeout_s").as_double();
     publish_tf_   = get_parameter("publish_tf").as_bool();
+    max_rate_hz_  = get_parameter("max_rate_hz").as_double();
+    min_interval_ns_ = (max_rate_hz_ > 0.0)
+        ? static_cast<int64_t>(1.0e9 / max_rate_hz_)
+        : 0;
 
     if (publish_tf_) {
       tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
@@ -85,8 +90,10 @@ public:
     RCLCPP_INFO(get_logger(),
       "odom_tf_relay ready:\n"
       "  %s  →  %s\n"
-      "  child_frame: <from msg>  →  %s",
-      input_topic_.c_str(), output_topic_.c_str(), base_frame_.c_str());
+      "  child_frame: <from msg>  →  %s\n"
+      "  max_rate_hz: %.1f%s",
+      input_topic_.c_str(), output_topic_.c_str(), base_frame_.c_str(),
+      max_rate_hz_, (max_rate_hz_ <= 0.0 ? " (unlimited)" : ""));
   }
 
 private:
@@ -189,6 +196,15 @@ private:
 
   void callback(const Odometry::SharedPtr msg)
   {
+    // Rate limiting — skip processing if below minimum interval
+    if (min_interval_ns_ > 0) {
+      int64_t now_ns = now().nanoseconds();
+      if ((now_ns - last_pub_time_ns_) < min_interval_ns_) {
+        return;
+      }
+      last_pub_time_ns_ = now_ns;
+    }
+
     const std::string & sensor_frame = msg->child_frame_id;
 
     // If child_frame_id already is base_frame, just relay with header update.
@@ -304,6 +320,9 @@ private:
   std::string output_frame_;
   double      tf_timeout_;
   bool        publish_tf_;
+  double      max_rate_hz_;
+  int64_t     min_interval_ns_ = 0;
+  int64_t     last_pub_time_ns_ = 0;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
   bool               tf_cached_      = false;
