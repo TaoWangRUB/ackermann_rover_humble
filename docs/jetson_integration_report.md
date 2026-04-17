@@ -341,6 +341,92 @@ After trimming, the active Nav2 nodes are:
    stalls on the STM32F427 (Cube Black) at higher rates. Input is accepted at
    up to 30 Hz with lazy conversion.
 
+## 7.1 Further Improvements (2026-04-17)
+
+Two follow-up changes addressing items 1 (CPU headroom) and 2 (EKF
+overruns) from Section 7.
+
+### 7.1.1 Nav2 planner tuning for short near-field goals
+
+During live goal testing (`NavigateToPose` → `(x=1.0, y=0.0)` from rest),
+the goal was accepted but the robot never moved. `distance_remaining`
+stayed at ~0.998 m for the full 10 s progress-checker window. Nav2 then
+aborted with `Failed to make progress`.
+
+Root cause: the SmacPlannerHybrid (Reeds-Shepp) could not find a
+curvature-feasible path from the robot's startup pose through the narrow
+free corridor left by the inflation layer. `minimum_turning_radius` was
+0.50 m with `inflation_radius` 0.70 m on a ~0.22 m-radius rover — the
+planner had almost no room to curve near obstacles or map edges.
+
+Config changes ([src/ackermann_nav2_bringup/config/nav2_params.yaml](../src/ackermann_nav2_bringup/config/nav2_params.yaml),
+commit `c551f4e`):
+
+| Parameter | Old | New |
+|---|---|---|
+| `GridBased.minimum_turning_radius` | 0.50 | 0.25 |
+| `local_costmap.inflation_radius` | 0.70 | 0.35 |
+| `global_costmap.inflation_radius` | 0.70 | 0.35 |
+
+After the change, planner logs `Passing new path to controller.`
+repeatedly during a goal — the planner succeeds end-to-end.
+
+### 7.1.2 Drop robot_localization EKF; T265 relay owns TF edge
+
+With EKF active, top CPU showed `ekf_filter_node + imu_filter_madgwick +
+imu_transformer` together consuming ~15–20 % of one core at 30 Hz EKF
+frequency. On the already-starved Jetson NX (load avg 16.03 on 6 cores,
+idle 1.4 %), this contributed to the EKF overruns noted in Section 7.2
+and to control-loop jitter in `controller_server` during goals.
+
+Since the T265 already provides 6-DoF odometry at ~230 Hz (see
+Section 5.6), routing it directly to Nav2/RTAB-Map removes the EKF
+entirely from the hot path.
+
+Changes (commit `1311458`):
+
+1. **rtabmap_slam.launch.py** — comment out `imu_transform_node`,
+   `imu_filter_node`, `ekf_filter_node`. RTAB-Map consumes
+   `/t265/odom_base` directly via `use_t265_odom:=true`.
+
+2. **realsense_camera.launch.py** — flip `t265_relay_publish_tf`
+   default from `'false'` → `'true'`. The existing C++ `odom_tf_relay`
+   (30 Hz-throttled since `a095fe9`) now owns the
+   `odom → ackermann/base_link` TF edge that EKF used to publish.
+
+TF tree ownership after the change:
+
+| Edge | Publisher |
+|---|---|
+| `map → odom` | RTAB-Map (unchanged) |
+| `odom → ackermann/base_link` | `t265_odom_relay` (was `ekf_filter_node`) |
+
+Without this TF change, `tf2_echo odom ackermann/base_link` reports
+`frame does not exist` and Nav2 cannot resolve robot pose — the TF edge
+is mandatory.
+
+### 7.1.3 Outstanding — MPPI load on Xavier NX
+
+Goal execution remains CPU-bound even after 7.1.1 and 7.1.2. During an
+active goal, `controller_server` emits `Control loop missed its desired
+rate of 20.0000 Hz` continuously, and `velocity_smoother` has been
+observed triggering `CRITICAL FAILURE` in the lifecycle manager. MPPI
+at `batch_size: 1000 × time_steps: 56` at 20 Hz is the dominant cost.
+
+Candidate further reductions (not yet applied):
+
+| Parameter | Current | Candidate |
+|---|---|---|
+| `FollowPath.batch_size` | 1000 | 300 |
+| `FollowPath.time_steps` | 56 | 30 |
+| `FollowPath.visualize` | true | false |
+| `controller_server.controller_frequency` | 20.0 | 10.0 |
+| `velocity_smoother.smoothing_frequency` | 20.0 | 10.0 |
+
+Separately: `polkitd` was observed at 75 % CPU in one `top` snapshot —
+unexpected for an idle auth daemon and worth a dedicated investigation
+(likely a telemetry probe hammering dbus/systemd).
+
 ## 8. Commit History
 
 | Commit | Description |
