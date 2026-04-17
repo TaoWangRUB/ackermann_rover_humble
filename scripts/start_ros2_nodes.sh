@@ -198,6 +198,20 @@ if [[ "${PX4}" == "true" ]]; then
     VO_BRIDGE="true"
 fi
 
+# Auto-resolve ODOM_TOPIC from odom-source flags (same priority as rtabmap_slam.launch.py).
+# Explicit --odom-topic=X overrides this.
+if [[ "${ODOM_TOPIC}" == "/odometry/filtered" ]]; then
+    if [[ "${CUVSLAM_ODOM}" == "true" ]]; then
+        ODOM_TOPIC="/cuvslam_odom"
+    elif [[ "${RGBD_ODOM}" == "true" ]]; then
+        ODOM_TOPIC="/cuvslam_rgbd_odom"
+    elif [[ "${VINS_ODOM}" == "true" ]]; then
+        ODOM_TOPIC="/vins_odom"
+    elif [[ "${HW_T265_ODOM}" == "true" ]]; then
+        ODOM_TOPIC="/t265/odom_base"
+    fi
+fi
+
 # Auto-resolve depth camera: default to 'none' when only T265/VINS/cuVSLAM is needed,
 # otherwise fall back to 'l515'.
 if [[ -z "${DEPTH_CAMERA}" ]]; then

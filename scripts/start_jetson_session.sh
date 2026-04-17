@@ -115,8 +115,21 @@ if [[ "${ENABLE_NAV2}" == true ]]; then
     ROS2_ARGS+=" --nav2"
 fi
 
+# Derive canonical odom topic for readiness (same priority as rtabmap_slam.launch.py)
+if [[ "${CUVSLAM_ODOM}" == true ]]; then
+    ODOM_READY_TOPIC="/cuvslam_odom"
+elif [[ "${RGBD_ODOM}" == true ]]; then
+    ODOM_READY_TOPIC="/cuvslam_rgbd_odom"
+elif [[ "${VINS_ODOM}" == true ]]; then
+    ODOM_READY_TOPIC="/vins_odom"
+elif [[ "${T265_ODOM}" == true ]]; then
+    ODOM_READY_TOPIC="/t265/odom_base"
+else
+    ODOM_READY_TOPIC="/odometry/filtered"
+fi
+
 ROS_SRC="source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash"
-WAIT_FOR_ROS_READY="source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && echo \"Waiting for /odometry/filtered topic...\" && timeout 120 bash -lc \"until ros2 topic list | grep -qx /odometry/filtered; do sleep 1; done\" && sleep 5'"
+WAIT_FOR_ROS_READY="source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && echo \"Waiting for ${ODOM_READY_TOPIC} topic...\" && timeout 120 bash -lc \"until ros2 topic list | grep -qx ${ODOM_READY_TOPIC}; do sleep 1; done\" && sleep 5'"
 WAIT_FOR_PX4_READY="source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && echo \"Waiting for PX4 DDS topics...\" && timeout 120 bash -lc \"until ros2 topic list | grep -qx /fmu/out/vehicle_status_v2; do sleep 1; done\" && sleep 10'"
 
 TELEMETRY_ARG="enable_telemetry:=false"
