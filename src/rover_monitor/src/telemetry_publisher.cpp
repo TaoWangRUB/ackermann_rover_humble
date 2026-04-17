@@ -52,7 +52,9 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   this->declare_parameter("publisher.cmd_qos", 2);
   this->declare_parameter("publisher.client_id", "xavier_rover_01");
   this->declare_parameter("publisher.dedup_eviction_s", 30);
-  this->declare_parameter("publisher.heartbeat_interval_s", 5.0);
+  this->declare_parameter("publisher.keep_alive_s", 15);
+  this->declare_parameter("publisher.connect_timeout_s", 5);
+  this->declare_parameter("publisher.heartbeat_interval_s", 1.0);
 
   broker_host_ = this->get_parameter("publisher.broker_host").as_string();
   broker_port_ = this->get_parameter("publisher.broker_port").as_int();
@@ -62,6 +64,8 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   cmd_qos_ = this->get_parameter("publisher.cmd_qos").as_int();
   client_id_ = this->get_parameter("publisher.client_id").as_string();
   dedup_eviction_s_ = this->get_parameter("publisher.dedup_eviction_s").as_int();
+  keep_alive_s_ = this->get_parameter("publisher.keep_alive_s").as_int();
+  connect_timeout_s_ = this->get_parameter("publisher.connect_timeout_s").as_int();
   heartbeat_interval_s_ = this->get_parameter("publisher.heartbeat_interval_s").as_double();
 
   // ROS subscriber for health telemetry
@@ -153,6 +157,7 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   // Set connected callback to subscribe to command topics on (re)connect
   mqtt_client_->set_connected_handler(
     [this](const std::string & /*cause*/) {
+      mqtt_connected_ = true;
       RCLCPP_INFO(this->get_logger(), "MQTT (re)connected — subscribing to command topics");
       try {
         mqtt_client_->subscribe("rover/cmd/goal", cmd_qos_);
@@ -164,6 +169,16 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
         mqtt_client_->subscribe("rover/cmd/drive", 0);  // QoS 0 for high-freq drive
       } catch (const mqtt::exception & e) {
         RCLCPP_WARN(this->get_logger(), "MQTT subscribe failed: %s", e.what());
+      }
+    });
+
+  mqtt_client_->set_connection_lost_handler(
+    [this](const std::string & cause) {
+      mqtt_connected_ = false;
+      if (cause.empty()) {
+        RCLCPP_WARN(this->get_logger(), "MQTT connection lost");
+      } else {
+        RCLCPP_WARN(this->get_logger(), "MQTT connection lost: %s", cause.c_str());
       }
     });
 
@@ -190,6 +205,8 @@ void TelemetryPublisher::connect_mqtt()
   try {
     auto conn_opts = mqtt::connect_options_builder()
       .clean_session(true)
+      .keep_alive_interval(std::chrono::seconds(keep_alive_s_))
+      .connect_timeout(std::chrono::seconds(connect_timeout_s_))
       .automatic_reconnect(
         std::chrono::seconds(1),
         std::chrono::seconds(reconnect_delay_s_))

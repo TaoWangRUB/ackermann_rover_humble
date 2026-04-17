@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Create the 'Rover Health Monitor' dashboard in InfluxDB 2.x.
 
-Idempotent — skips creation if a dashboard with the same name already exists.
+Idempotent — if a dashboard with the same name already exists, it is replaced
+so query/schema changes are applied cleanly.
 Run once after `docker compose up -d` to provision the default dashboard.
 
 Usage:
@@ -49,6 +50,17 @@ def dashboard_exists():
         if dash["name"] == DASHBOARD_NAME:
             return dash["id"]
     return None
+
+
+def delete_dashboard(dash_id):
+    req = urllib.request.Request(
+        f"{URL}/api/v2/dashboards/{dash_id}",
+        method="DELETE",
+        headers=HEADERS,
+    )
+    with urllib.request.urlopen(req) as resp:
+        if resp.status not in (204, 200):
+            sys.exit(f"Failed to delete dashboard {dash_id}: HTTP {resp.status}")
 
 
 def create_dashboard(org_id):
@@ -160,11 +172,11 @@ Q_BATTERY_V = (
     ' |> yield(name: "mean")'
 )
 
-Q_CAM_FPS = (
+Q_CAM_DEPTH_FPS = (
     'from(bucket: "rover_telemetry")'
     " |> range(start: v.timeRangeStart, stop: v.timeRangeStop)"
     ' |> filter(fn: (r) => r._measurement == "rover_cam_telemetry")'
-    ' |> filter(fn: (r) => r._field == "cam_stream_fps")'
+    ' |> filter(fn: (r) => r._field == "cam_depth_fps")'
     " |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
     ' |> yield(name: "mean")'
 )
@@ -220,41 +232,43 @@ def main():
             sys.exit("InfluxDB not ready after 30s")
         time.sleep(1)
 
-    # Check if dashboard already exists
+    # Replace stale dashboard definitions so schema/query changes land.
     existing = dashboard_exists()
     if existing:
-        print(f"Dashboard '{DASHBOARD_NAME}' already exists (ID: {existing}) — skipping.")
-        return
+        print(f"Dashboard '{DASHBOARD_NAME}' already exists (ID: {existing}) — replacing.")
+        delete_dashboard(existing)
+        # Influx may take a brief moment to release the old name.
+        time.sleep(1)
 
     org_id = get_org_id()
     dash_id = create_dashboard(org_id)
     print(f"Created dashboard '{DASHBOARD_NAME}' (ID: {dash_id})")
 
-    # Row 1: PX4 Battery %, PX4 Battery Voltage, Camera Stream FPS
-    c1 = add_cell(dash_id, 0, 0, 4, 3, "PX4 Battery %")
-    c2 = add_cell(dash_id, 4, 0, 4, 3, "PX4 Battery Voltage")
-    c3 = add_cell(dash_id, 8, 0, 4, 3, "Camera FPS")
+    # Row 1: Active Alerts, Camera Depth FPS, Jetson CPU / GPU %
+    c1 = add_cell(dash_id, 0, 0, 4, 3, "Active Alerts")
+    c2 = add_cell(dash_id, 4, 0, 4, 3, "Camera Depth FPS")
+    c3 = add_cell(dash_id, 8, 0, 4, 3, "Jetson CPU / GPU %")
 
-    # Row 2: Jetson Temperatures, Jetson GPU %, Active Alerts
-    c4 = add_cell(dash_id, 0, 3, 4, 3, "Jetson Temperatures (°C)")
-    c5 = add_cell(dash_id, 4, 3, 4, 3, "Jetson CPU / GPU %")
-    c6 = add_cell(dash_id, 8, 3, 4, 3, "Active Alerts")
+    # Row 2: PX4 Battery Voltage, PX4 Battery %, Jetson Temperatures
+    c4 = add_cell(dash_id, 0, 3, 4, 3, "PX4 Battery Voltage")
+    c5 = add_cell(dash_id, 4, 3, 4, 3, "PX4 Battery %")
+    c6 = add_cell(dash_id, 8, 3, 4, 3, "Jetson Temperatures (°C)")
 
     # Configure views
-    set_xy_view(dash_id, c1, "PX4 Battery %", Q_BATTERY_PCT,
-                colors=["#22C55E"])
-    set_xy_view(dash_id, c2, "PX4 Battery Voltage", Q_BATTERY_V,
-                colors=["#60A5FA"])
-    set_xy_view(dash_id, c3, "Camera FPS", Q_CAM_FPS,
+    set_table_view(dash_id, c1, "Active Alerts", Q_ALERTS)
+    set_xy_view(dash_id, c2, "Camera Depth FPS", Q_CAM_DEPTH_FPS,
                 y_bounds=["0", "30"], y_label="fps", legend=True,
                 colors=["#F59E0B", "#22C55E"])
-    set_xy_view(dash_id, c4, "Jetson Temperatures (°C)", Q_JETSON_TEMPS,
-                y_bounds=["30", "80"], y_label="°C", legend=True,
-                colors=["#F97316", "#EF4444"])
-    set_xy_view(dash_id, c5, "Jetson CPU / GPU %", Q_JETSON_GPU,
+    set_xy_view(dash_id, c3, "Jetson CPU / GPU %", Q_JETSON_GPU,
                 y_bounds=["0", "100"], y_label="%", legend=True,
                 colors=["#38BDF8", "#A78BFA"])
-    set_table_view(dash_id, c6, "Active Alerts", Q_ALERTS)
+    set_xy_view(dash_id, c4, "PX4 Battery Voltage", Q_BATTERY_V,
+                colors=["#60A5FA"])
+    set_xy_view(dash_id, c5, "PX4 Battery %", Q_BATTERY_PCT,
+                colors=["#22C55E"])
+    set_xy_view(dash_id, c6, "Jetson Temperatures (°C)", Q_JETSON_TEMPS,
+                y_bounds=["30", "80"], y_label="°C", legend=True,
+                colors=["#F97316", "#EF4444"])
 
     print("Dashboard provisioned with 6 panels.")
 

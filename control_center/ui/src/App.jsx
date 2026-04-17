@@ -2,21 +2,44 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const WS_BASE = `ws://${window.location.host}`;
 
-function useWebSocket(path) {
+function useWebSocket(path, initialUrl = null) {
   const [data, setData] = useState(null);
   const wsRef = useRef(null);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const fetchInitial = async () => {
+      if (!initialUrl) return;
+      try {
+        const response = await fetch(initialUrl);
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (!cancelled && payload) {
+          setData(payload.health ?? payload);
+        }
+      } catch {
+        // Best-effort bootstrap only; live updates come from WebSocket.
+      }
+    };
+
     const connect = () => {
       const ws = new WebSocket(`${WS_BASE}${path}`);
       wsRef.current = ws;
       ws.onmessage = (e) => setData(JSON.parse(e.data));
-      ws.onclose = () => setTimeout(connect, 2000);
+      ws.onclose = () => {
+        if (!cancelled) setTimeout(connect, 2000);
+      };
       ws.onerror = () => ws.close();
     };
+
+    fetchInitial();
     connect();
-    return () => wsRef.current?.close();
-  }, [path]);
+    return () => {
+      cancelled = true;
+      wsRef.current?.close();
+    };
+  }, [initialUrl, path]);
 
   return data;
 }
@@ -140,6 +163,7 @@ function DrivePanel() {
   const intervalRef = useRef(null);
   const speedRef = useRef(0);
   const steeringRef = useRef(0);
+  const wasEnabledRef = useRef(false);
 
   useEffect(() => { speedRef.current = speed; }, [speed]);
   useEffect(() => { steeringRef.current = steering; }, [steering]);
@@ -161,6 +185,7 @@ function DrivePanel() {
   // When enabled: publish at 2 Hz. When disabled: stop publishing.
   useEffect(() => {
     if (enabled) {
+      wasEnabledRef.current = true;
       intervalRef.current = setInterval(() => {
         sendDrive(speedRef.current, steeringRef.current);
       }, 500);
@@ -169,10 +194,13 @@ function DrivePanel() {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      // Reset sliders and send a final zero on disable
+      // Reset sliders and send a final zero only after an active drive session.
       setSpeed(0);
       setSteering(0);
-      sendDrive(0, 0);
+      if (wasEnabledRef.current) {
+        sendDrive(0, 0);
+        wasEnabledRef.current = false;
+      }
     }
     return () => {
       if (intervalRef.current) {
@@ -413,7 +441,7 @@ function CommandLogPanel() {
 }
 
 export default function App() {
-  const health = useWebSocket('/ws/health');
+  const health = useWebSocket('/ws/health', '/api/health/history');
   const [hwMode, setHwMode] = useState({});
 
   useEffect(() => {
