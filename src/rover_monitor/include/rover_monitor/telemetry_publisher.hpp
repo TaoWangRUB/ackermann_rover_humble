@@ -127,6 +127,8 @@ private:
   int cmd_qos_{2};
   std::string client_id_{"xavier_rover_01"};
   int dedup_eviction_s_{30};
+  int keep_alive_s_{15};
+  int connect_timeout_s_{5};
   double heartbeat_interval_s_{5.0};
 
   bool mqtt_connected_{false};

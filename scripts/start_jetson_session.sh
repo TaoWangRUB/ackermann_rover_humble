@@ -225,10 +225,18 @@ tmux select-pane -t "${PANE_ROS2}"
 # is ready to receive.
 if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     CC_URL="http://${BROKER_HOST}:8080"
-    (sleep 10 && curl -sf -X POST "${CC_URL}/api/hw_mode" \
-        -H 'Content-Type: application/json' \
-        -d '{"camera":"hw","t265":"hw","px4":"hw","jetson":"hw"}' \
-        >/dev/null 2>&1) &
+    (
+        sleep 10
+        for _ in 1 2 3 4 5 6; do
+            if curl -sf -X POST "${CC_URL}/api/hw_mode" \
+                -H 'Content-Type: application/json' \
+                -d '{"camera":"hw","t265":"hw","px4":"hw","jetson":"hw"}' \
+                >/dev/null 2>&1; then
+                exit 0
+            fi
+            sleep 5
+        done
+    ) &
 fi
 
 if [[ "${ATTACH}" == true && -t 1 ]]; then

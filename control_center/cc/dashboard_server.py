@@ -135,6 +135,10 @@ class DashboardServer:
             await ws.accept()
             self._health_ws_clients.add(ws)
             try:
+                if MessageToDict:
+                    effective_health, _ = await self._cache.get_effective_health()
+                    if effective_health is not None:
+                        await ws.send_text(json.dumps(MessageToDict(effective_health)))
                 while True:
                     await ws.receive_text()
             except WebSocketDisconnect:

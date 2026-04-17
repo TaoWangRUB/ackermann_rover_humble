@@ -13,7 +13,7 @@ mqtt:
       qos: 1
 
 telemetry_cache:
-  stale_threshold_s: 5.0
+  stale_threshold_s: 15.0
 
 dashboard:
   host: "0.0.0.0"

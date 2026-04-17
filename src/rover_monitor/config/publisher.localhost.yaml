@@ -9,5 +9,7 @@
       cmd_qos: 2
       client_id: "x86_monitor_test"
       dedup_eviction_s: 30
-      heartbeat_interval_s: 5.0
+      keep_alive_s: 15
+      connect_timeout_s: 5
+      heartbeat_interval_s: 1.0
       serialization: "protobuf"
