@@ -70,11 +70,13 @@ BROKER_HOST=""
 PUBLISHER_CONFIG_FILE="/workspace/src/rover_monitor/config/publisher.yaml"
 PX4_MODE_TYPE="manual"
 REVERSIBLE_DRIVE=true
+NAV2_CONTROLLER="mppi"
 
 for arg in "$@"; do
     case "${arg}" in
         --with-telemetry)  ENABLE_TELEMETRY=true ;;
         --nav2)            ENABLE_NAV2=true ;;
+        --controller=*)    NAV2_CONTROLLER="${arg#--controller=}" ;;
         --t265)            ENABLE_T265=true ;;
         --t265-odom)       ENABLE_T265=true; T265_ODOM=true ;;
         --cuvslam-odom)    CUVSLAM_ODOM=true ;;
@@ -112,7 +114,7 @@ if [[ "${VINS_ODOM}" == true ]]; then
     ROS2_ARGS+=" --vins-odom"
 fi
 if [[ "${ENABLE_NAV2}" == true ]]; then
-    ROS2_ARGS+=" --nav2"
+    ROS2_ARGS+=" --nav2 --controller=${NAV2_CONTROLLER}"
 fi
 
 # Derive canonical odom topic for readiness (same priority as rtabmap_slam.launch.py).

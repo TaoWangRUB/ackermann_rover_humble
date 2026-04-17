@@ -34,6 +34,7 @@
 #                            --t265-odom    → /t265/odom_base
 #                            (none)         → /odometry/filtered
 #                          Explicit --odom-topic=X overrides the auto-resolve.
+#   --controller=TYPE  Nav2 path controller: mppi (default) or rpp (lightweight)
 #   --reversible-drive Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
 #   --no-rviz          Disable RViz2
 #   --build[=PKG]      Build workspace (or specific pkg) before launching
@@ -160,6 +161,7 @@ BRIDGE_MODE="manual"
 VO_BRIDGE="false"
 ODOM_TOPIC="/odometry/filtered"
 REVERSIBLE_DRIVE="false"
+NAV2_CONTROLLER="mppi"
 BUILD="false"
 BUILD_ONLY="false"
 BUILD_PKGS=""
@@ -183,6 +185,7 @@ for arg in "$@"; do
         --vo-bridge)         VO_BRIDGE="true" ;;
         --odom-topic=*)      ODOM_TOPIC="${arg#--odom-topic=}" ;;
         --reversible-drive)  REVERSIBLE_DRIVE="true" ;;
+        --controller=*)      NAV2_CONTROLLER="${arg#--controller=}" ;;
         --build)             BUILD="true" ;;
         --build=*)      BUILD="true"; BUILD_PKGS="${arg#--build=}" ;;
         --build-only)   BUILD="true"; BUILD_ONLY="true" ;;
@@ -192,7 +195,7 @@ for arg in "$@"; do
             exit 0 ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--cuvslam-odom] [--rgbd-odom] [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
+            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--cuvslam-odom] [--rgbd-odom] [--px4] [--rtabmap] [--nav2] [--controller=mppi|rpp] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
             exit 1
             ;;
     esac
@@ -308,6 +311,7 @@ LAUNCH_CMD+=" use_cuvslam_odom:=${CUVSLAM_ODOM}"
 LAUNCH_CMD+=" use_rgbd_odom:=${RGBD_ODOM}"
 LAUNCH_CMD+=" rtabmap:=${RTABMAP}"
 LAUNCH_CMD+=" nav2:=${NAV2}"
+LAUNCH_CMD+=" nav2_controller:=${NAV2_CONTROLLER}"
 LAUNCH_CMD+=" rviz:=${RVIZ}"
 LAUNCH_CMD+=" reversible_drive:=${REVERSIBLE_DRIVE}"
 

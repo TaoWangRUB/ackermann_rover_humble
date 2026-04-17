@@ -107,6 +107,12 @@ ARGUMENTS = [
         description='Launch the Nav2 stack once localization is running.'
     ),
     DeclareLaunchArgument(
+        'nav2_controller',
+        default_value='mppi',
+        choices=['mppi', 'rpp'],
+        description='Nav2 path controller: mppi (sampling-based) or rpp (Regulated Pure Pursuit, lightweight).'
+    ),
+    DeclareLaunchArgument(
         'nav2_params_file',
         default_value=TextSubstitution(
             text=os.path.join(
@@ -241,6 +247,7 @@ def generate_launch_description() -> LaunchDescription:
     rtabmap_enable = LaunchConfiguration('rtabmap')
     rtabmap_viz = LaunchConfiguration('rtabmap_viz')
     nav2_enable = LaunchConfiguration('nav2')
+    nav2_controller = LaunchConfiguration('nav2_controller')
     nav2_params_file = LaunchConfiguration('nav2_params_file')
     nav2_bt_xml = LaunchConfiguration('nav2_bt_xml')
     nav2_through_bt = LaunchConfiguration('nav2_through_poses_bt')
@@ -478,6 +485,7 @@ def generate_launch_description() -> LaunchDescription:
         ),
         condition=IfCondition(nav2_enable),
         launch_arguments={
+            'controller': nav2_controller,
             'params_file': nav2_params_file,
             'bt_xml': nav2_bt_xml,
             'navigate_through_poses_bt': nav2_through_bt,

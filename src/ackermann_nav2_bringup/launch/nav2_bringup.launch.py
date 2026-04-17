@@ -5,6 +5,8 @@ This launch file inlines the core functionality of Nav2's
 namespacing and scan remappings.
 """
 
+import os
+
 # Copyright 2022 Clearpath Robotics, Inc.
 # Copyright (c) 2018 Intel Corporation
 #
@@ -61,12 +63,14 @@ ARGUMENTS = [
         description='Whether to use stamped cmd_vel messages',
     ),
     DeclareLaunchArgument(
+        'controller',
+        default_value='mppi',
+        choices=['mppi', 'rpp'],
+        description='Path controller: mppi (sampling-based) or rpp (Regulated Pure Pursuit, lightweight)',
+    ),
+    DeclareLaunchArgument(
         'params_file',
-        default_value=PathJoinSubstitution([
-            get_package_share_directory('ackermann_nav2_bringup'),
-            'config',
-            'nav2_params.yaml',
-        ]),
+        default_value='',  # resolved from 'controller' arg if empty
         description='Full path to the ROS2 parameters file to use for all launched nodes',
     ),
     DeclareLaunchArgument(
@@ -140,7 +144,17 @@ def launch_setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration('use_sim_time')
     enable_stamped_cmd_vel = LaunchConfiguration('enable_stamped_cmd_vel')
     autostart = LaunchConfiguration('autostart')
-    params_file = LaunchConfiguration('params_file')
+    # Resolve params_file from controller arg if not explicitly set
+    controller_type = LaunchConfiguration('controller').perform(context)
+    params_file_str = LaunchConfiguration('params_file').perform(context)
+    if not params_file_str:
+        params_filename = 'nav2_params_rpp.yaml' if controller_type == 'rpp' else 'nav2_params.yaml'
+        params_file_str = os.path.join(
+            get_package_share_directory('ackermann_nav2_bringup'),
+            'config',
+            params_filename,
+        )
+    params_file = params_file_str
     use_composition = LaunchConfiguration('use_composition')
     container_name = LaunchConfiguration('container_name')
     container_name_full = (namespace, '/', container_name)
