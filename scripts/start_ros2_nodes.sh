@@ -26,7 +26,14 @@
 #   --nav2             Launch Nav2 navigation stack
 #   --bridge[=MODE]    Launch PX4 mode node (default: manual; options: speed_steering, trajectory, speed_attitude)
 #   --vo-bridge        Launch VO bridge: px4_vision_odom + px4_vehicle_odometry
-#   --odom-topic=TOPIC Odometry source for vision odom node (default: /odometry/filtered)
+#   --odom-topic=TOPIC Odometry topic for PX4 VO bridge and readiness gate.
+#                          Auto-resolved from odom-source flags when not set explicitly:
+#                            --cuvslam-odom → /cuvslam_odom
+#                            --rgbd-odom    → /cuvslam_rgbd_odom
+#                            --vins-odom    → /vins_odom
+#                            --t265-odom    → /t265/odom_base
+#                            (none)         → /odometry/filtered
+#                          Explicit --odom-topic=X overrides the auto-resolve.
 #   --reversible-drive Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
 #   --no-rviz          Disable RViz2
 #   --build[=PKG]      Build workspace (or specific pkg) before launching
@@ -199,7 +206,8 @@ if [[ "${PX4}" == "true" ]]; then
 fi
 
 # Auto-resolve ODOM_TOPIC from odom-source flags (same priority as rtabmap_slam.launch.py).
-# Explicit --odom-topic=X overrides this.
+# Priority: cuVSLAM > cuVSLAM RGBD > VINS > T265 > /odometry/filtered (default).
+# Explicit --odom-topic=X overrides this entirely.
 if [[ "${ODOM_TOPIC}" == "/odometry/filtered" ]]; then
     if [[ "${CUVSLAM_ODOM}" == "true" ]]; then
         ODOM_TOPIC="/cuvslam_odom"

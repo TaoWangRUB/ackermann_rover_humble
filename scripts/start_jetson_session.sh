@@ -115,7 +115,9 @@ if [[ "${ENABLE_NAV2}" == true ]]; then
     ROS2_ARGS+=" --nav2"
 fi
 
-# Derive canonical odom topic for readiness (same priority as rtabmap_slam.launch.py)
+# Derive canonical odom topic for readiness (same priority as rtabmap_slam.launch.py).
+# Priority: cuVSLAM > cuVSLAM RGBD > VINS > T265 > /odometry/filtered (default).
+# This determines which topic the PX4 pane waits for before launching.
 if [[ "${CUVSLAM_ODOM}" == true ]]; then
     ODOM_READY_TOPIC="/cuvslam_odom"
 elif [[ "${RGBD_ODOM}" == true ]]; then
