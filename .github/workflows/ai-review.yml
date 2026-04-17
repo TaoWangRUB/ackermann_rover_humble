@@ -1,13 +1,72 @@
 name: ai-review
-on: [pull_request]
+
+on:
+  pull_request:
+
 jobs:
   review:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           submodules: false
+
+      - name: Setup ROS 2 Jazzy
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: jazzy
+
       - name: Prepare CI submodules
-        run: bash scripts/prepare_ci_submodules.sh
-      - name: Run Autonomous Agent Verification
-        run: bash scripts/verify_agent_work.sh
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/prepare_ci_submodules.sh
+
+      - name: Install package dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          # Remove submodule example package manifests so rosdep does not
+          # process their deps. The build below skips example_* and px4_ros2_py.
+          find src/px4-ros2-interface-lib/examples -name package.xml -delete
+          rosdep update
+          rosdep install --from-paths src --ignore-src --rosdistro jazzy -y
+
+      - name: Build and test
+        shell: bash
+        run: |
+          set -eo pipefail
+          source /opt/ros/jazzy/setup.bash
+          COLCON_SKIP_ARGS=(--packages-ignore-regex '^example_.*' --packages-ignore px4_ros2_py)
+
+          # CMake configure steps may call /usr/bin/python3 directly, so make
+          # sure ROS Python packages are visible on the default sys.path.
+          PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          SITE=$(/usr/bin/python3 -c "import site; print(site.getsitepackages()[0])")
+          echo "/opt/ros/jazzy/lib/python${PY_VER}/site-packages" | sudo tee "$SITE/ros-jazzy.pth" > /dev/null
+          /usr/bin/python3 -c "import ament_package; print('ament_package:', ament_package.__file__)"
+
+          # Stage 1: build px4_msgs first.
+          colcon build --symlink-install "${COLCON_SKIP_ARGS[@]}" --packages-select px4_msgs
+          source install/setup.bash
+
+          # Stage 2: build px4_ros2_cpp with px4_msgs on CMAKE_PREFIX_PATH.
+          colcon build --symlink-install "${COLCON_SKIP_ARGS[@]}" --packages-select px4_ros2_cpp
+          source install/setup.bash
+
+          # Stage 3: build the project packages.
+          colcon build --symlink-install "${COLCON_SKIP_ARGS[@]}" --packages-up-to \
+            ackermann_control \
+            safety \
+            px4_bringup \
+            robot_bringup \
+            ackermann_nav2_bringup \
+            rtabmap_bringup \
+            cuvslam_bringup \
+            description_robot
+
+          colcon test --event-handlers console_direct+ --packages-select ackermann_control safety
+          colcon test-result --verbose

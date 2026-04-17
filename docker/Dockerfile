@@ -10,6 +10,18 @@ ARG UBUNTU_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-c"]
 
+# Make apt more resilient to transient mirror/network failures in CI and Docker
+# builds. The Ubuntu base image defaults to plain HTTP mirrors, so short-lived
+# fetch drops can otherwise fail the whole image very early (for example while
+# installing `locales`).
+RUN printf '%s\n' \
+    'Acquire::Retries "5";' \
+    'Acquire::http::Timeout "30";' \
+    'Acquire::https::Timeout "30";' \
+    'Acquire::http::Pipeline-Depth "0";' \
+    'Acquire::ForceIPv4 "true";' \
+    > /etc/apt/apt.conf.d/99resilient-network
+
 # Build-time configuration for ROS and Gazebo distributions
 ARG ROS_DISTRO=jazzy
 ARG GZ_DISTRO=harmonic
