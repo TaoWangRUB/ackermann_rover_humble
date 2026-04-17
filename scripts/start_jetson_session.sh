@@ -166,7 +166,7 @@ if [[ "${CUVSLAM_ODOM}" == true || "${VINS_ODOM}" == true ]]; then
     TRACKING_EXPECT_STREAM=true
 fi
 
-PX4_BRINGUP_ARGS=(--bridge --vo-bridge --mode-type "${PX4_MODE_TYPE}")
+PX4_BRINGUP_ARGS=(--bridge --vo-bridge --mode-type "${PX4_MODE_TYPE}" --odom-topic "${ODOM_READY_TOPIC}")
 if [[ "${REVERSIBLE_DRIVE}" == true ]]; then
     PX4_BRINGUP_ARGS+=(--reversible-drive)
 fi
