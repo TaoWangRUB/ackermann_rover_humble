@@ -8,7 +8,9 @@
 #   --bridge                Enable PX4 mode bridge (default: disabled)
 #   --mode-type TYPE        Mode type (default: manual)
 #   --vo-bridge             Enable VO bridge: launches px4_vehicle_odometry + px4_vision_odom (default: disabled)
-#   --odom-topic TOPIC      Odometry topic for vision odom node (default: /odometry/filtered)
+#   --odom-topic TOPIC      Odometry topic for vision odom node (default: /odometry/filtered).
+#                           When called from start_jetson_session.sh, this is auto-resolved
+#                           from the odom-source flags (--cuvslam-odom, --t265-odom, etc.).
 #   --reversible-drive      Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
 #
 # Examples:
