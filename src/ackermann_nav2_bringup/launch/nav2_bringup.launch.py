@@ -170,7 +170,7 @@ def launch_setup(context, *args, **kwargs):
     remappings = [
         ('/tf', 'tf'),
         ('/tf_static', 'tf_static'),
-        ('odom', '/odometry/filtered'),
+        ('odom', '/t265/odom_base'), #/odometry/filtered
     ]
 
     # Create our own temporary YAML files that include substitutions
