@@ -256,6 +256,17 @@ def generate_launch_description() -> LaunchDescription:
     use_cuvslam_odom = LaunchConfiguration('use_cuvslam_odom')
     use_rgbd_odom = LaunchConfiguration('use_rgbd_odom')
 
+    # Canonical odom topic — mirrors the priority logic in rtabmap_slam.launch.py.
+    # Downstream readiness gates and VO bridge default use this single expression;
+    # switching odom sources only requires changing launch flags, not hardcoded topics.
+    odom_ready_topic = PythonExpression([
+        '"/cuvslam_odom" if "', use_cuvslam_odom, '" == "true"'
+        ' else ("/cuvslam_rgbd_odom" if "', use_rgbd_odom, '" == "true"'
+        ' else ("/vins_odom" if "', use_vins_odom, '" == "true"'
+        ' else ("/t265/odom_base" if "', use_t265_odom, '" == "true"'
+        ' else "/odometry/filtered")))'
+    ])
+
     robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
     nav2_bringup_share = get_package_share_directory('ackermann_nav2_bringup')
@@ -483,17 +494,19 @@ def generate_launch_description() -> LaunchDescription:
         condition=IfCondition(nav2_enable),
         cmd=[
             'bash', '-c',
+            'ODOM_TOPIC="$1"; '
             'if [ "$0" == "true" ]; then '
-            '  echo "Waiting for RTAB-Map topics and filtered odometry..."; '
+            '  echo "Waiting for RTAB-Map topics and odometry ($ODOM_TOPIC)..."; '
             '  timeout 60 bash -lc "until ros2 topic list | grep -qx /rtabmap/info; do sleep 1; done" || true; '
-            '  timeout 60 ros2 topic echo --once /odometry/filtered nav_msgs/msg/Odometry > /dev/null || true; '
+            '  timeout 60 ros2 topic echo --once "$ODOM_TOPIC" nav_msgs/msg/Odometry > /dev/null || true; '
             '  sleep 3; '
             'else '
-            '  echo "Waiting for filtered odometry..."; '
-            '  timeout 60 ros2 topic echo --once /odometry/filtered nav_msgs/msg/Odometry > /dev/null || true; '
+            '  echo "Waiting for odometry ($ODOM_TOPIC)..."; '
+            '  timeout 60 ros2 topic echo --once "$ODOM_TOPIC" nav_msgs/msg/Odometry > /dev/null || true; '
             '  sleep 3; '
             'fi',
-            LaunchConfiguration('rtabmap')
+            LaunchConfiguration('rtabmap'),
+            odom_ready_topic,
         ],
         output='screen'
     )
