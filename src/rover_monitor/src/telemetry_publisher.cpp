@@ -96,6 +96,18 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
     std::chrono::milliseconds(500),
     std::bind(&TelemetryPublisher::on_nav2_status_timer, this), cb_group_);
 
+  // Shadow subscribers — surface Nav2 goals initiated by RViz or the CLI
+  // (when rover_monitor isn't the action client) so the RCC panel can still
+  // render distance_remaining / ETA / terminal state.
+  nav2_feedback_sub_ = this->create_subscription<NavigateToPoseFeedbackMsg>(
+    "/navigate_to_pose/_action/feedback", rclcpp::QoS(10),
+    std::bind(&TelemetryPublisher::on_nav2_action_feedback, this,
+      std::placeholders::_1), sub_opts);
+  nav2_status_sub_ = this->create_subscription<action_msgs::msg::GoalStatusArray>(
+    "/navigate_to_pose/_action/status", rclcpp::QoS(10),
+    std::bind(&TelemetryPublisher::on_nav2_action_status, this,
+      std::placeholders::_1), sub_opts);
+
   // Dedup eviction timer (every 10s, clean entries older than dedup_eviction_s_)
   dedup_timer_ = this->create_wall_timer(
     std::chrono::seconds(10),
@@ -861,6 +873,92 @@ void TelemetryPublisher::on_nav2_status_timer()
       nav2_status_.error_msg.clear();
     }
     nav2_status_.localization_active = latest_health_ && latest_health_->slam_latency_ms >= 0.0f;
+  }
+  publish_nav2_status();
+}
+
+void TelemetryPublisher::on_nav2_action_feedback(
+  NavigateToPoseFeedbackMsg::ConstSharedPtr msg)
+{
+  // Skip when the RCC path owns this goal — its callbacks already track it.
+  {
+    std::lock_guard<std::mutex> lock(nav2_mutex_);
+    if (active_nav2_goal_handle_) {
+      return;
+    }
+    external_goal_uuid_ = msg->goal_id.uuid;
+    external_goal_active_ = true;
+
+    nav2_status_.available = true;
+    nav2_status_.navigating = true;
+    nav2_status_.goal_status_label = "EXECUTING";
+    nav2_status_.feedback_status = "external_goal";
+    nav2_status_.distance_remaining_m = msg->feedback.distance_remaining;
+    nav2_status_.eta_seconds = static_cast<float>(
+      duration_to_seconds(msg->feedback.estimated_time_remaining));
+    nav2_status_.navigation_time_s = static_cast<float>(
+      duration_to_seconds(msg->feedback.navigation_time));
+    nav2_status_.number_of_recoveries = msg->feedback.number_of_recoveries;
+    nav2_status_.number_of_poses_remaining = 0;
+    nav2_status_.error_code = 0;
+    nav2_status_.error_msg.clear();
+  }
+  publish_nav2_status();
+}
+
+void TelemetryPublisher::on_nav2_action_status(
+  action_msgs::msg::GoalStatusArray::ConstSharedPtr msg)
+{
+  using action_msgs::msg::GoalStatus;
+
+  std::lock_guard<std::mutex> lock(nav2_mutex_);
+  // RCC path owns its goal; don't interfere.
+  if (active_nav2_goal_handle_ || !external_goal_active_) {
+    return;
+  }
+
+  for (const auto & status : msg->status_list) {
+    if (status.goal_info.goal_id.uuid != external_goal_uuid_) {
+      continue;
+    }
+    const auto s = status.status;
+    if (s == GoalStatus::STATUS_EXECUTING || s == GoalStatus::STATUS_ACCEPTED) {
+      // Feedback callback handles the progressive updates.
+      return;
+    }
+
+    std::string label;
+    std::string feedback;
+    int32_t error_code = 0;
+    switch (s) {
+      case GoalStatus::STATUS_SUCCEEDED:
+        label = "SUCCEEDED"; feedback = "succeeded"; break;
+      case GoalStatus::STATUS_CANCELED:
+        label = "CANCELED";  feedback = "canceled";  break;
+      case GoalStatus::STATUS_CANCELING:
+        label = "CANCELING"; feedback = "canceling";
+        // Still active — don't clear external_goal_active_.
+        nav2_status_.goal_status_label = std::move(label);
+        nav2_status_.feedback_status = std::move(feedback);
+        publish_nav2_status();
+        return;
+      case GoalStatus::STATUS_ABORTED:
+        label = "ABORTED"; feedback = "aborted"; error_code = 4; break;
+      default:
+        label = "UNKNOWN"; feedback = "unknown"; error_code = 5; break;
+    }
+
+    nav2_status_.navigating = false;
+    nav2_status_.goal_status_label = std::move(label);
+    nav2_status_.feedback_status = std::move(feedback);
+    nav2_status_.distance_remaining_m = 0.0f;
+    nav2_status_.eta_seconds = 0.0f;
+    nav2_status_.number_of_poses_remaining = 0;
+    nav2_status_.error_code = error_code;
+    nav2_status_.error_msg.clear();
+    external_goal_active_ = false;
+    external_goal_uuid_.fill(0);
+    break;
   }
   publish_nav2_status();
 }

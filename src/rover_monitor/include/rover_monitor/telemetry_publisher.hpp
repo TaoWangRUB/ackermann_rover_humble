@@ -6,7 +6,9 @@
 #include <rover_monitor/msg/nav2_status.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <nav2_msgs/action/navigate_to_pose.hpp>
+#include <action_msgs/msg/goal_status_array.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
+#include <array>
 
 #include <mqtt/async_client.h>
 
@@ -37,6 +39,11 @@ private:
   void on_nav2_status_timer();
   void publish_nav2_status();
   void update_nav2_localization_flag();
+
+  // Shadow path for CLI/RViz-initiated Nav2 goals (we're not the action client).
+  using NavigateToPoseFeedbackMsg = nav2_msgs::action::NavigateToPose::Impl::FeedbackMessage;
+  void on_nav2_action_feedback(NavigateToPoseFeedbackMsg::ConstSharedPtr msg);
+  void on_nav2_action_status(action_msgs::msg::GoalStatusArray::ConstSharedPtr msg);
 
   // --- Inbound command handling ---
   void on_mqtt_message(mqtt::const_message_ptr mqtt_msg);
@@ -90,6 +97,13 @@ private:
   rover_monitor::msg::Nav2Status nav2_status_;
   NavigateToPoseGoalHandle::SharedPtr active_nav2_goal_handle_;
   std::string active_nav_goal_cmd_id_;
+
+  // Passive shadow subscribers — track goals sent by others (RViz / CLI).
+  rclcpp::Subscription<NavigateToPoseFeedbackMsg>::SharedPtr nav2_feedback_sub_;
+  rclcpp::Subscription<action_msgs::msg::GoalStatusArray>::SharedPtr nav2_status_sub_;
+  // Last external goal UUID we're tracking (non-zero when a non-RCC goal is active).
+  std::array<uint8_t, 16> external_goal_uuid_{};
+  bool external_goal_active_{false};
 
   // Command deduplication set with timestamps
   std::mutex dedup_mutex_;
