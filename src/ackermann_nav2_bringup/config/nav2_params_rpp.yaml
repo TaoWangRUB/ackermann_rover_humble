@@ -28,10 +28,8 @@ bt_navigator:
 controller_server:
   ros__parameters:
     odom_topic: /odom
-    current_progress_checker: "progress_checker"
-    current_goal_checker: "general_goal_checker"
-    controller_frequency: 20.0
-    costmap_update_timeout: 0.30
+    controller_frequency: 10.0
+    costmap_update_timeout: 0.50
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
@@ -60,7 +58,7 @@ controller_server:
       max_lookahead_dist: 0.9
       lookahead_time: 1.5
       rotate_to_heading_angular_vel: 1.8
-      transform_tolerance: 0.3
+      transform_tolerance: 1.0
       use_velocity_scaled_lookahead_dist: true
       min_approach_linear_velocity: 0.05
       approach_velocity_scaling_dist: 0.6
@@ -102,7 +100,7 @@ local_costmap:
         mark_threshold: 0
         observation_sources: scan
         scan:
-          topic: /rplidar/scan
+          topic: /scan
           max_obstacle_height: 2.0
           clearing: True
           marking: True
@@ -132,7 +130,7 @@ global_costmap:
         enabled: True
         observation_sources: scan
         scan:
-          topic: /rplidar/scan
+          topic: /scan
           max_obstacle_height: 2.0
           clearing: True
           marking: True
@@ -229,7 +227,7 @@ behavior_server:
     local_frame: odom
     global_frame: map
     robot_base_frame: ackermann/base_link
-    transform_tolerance: 0.1
+    transform_tolerance: 1.0
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4
@@ -291,8 +289,8 @@ collision_monitor:
     cmd_vel_in_topic: "cmd_vel_smoothed"
     cmd_vel_out_topic: "cmd_vel"
     state_topic: "collision_monitor_state"
-    transform_tolerance: 0.2
-    source_timeout: 1.0
+    transform_tolerance: 1.0
+    source_timeout: 5.0
     base_shift_correction: True
     stop_pub_timeout: 2.0
     # Polygons represent zone around the robot for "stop", "slowdown" and "limit" action types,
@@ -310,7 +308,7 @@ collision_monitor:
     observation_sources: ["scan"]
     scan:
       type: "scan"
-      topic: "rplidar/scan"
+      topic: "scan"
       min_height: 0.15
       max_height: 2.0
       enabled: True
@@ -363,7 +361,7 @@ docking_server:
       use_collision_detection: true
       costmap_topic: "local_costmap/costmap_raw"
       footprint_topic: "local_costmap/published_footprint"
-      transform_tolerance: 0.1
+      transform_tolerance: 1.0
       projection_time: 5.0
       simulation_step: 0.1
       dock_collision_threshold: 0.3
