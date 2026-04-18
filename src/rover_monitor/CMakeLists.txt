@@ -14,6 +14,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(Protobuf REQUIRED)
@@ -64,6 +65,7 @@ ament_target_dependencies(${PROJECT_NAME}_components
   geometry_msgs
   nav_msgs
   nav2_msgs
+  action_msgs
   tf2_ros
   rclcpp_action
   px4_msgs
@@ -132,6 +134,7 @@ ament_export_dependencies(
   geometry_msgs
   nav_msgs
   nav2_msgs
+  action_msgs
   tf2_ros
   rclcpp_action
   px4_msgs
