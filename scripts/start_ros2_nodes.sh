@@ -22,7 +22,10 @@
 #                          streams; in simulation it auto-enables the simulated
 #                          T265 path via robot_bringup.
 #   --px4              Enable PX4 SITL (disables ros2_control, implies --bridge --vo-bridge)
-#   --rtabmap          Launch RTAB-Map SLAM
+#   --rtabmap          Launch RTAB-Map in mapping mode
+#   --localization     Launch RTAB-Map in localization-only mode
+#   --wipe-rtabmap-db Wipe the RTAB-Map DB before launch
+#   --keep-rtabmap-db Keep the existing RTAB-Map DB when mapping
 #   --nav2             Launch Nav2 navigation stack
 #   --bridge[=MODE]    Launch PX4 mode node (default: manual; options: speed_steering, trajectory, speed_attitude)
 #   --vo-bridge        Launch VO bridge: px4_vision_odom + px4_vehicle_odometry
@@ -51,8 +54,11 @@
 #   ── Hardware mode (real cameras, L515 default) ──
 #   ./scripts/start_ros2_nodes.sh --hw
 #
-#   ── Hardware mode + RTAB-Map ──
+#   ── Hardware mode + RTAB-Map mapping ──
 #   ./scripts/start_ros2_nodes.sh --hw --rtabmap
+#
+#   ── Hardware mode + RTAB-Map localization ──
+#   ./scripts/start_ros2_nodes.sh --hw --localization
 #
 #   ── Hardware mode + RTAB-Map + Nav2 ──
 #   ./scripts/start_ros2_nodes.sh --hw --rtabmap --nav2
@@ -87,8 +93,11 @@
 #   ── Gazebo only (ros2_control) ──
 #   ./scripts/start_ros2_nodes.sh
 #
-#   ── Gazebo + RTAB-Map ──
+#   ── Gazebo + RTAB-Map mapping ──
 #   ./scripts/start_ros2_nodes.sh --rtabmap
+#
+#   ── Gazebo + RTAB-Map localization ──
+#   ./scripts/start_ros2_nodes.sh --localization
 #
 #   ── Gazebo + RTAB-Map + Nav2 ──
 #   ./scripts/start_ros2_nodes.sh --rtabmap --nav2
@@ -154,6 +163,8 @@ CUVSLAM_ODOM="false"
 RGBD_ODOM="false"
 PX4="false"
 RTABMAP="false"
+LOCALIZATION="false"
+DELETE_DB_ON_START=""
 NAV2="false"
 RVIZ="true"
 BRIDGE="false"
@@ -177,7 +188,10 @@ for arg in "$@"; do
         --cuvslam-odom)    CUVSLAM_ODOM="true" ;;
         --rgbd-odom)       RGBD_ODOM="true" ;;
         --px4)          PX4="true" ;;
-        --rtabmap)      RTABMAP="true" ;;
+        --rtabmap)      RTABMAP="true"; LOCALIZATION="false" ;;
+        --localization) RTABMAP="true"; LOCALIZATION="true" ;;
+        --wipe-rtabmap-db) DELETE_DB_ON_START="true" ;;
+        --keep-rtabmap-db) DELETE_DB_ON_START="false" ;;
         --nav2)         NAV2="true" ;;
         --no-rviz)      RVIZ="false" ;;
         --bridge)       BRIDGE="true" ;;
@@ -195,11 +209,24 @@ for arg in "$@"; do
             exit 0 ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--cuvslam-odom] [--rgbd-odom] [--px4] [--rtabmap] [--nav2] [--controller=mppi|rpp] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
+            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--cuvslam-odom] [--rgbd-odom] [--px4] [--rtabmap|--localization] [--wipe-rtabmap-db|--keep-rtabmap-db] [--nav2] [--controller=mppi|rpp] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
             exit 1
             ;;
     esac
 done
+
+# Default DB policy:
+# - localization always keeps the existing DB
+# - mapping wipes the DB unless explicitly told to keep it
+if [[ "${LOCALIZATION}" == "true" ]]; then
+    DELETE_DB_ON_START="false"
+elif [[ -z "${DELETE_DB_ON_START}" ]]; then
+    if [[ "${RTABMAP}" == "true" ]]; then
+        DELETE_DB_ON_START="true"
+    else
+        DELETE_DB_ON_START="false"
+    fi
+fi
 
 # ── Flag implications ──
 # --px4 (PX4 SITL) always needs both mode node and VO bridge
@@ -283,6 +310,8 @@ echo "  VINS odom:    ${VINS_ODOM}"
 echo "  cuVSLAM odom: ${CUVSLAM_ODOM}"
 echo "  RGB-D odom:   ${RGBD_ODOM}"
 echo "  RTAB-Map:     ${RTABMAP}"
+echo "  Localization: ${LOCALIZATION}"
+echo "  Wipe RTAB-Map DB: ${DELETE_DB_ON_START}"
 echo "  Nav2:         ${NAV2}"
 echo "  RViz:         ${RVIZ}"
 if [[ "${BRIDGE}" == "true" ]]; then
@@ -310,6 +339,8 @@ LAUNCH_CMD+=" use_vins_odom:=${VINS_ODOM}"
 LAUNCH_CMD+=" use_cuvslam_odom:=${CUVSLAM_ODOM}"
 LAUNCH_CMD+=" use_rgbd_odom:=${RGBD_ODOM}"
 LAUNCH_CMD+=" rtabmap:=${RTABMAP}"
+LAUNCH_CMD+=" localization:=${LOCALIZATION}"
+LAUNCH_CMD+=" delete_db_on_start:=${DELETE_DB_ON_START}"
 LAUNCH_CMD+=" nav2:=${NAV2}"
 LAUNCH_CMD+=" nav2_controller:=${NAV2_CONTROLLER}"
 LAUNCH_CMD+=" rviz:=${RVIZ}"
