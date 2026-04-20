@@ -5,12 +5,15 @@ message CamStatus {
   string camera_id = 1;
   bool connected = 2;
   float frame_delta_ms = 3;
-  float depth_fps = 4;
-  float depth_quality_sampled = 5;
-  bool imu_active = 6;
-  int32 error_code = 7;
-  string error_msg = 8;
-  int64 timestamp = 9;
+  float stream_fps = 4;
+  float depth_fps = 5;
+  float depth_quality_sampled = 6;
+  bool imu_active = 7;
+  int32 error_code = 8;
+  string error_msg = 9;
+  int64 timestamp = 10;
+  bool stream_available = 11;
+  bool odom_active = 12;
 }
 
 message Px4Status {
@@ -48,15 +51,35 @@ message JetsonStatus {
   int64 timestamp = 17;
 }
 
+message Nav2Status {
+  bool available = 1;
+  bool navigating = 2;
+  bool localization_active = 3;
+  string goal_status_label = 4;
+  string feedback_status = 5;
+  float distance_remaining_m = 6;
+  float eta_seconds = 7;
+  float navigation_time_s = 8;
+  int32 number_of_recoveries = 9;
+  int32 number_of_poses_remaining = 10;
+  int32 error_code = 11;
+  string error_msg = 12;
+  int64 timestamp = 13;
+}
+
 message RoverHealth {
   int32 seq = 1;
   int64 timestamp = 2;
-  CamStatus camera = 3;
+  reserved 3;  // was singular CamStatus camera
   Px4Status px4 = 4;
   JetsonStatus jetson = 5;
+  // Legacy field name retained for compatibility.
+  // Stores the age/freshness of the latest map->odom TF in milliseconds.
   float slam_latency_ms = 6;
   string overall_health = 7;
   repeated string active_alerts = 8;
+  repeated CamStatus cameras = 9;
+  Nav2Status nav2 = 10;
 }
 
 // --- v1.2.0: Command System ---

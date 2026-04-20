@@ -1,0 +1,492 @@
+{
+  "1090afa9be578000": {
+    "id": "1090afa9be578000",
+    "name": "PX4 Battery %",
+    "links": {
+      "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9be578000"
+    },
+    "properties": {
+      "shape": "chronograf-v2",
+      "queries": [
+        {
+          "text": "from(bucket: \"rover_telemetry\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"rover_telemetry\") |> filter(fn: (r) => r._field == \"px4_battery_pct\") |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")",
+          "editMode": "advanced",
+          "name": "",
+          "builderConfig": {
+            "buckets": [],
+            "tags": [],
+            "functions": [],
+            "aggregateWindow": {
+              "period": "auto",
+              "fillValues": false
+            }
+          }
+        }
+      ],
+      "axes": {
+        "x": {
+          "bounds": [
+            "",
+            ""
+          ],
+          "label": "",
+          "prefix": "",
+          "suffix": "",
+          "base": "10",
+          "scale": "linear"
+        },
+        "y": {
+          "bounds": [
+            "",
+            ""
+          ],
+          "label": "",
+          "prefix": "",
+          "suffix": "",
+          "base": "10",
+          "scale": "linear"
+        }
+      },
+      "type": "xy",
+      "staticLegend": {},
+      "geom": "",
+      "colors": [
+        {
+          "id": "base",
+          "type": "scale",
+          "hex": "#31C0F6",
+          "name": "Nineteen Eighty Four",
+          "value": 0
+        }
+      ],
+      "note": "",
+      "showNoteWhenEmpty": false,
+      "xColumn": "",
+      "generateXAxisTicks": null,
+      "xTotalTicks": 0,
+      "xTickStart": 0,
+      "xTickStep": 0,
+      "yColumn": "",
+      "generateYAxisTicks": null,
+      "yTotalTicks": 0,
+      "yTickStart": 0,
+      "yTickStep": 0,
+      "shadeBelow": false,
+      "position": "overlaid",
+      "timeFormat": "",
+      "hoverDimension": "",
+      "legendColorizeRows": false,
+      "legendHide": true,
+      "legendOpacity": 0,
+      "legendOrientationThreshold": 0
+    }
+  },
+  "1090afa9bfd78000": {
+    "id": "1090afa9bfd78000",
+    "name": "PX4 Battery Voltage",
+    "links": {
+      "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9bfd78000"
+    },
+    "properties": {
+      "shape": "chronograf-v2",
+      "queries": [
+        {
+          "text": "from(bucket: \"rover_telemetry\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"rover_telemetry\") |> filter(fn: (r) => r._field == \"px4_battery_v\") |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")",
+          "editMode": "advanced",
+          "name": "",
+          "builderConfig": {
+            "buckets": [],
+            "tags": [],
+            "functions": [],
+            "aggregateWindow": {
+              "period": "auto",
+              "fillValues": false
+            }
+          }
+        }
+      ],
+      "axes": {
+        "x": {
+          "bounds": [
+            "",
+            ""
+          ],
+          "label": "",
+          "prefix": "",
+          "suffix": "",
+          "base": "10",
+          "scale": "linear"
+        },
+        "y": {
+          "bounds": [
+            "",
+            ""
+          ],
+          "label": "",
+          "prefix": "",
+          "suffix": "",
+          "base": "10",
+          "scale": "linear"
+        }
+      },
+      "type": "xy",
+      "staticLegend": {},
+      "geom": "",
+      "colors": [
+        {
+          "id": "base",
+          "type": "scale",
+          "hex": "#31C0F6",
+          "name": "Nineteen Eighty Four",
+          "value": 0
+        }
+      ],
+      "note": "",
+      "showNoteWhenEmpty": false,
+      "xColumn": "",
+      "generateXAxisTicks": null,
+      "xTotalTicks": 0,
+      "xTickStart": 0,
+      "xTickStep": 0,
+      "yColumn": "",
+      "generateYAxisTicks": null,
+      "yTotalTicks": 0,
+      "yTickStart": 0,
+      "yTickStep": 0,
+      "shadeBelow": false,
+      "position": "overlaid",
+      "timeFormat": "",
+      "hoverDimension": "",
+      "legendColorizeRows": false,
+      "legendHide": true,
+      "legendOpacity": 0,
+      "legendOrientationThreshold": 0
+    }
+  },
+  "1090afa9c1578000": {
+    "id": "1090afa9c1578000",
+    "name": "Camera FPS",
+    "links": {
+      "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c1578000"
+    },
+    "properties": {
+      "shape": "chronograf-v2",
+      "queries": [
+        {
+          "text": "from(bucket: \"rover_telemetry\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"rover_cam_telemetry\") |> filter(fn: (r) => r._field == \"cam_stream_fps\") |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")",
+          "editMode": "advanced",
+          "name": "",
+          "builderConfig": {
+            "buckets": [],
+            "tags": [],
+            "functions": [],
+            "aggregateWindow": {
+              "period": "auto",
+              "fillValues": false
+            }
+          }
+        }
+      ],
+      "axes": {
+        "x": {
+          "bounds": [
+            "",
+            ""
+          ],
+          "label": "",
+          "prefix": "",
+          "suffix": "",
+          "base": "10",
+          "scale": "linear"
+        },
+        "y": {
+          "bounds": [
+            "",
+            ""
+          ],
+          "label": "",
+          "prefix": "",
+          "suffix": "",
+          "base": "10",
+          "scale": "linear"
+        }
+      },
+      "type": "xy",
+      "staticLegend": {
+        "colorizeRows": true,
+        "heightRatio": 0.3,
+        "show": true,
+        "widthRatio": 1
+      },
+      "geom": "",
+      "colors": [
+        {
+          "id": "base",
+          "type": "scale",
+          "hex": "#31C0F6",
+          "name": "Nineteen Eighty Four",
+          "value": 0
+        }
+      ],
+      "note": "",
+      "showNoteWhenEmpty": false,
+      "xColumn": "",
+      "generateXAxisTicks": null,
+      "xTotalTicks": 0,
+      "xTickStart": 0,
+      "xTickStep": 0,
+      "yColumn": "",
+      "generateYAxisTicks": null,
+      "yTotalTicks": 0,
+      "yTickStart": 0,
+      "yTickStep": 0,
+      "shadeBelow": false,
+      "position": "overlaid",
+      "timeFormat": "",
+      "hoverDimension": "",
+      "legendColorizeRows": true,
+      "legendHide": false,
+      "legendOpacity": 1,
+      "legendOrientationThreshold": 5
+    }
+  },
+  "1090afa9c2978000": {
+    "id": "1090afa9c2978000",
+    "name": "Jetson Temperatures (\u00b0C)",
+    "links": {
+      "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c2978000"
+    },
+    "properties": {
+      "shape": "chronograf-v2",
+      "queries": [
+        {
+          "text": "from(bucket: \"rover_telemetry\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"rover_telemetry\") |> filter(fn: (r) => r._field == \"jetson_temp_cpu_c\" or r._field == \"jetson_temp_gpu_c\") |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")",
+          "editMode": "advanced",
+          "name": "",
+          "builderConfig": {
+            "buckets": [],
+            "tags": [],
+            "functions": [],
+            "aggregateWindow": {
+              "period": "auto",
+              "fillValues": false
+            }
+          }
+        }
+      ],
+      "axes": {
+        "x": {
+          "bounds": [
+            "",
+            ""
+          ],
+          "label": "",
+          "prefix": "",
+          "suffix": "",
+          "base": "10",
+          "scale": "linear"
+        },
+        "y": {
+          "bounds": [
+            "30",
+            "80"
+          ],
+          "label": "\u00b0C",
+          "prefix": "",
+          "suffix": "",
+          "base": "10",
+          "scale": "linear"
+        }
+      },
+      "type": "xy",
+      "staticLegend": {
+        "colorizeRows": true,
+        "heightRatio": 0.3,
+        "show": true,
+        "widthRatio": 1
+      },
+      "geom": "",
+      "colors": [
+        {
+          "id": "base",
+          "type": "scale",
+          "hex": "#31C0F6",
+          "name": "Nineteen Eighty Four",
+          "value": 0
+        }
+      ],
+      "note": "",
+      "showNoteWhenEmpty": false,
+      "xColumn": "",
+      "generateXAxisTicks": null,
+      "xTotalTicks": 0,
+      "xTickStart": 0,
+      "xTickStep": 0,
+      "yColumn": "",
+      "generateYAxisTicks": null,
+      "yTotalTicks": 0,
+      "yTickStart": 0,
+      "yTickStep": 0,
+      "shadeBelow": false,
+      "position": "overlaid",
+      "timeFormat": "",
+      "hoverDimension": "",
+      "legendColorizeRows": true,
+      "legendHide": false,
+      "legendOpacity": 1,
+      "legendOrientationThreshold": 5
+    }
+  },
+  "1090afa9c4178000": {
+    "id": "1090afa9c4178000",
+    "name": "Jetson CPU / GPU %",
+    "links": {
+      "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c4178000"
+    },
+    "properties": {
+      "shape": "chronograf-v2",
+      "queries": [
+        {
+          "text": "from(bucket: \"rover_telemetry\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"rover_telemetry\") |> filter(fn: (r) => r._field == \"jetson_gpu_pct\" or r._field == \"jetson_cpu_pct\") |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false) |> yield(name: \"mean\")",
+          "editMode": "advanced",
+          "name": "",
+          "builderConfig": {
+            "buckets": [],
+            "tags": [],
+            "functions": [],
+            "aggregateWindow": {
+              "period": "auto",
+              "fillValues": false
+            }
+          }
+        }
+      ],
+      "axes": {
+        "x": {
+          "bounds": [
+            "",
+            ""
+          ],
+          "label": "",
+          "prefix": "",
+          "suffix": "",
+          "base": "10",
+          "scale": "linear"
+        },
+        "y": {
+          "bounds": [
+            "",
+            ""
+          ],
+          "label": "",
+          "prefix": "",
+          "suffix": "",
+          "base": "10",
+          "scale": "linear"
+        }
+      },
+      "type": "xy",
+      "staticLegend": {
+        "colorizeRows": true,
+        "heightRatio": 0.3,
+        "show": true,
+        "widthRatio": 1
+      },
+      "geom": "",
+      "colors": [
+        {
+          "id": "base",
+          "type": "scale",
+          "hex": "#31C0F6",
+          "name": "Nineteen Eighty Four",
+          "value": 0
+        }
+      ],
+      "note": "",
+      "showNoteWhenEmpty": false,
+      "xColumn": "",
+      "generateXAxisTicks": null,
+      "xTotalTicks": 0,
+      "xTickStart": 0,
+      "xTickStep": 0,
+      "yColumn": "",
+      "generateYAxisTicks": null,
+      "yTotalTicks": 0,
+      "yTickStart": 0,
+      "yTickStep": 0,
+      "shadeBelow": false,
+      "position": "overlaid",
+      "timeFormat": "",
+      "hoverDimension": "",
+      "legendColorizeRows": true,
+      "legendHide": false,
+      "legendOpacity": 1,
+      "legendOrientationThreshold": 5
+    }
+  },
+  "1090afa9c6578000": {
+    "id": "1090afa9c6578000",
+    "name": "Active Alerts",
+    "links": {
+      "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c6578000"
+    },
+    "properties": {
+      "shape": "chronograf-v2",
+      "type": "table",
+      "queries": [
+        {
+          "text": "from(bucket: \"rover_telemetry\") |> range(start: v.timeRangeStart, stop: v.timeRangeStop) |> filter(fn: (r) => r._measurement == \"rover_alerts\") |> filter(fn: (r) => r._field == \"severity\") |> group(columns: [\"alert_id\", \"_field\"]) |> count() |> rename(columns: {\"_value\": \"count\"}) |> group() |> sort(columns: [\"count\"], desc: true) |> keep(columns: [\"alert_id\", \"count\"])",
+          "editMode": "advanced",
+          "name": "",
+          "builderConfig": {
+            "buckets": [],
+            "tags": [],
+            "functions": [],
+            "aggregateWindow": {
+              "period": "auto",
+              "fillValues": false
+            }
+          }
+        }
+      ],
+      "colors": [
+        {
+          "id": "base",
+          "type": "text",
+          "hex": "#31C0F6",
+          "name": "Nineteen Eighty Four",
+          "value": 0
+        }
+      ],
+      "tableOptions": {
+        "verticalTimeAxis": true,
+        "sortBy": {
+          "internalName": "count",
+          "displayName": "count",
+          "visible": true
+        },
+        "wrapping": "",
+        "fixFirstColumn": false
+      },
+      "fieldOptions": [
+        {
+          "internalName": "alert_id",
+          "displayName": "Alert",
+          "visible": true
+        },
+        {
+          "internalName": "count",
+          "displayName": "Count",
+          "visible": true
+        }
+      ],
+      "timeFormat": "",
+      "decimalPlaces": {
+        "isEnforced": false,
+        "digits": 0
+      },
+      "note": "",
+      "showNoteWhenEmpty": false
+    }
+  }
+}

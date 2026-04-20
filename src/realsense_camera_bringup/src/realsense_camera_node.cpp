@@ -33,6 +33,7 @@ RealsenseCameraNode::RealsenseCameraNode(const rclcpp::NodeOptions & options)
         did_hardware_reset = true;
       }
       start_pipeline();
+      start_data_flow_watchdog();
       return;   // success
     } catch (const std::exception & e) {
       const std::string what = e.what();
@@ -78,6 +79,11 @@ RealsenseCameraNode::~RealsenseCameraNode()
 {
   RCLCPP_INFO(get_logger(), "Shutting down — stopping pipeline...");
   running_ = false;
+
+  // Cancel the data-flow watchdog to prevent it from firing during shutdown.
+  if (data_flow_watchdog_timer_) {
+    data_flow_watchdog_timer_->cancel();
+  }
 
   // Wake and join the alignment worker before stopping the pipeline so it
   // doesn't try to process frames after pipe_.stop() frees them.
@@ -486,7 +492,11 @@ void RealsenseCameraNode::start_pipeline()
     RCLCPP_INFO(get_logger(), "Depth alignment: CPU rs2::align (async worker thread)");
 #endif
 
-    align_thread_ = std::thread(&RealsenseCameraNode::align_worker, this);
+    // Guard: only spawn a new alignment thread if none is running
+    // (handles pipeline restart after watchdog trigger).
+    if (!align_thread_.joinable()) {
+      align_thread_ = std::thread(&RealsenseCameraNode::align_worker, this);
+    }
   }
 
   // Log USB connection type; warn if USB 2.x (bandwidth may be insufficient for full resolution)
@@ -666,14 +676,26 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
 {
   if (!running_) return;
 
+  // Signal the data-flow watchdog that we're receiving data.
+  if (!first_frame_received_.load(std::memory_order_relaxed)) {
+    first_frame_received_.store(true, std::memory_order_relaxed);
+  }
+
   try {
     // Pipeline sync module delivers color+depth as a composite frameset — unpack explicitly
     if (auto fs = frame.as<rs2::frameset>()) {
       // Publish raw color and depth immediately so they run at full sensor fps
       // regardless of how long alignment takes (alignment is offloaded to align_worker).
+      // Compute color stamp once — the same stamp is forwarded to align_worker
+      // so aligned depth is guaranteed to carry an identical header.stamp.
+      rclcpp::Time color_stamp;
+      bool have_color_stamp = false;
       if (enable_color_) {
-        if (auto color = fs.get_color_frame())
-          publish_video_frame(color, color_image_pub_, color_info_pub_, color_info_msg_);
+        if (auto color = fs.get_color_frame()) {
+          color_stamp = frame_ros_time(color);
+          have_color_stamp = true;
+          publish_video_frame(color, color_image_pub_, color_info_pub_, color_info_msg_, color_stamp);
+        }
       }
       if (enable_depth_) {
         if (auto depth = fs.get_depth_frame())
@@ -729,12 +751,20 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
 
       // Hand off to async alignment worker (if enabled). Drop oldest frame if
       // the worker is behind to bound queue memory usage.
+      // Pass the pre-computed color stamp (or a fallback depth stamp) so the
+      // aligned depth image carries exactly the same header.stamp as the raw
+      // color image already published above — no re-derivation needed.
       if (align_depth_enable_) {
+        rclcpp::Time align_stamp = have_color_stamp
+            ? color_stamp
+            : (fs.get_depth_frame()
+                ? frame_ros_time(fs.get_depth_frame())
+                : rclcpp::Time(0, 0, RCL_SYSTEM_TIME));
         std::lock_guard<std::mutex> lock(align_mutex_);
         if (align_queue_.size() >= ALIGN_QUEUE_MAX) {
           align_queue_.pop();
         }
-        align_queue_.push(fs);
+        align_queue_.push({fs, align_stamp});
         align_cv_.notify_one();
       }
       return;
@@ -791,11 +821,14 @@ void RealsenseCameraNode::align_worker()
 {
   while (true) {
     rs2::frameset fs;
+    rclcpp::Time aligned_stamp;
     {
       std::unique_lock<std::mutex> lock(align_mutex_);
       align_cv_.wait(lock, [this] { return !align_queue_.empty() || !running_; });
       if (!running_ && align_queue_.empty()) break;
-      fs = align_queue_.front();
+      auto & front = align_queue_.front();
+      fs = front.first;
+      aligned_stamp = front.second;
       align_queue_.pop();
     }
     try {
@@ -803,8 +836,6 @@ void RealsenseCameraNode::align_worker()
       if (cuda_aligner_) {
         auto depth = fs.get_depth_frame();
         if (!depth) continue;
-        const auto color = fs.get_color_frame();
-        const auto aligned_stamp = frame_ros_time(color ? color : depth);
 
         try {
           const auto * src = reinterpret_cast<const uint16_t *>(depth.get_data());
@@ -820,9 +851,6 @@ void RealsenseCameraNode::align_worker()
       }
 
       if (align_to_color_) {
-        const auto color = fs.get_color_frame();
-        const auto depth = fs.get_depth_frame();
-        const auto aligned_stamp = frame_ros_time(color ? color : depth);
         rs2::frameset processed = align_to_color_->process(fs);
         if (auto aligned = processed.get_depth_frame())
           publish_video_frame(
@@ -833,9 +861,6 @@ void RealsenseCameraNode::align_worker()
             aligned_stamp);
       }
 #else
-      const auto color = fs.get_color_frame();
-      const auto depth = fs.get_depth_frame();
-      const auto aligned_stamp = frame_ros_time(color ? color : depth);
       rs2::frameset processed = align_to_color_->process(fs);
       if (auto aligned = processed.get_depth_frame())
         publish_video_frame(
@@ -1073,6 +1098,97 @@ void RealsenseCameraNode::publish_pose_frame(const rs2::pose_frame & frame)
   }
 
   odom_pub_->publish(std::move(msg));
+}
+
+// ---------------------------------------------------------------------------
+// Data-flow watchdog — detects frozen T265 (or any camera) pipeline
+// ---------------------------------------------------------------------------
+void RealsenseCameraNode::start_data_flow_watchdog()
+{
+  // Only arm the watchdog when hardware_reset is enabled (i.e. we can actually
+  // recover) and we haven't already exhausted restart attempts.
+  if (!enable_hardware_reset_ || pipeline_restart_attempts_ >= MAX_PIPELINE_RESTARTS) {
+    return;
+  }
+
+  first_frame_received_.store(false, std::memory_order_relaxed);
+  data_flow_watchdog_timer_ = create_wall_timer(
+    std::chrono::seconds(DATA_FLOW_WATCHDOG_S),
+    [this]() {
+      // One-shot: cancel immediately so it doesn't re-fire.
+      data_flow_watchdog_timer_->cancel();
+
+      if (first_frame_received_.load(std::memory_order_relaxed)) {
+        RCLCPP_INFO(get_logger(), "Data-flow watchdog: first frame received — all good.");
+        return;
+      }
+
+      // No data arrived within the timeout window.
+      ++pipeline_restart_attempts_;
+      RCLCPP_WARN(get_logger(),
+        "Data-flow watchdog: no frames received in %d s — restarting pipeline "
+        "(attempt %d/%d)...",
+        DATA_FLOW_WATCHDOG_S, pipeline_restart_attempts_, MAX_PIPELINE_RESTARTS);
+
+      restart_pipeline_with_reset();
+    });
+}
+
+void RealsenseCameraNode::restart_pipeline_with_reset()
+{
+  // Stop current pipeline
+  running_ = false;
+
+  // Wake and join the alignment worker so it doesn't race with the new pipeline.
+  align_cv_.notify_all();
+  if (align_thread_.joinable()) {
+    align_thread_.join();
+  }
+
+  // Drain the alignment queue
+  {
+    std::lock_guard<std::mutex> lock(align_mutex_);
+    decltype(align_queue_) empty;
+    std::swap(align_queue_, empty);
+  }
+
+  // Stop IMU sensor if running
+  if (imu_sensor_) {
+    try { imu_sensor_.stop(); imu_sensor_.close(); } catch (...) {}
+    imu_sensor_ = rs2::sensor();
+  }
+
+  // Stop video pipeline
+  try { pipe_.stop(); } catch (const std::exception & e) {
+    RCLCPP_WARN(get_logger(), "Pipeline stop during restart: %s", e.what());
+  }
+
+  // Reset timestamp base so next start picks up fresh timestamps
+  {
+    std::lock_guard<std::mutex> lock(timestamp_base_mutex_);
+    timestamp_base_initialized_ = false;
+  }
+
+  // Perform hardware reset + re-enumeration
+  try {
+    ctx_ = rs2::context();
+    pipe_ = rs2::pipeline(ctx_);
+    cfg_ = rs2::config();
+    reset_device();
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(get_logger(), "Hardware reset during restart failed: %s", e.what());
+    return;
+  }
+
+  // Restart pipeline
+  try {
+    start_pipeline();
+    RCLCPP_INFO(get_logger(), "Pipeline restarted successfully after watchdog trigger.");
+    // Re-arm watchdog for the new pipeline
+    start_data_flow_watchdog();
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(get_logger(), "Pipeline restart failed: %s — node needs manual intervention.", e.what());
+  }
 }
 
 } // namespace realsense_camera_bringup

@@ -2,21 +2,44 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const WS_BASE = `ws://${window.location.host}`;
 
-function useWebSocket(path) {
+function useWebSocket(path, initialUrl = null) {
   const [data, setData] = useState(null);
   const wsRef = useRef(null);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const fetchInitial = async () => {
+      if (!initialUrl) return;
+      try {
+        const response = await fetch(initialUrl);
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (!cancelled && payload) {
+          setData(payload.health ?? payload);
+        }
+      } catch {
+        // Best-effort bootstrap only; live updates come from WebSocket.
+      }
+    };
+
     const connect = () => {
       const ws = new WebSocket(`${WS_BASE}${path}`);
       wsRef.current = ws;
       ws.onmessage = (e) => setData(JSON.parse(e.data));
-      ws.onclose = () => setTimeout(connect, 2000);
+      ws.onclose = () => {
+        if (!cancelled) setTimeout(connect, 2000);
+      };
       ws.onerror = () => ws.close();
     };
+
+    fetchInitial();
     connect();
-    return () => wsRef.current?.close();
-  }, [path]);
+    return () => {
+      cancelled = true;
+      wsRef.current?.close();
+    };
+  }, [initialUrl, path]);
 
   return data;
 }
@@ -33,31 +56,65 @@ function StatusBadge({ health }) {
   );
 }
 
-function Panel({ title, children }) {
+function formatMapOdomTfAge(slamLatencyMs) {
+  if (slamLatencyMs == null || slamLatencyMs < 0) return 'N/A';
+  return `${slamLatencyMs.toFixed(0)}ms`;
+}
+
+function HwModeBadge({ mode }) {
+  if (!mode) return null;
+  const isHw = mode === 'hw';
+  return (
+    <span style={{
+      background: isHw ? '#3b82f6' : '#9333ea',
+      color: 'white', padding: '1px 6px', borderRadius: 4, fontSize: 10,
+      marginLeft: 6, fontWeight: 600, letterSpacing: 0.5,
+    }}>
+      {isHw ? 'HW' : 'MOCK'}
+    </span>
+  );
+}
+
+function Panel({ title, hwMode, children }) {
   return (
     <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, margin: 8 }}>
-      <h3 style={{ margin: '0 0 8px', fontSize: 14, color: '#374151' }}>{title}</h3>
+      <h3 style={{ margin: '0 0 8px', fontSize: 14, color: '#374151' }}>
+        {title}
+        <HwModeBadge mode={hwMode} />
+      </h3>
       {children}
     </div>
   );
 }
 
-function CameraPanel({ cam }) {
-  if (!cam) return <Panel title="Camera"><p>No data</p></Panel>;
+function CameraPanel({ cam, hwMode }) {
+  if (!cam) return <Panel title="Camera" hwMode={hwMode}><p>No data</p></Panel>;
+  const label = cam.cameraId ? `Camera (${cam.cameraId})` : 'Camera';
+  const isTrackingCamera = cam.cameraId === 't265';
+  const streamFpsText = cam.streamAvailable ? cam.streamFps?.toFixed(1) : 'N/A';
   return (
-    <Panel title="Camera">
+    <Panel title={label} hwMode={hwMode}>
       <p>Connected: {cam.connected ? 'Yes' : 'No'}</p>
-      <p>Frame Delta: {cam.frameDeltaMs?.toFixed(1)} ms</p>
-      <p>Depth FPS: {cam.depthFps?.toFixed(1)}</p>
+      {isTrackingCamera ? (
+        <>
+          <p>Fisheye FPS: {streamFpsText}</p>
+          <p>Odom Active: {cam.odomActive ? 'Yes' : 'No'}</p>
+        </>
+      ) : (
+        <>
+          <p>Frame Delta: {cam.frameDeltaMs?.toFixed(1)} ms</p>
+          <p>Depth FPS: {cam.depthFps?.toFixed(1)}</p>
+        </>
+      )}
       <p>IMU Active: {cam.imuActive ? 'Yes' : 'No'}</p>
     </Panel>
   );
 }
 
-function Px4Panel({ px4 }) {
-  if (!px4) return <Panel title="PX4"><p>No data</p></Panel>;
+function Px4Panel({ px4, hwMode }) {
+  if (!px4) return <Panel title="PX4" hwMode={hwMode}><p>No data</p></Panel>;
   return (
-    <Panel title="PX4">
+    <Panel title="PX4" hwMode={hwMode}>
       <p>Connected: {px4.connected ? 'Yes' : 'No'}</p>
       <p>Armed: {px4.armed ? 'Yes' : 'No'}</p>
       <p>Armable: {px4.armable ? 'Yes' : 'No'}</p>
@@ -68,10 +125,14 @@ function Px4Panel({ px4 }) {
   );
 }
 
-function JetsonPanel({ jetson }) {
-  if (!jetson) return <Panel title="Jetson"><p>No data</p></Panel>;
+function JetsonPanel({ jetson, hwMode }) {
+  if (!jetson) return <Panel title="Jetson" hwMode={hwMode}><p>No data</p></Panel>;
+  const avgCpuPct = jetson.cpuUsagePct?.length
+    ? jetson.cpuUsagePct.reduce((sum, value) => sum + value, 0) / jetson.cpuUsagePct.length
+    : null;
   return (
-    <Panel title="Jetson">
+    <Panel title="Jetson" hwMode={hwMode}>
+      <p>CPU: {avgCpuPct?.toFixed(1) ?? 'N/A'}%</p>
       <p>GPU: {jetson.gpuUsagePct?.toFixed(1)}%</p>
       <p>RAM: {jetson.ramUsedMb}/{jetson.ramTotalMb} MB</p>
       <p>Temp CPU: {jetson.tempCpuC?.toFixed(1)}C</p>
@@ -102,6 +163,7 @@ function DrivePanel() {
   const intervalRef = useRef(null);
   const speedRef = useRef(0);
   const steeringRef = useRef(0);
+  const wasEnabledRef = useRef(false);
 
   useEffect(() => { speedRef.current = speed; }, [speed]);
   useEffect(() => { steeringRef.current = steering; }, [steering]);
@@ -123,6 +185,7 @@ function DrivePanel() {
   // When enabled: publish at 2 Hz. When disabled: stop publishing.
   useEffect(() => {
     if (enabled) {
+      wasEnabledRef.current = true;
       intervalRef.current = setInterval(() => {
         sendDrive(speedRef.current, steeringRef.current);
       }, 500);
@@ -131,10 +194,13 @@ function DrivePanel() {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      // Reset sliders and send a final zero on disable
+      // Reset sliders and send a final zero only after an active drive session.
       setSpeed(0);
       setSteering(0);
-      sendDrive(0, 0);
+      if (wasEnabledRef.current) {
+        sendDrive(0, 0);
+        wasEnabledRef.current = false;
+      }
     }
     return () => {
       if (intervalRef.current) {
@@ -178,41 +244,191 @@ function DrivePanel() {
   );
 }
 
-function CommandPanel() {
+async function sendDashboardCommand(cmdType, params = {}) {
+  try {
+    const res = await fetch('/api/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cmd_type: cmdType, params, issued_by: 'dashboard' }),
+    });
+    const data = await res.json();
+    if (data.error) alert(`Rejected: ${data.error}`);
+  } catch (e) {
+    alert(`Failed: ${e.message}`);
+  }
+}
+
+function Px4CommandsPanel() {
+  return (
+    <Panel title="PX4 Commands">
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={() => sendDashboardCommand('arm')}>Arm</button>
+        <button onClick={() => sendDashboardCommand('disarm')}>Disarm</button>
+        <button onClick={() => sendDashboardCommand('estop')} style={{ background: '#ef4444', color: 'white' }}>
+          E-STOP
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
+function Nav2ControlPanel({ nav2 }) {
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [altitude, setAltitude] = useState('0');
+  const [yawDeg, setYawDeg] = useState('0');
+
+  const nav2Data = nav2 || {};
+  const availableText = nav2Data.available ? 'Ready' : 'Unavailable';
+  const navigatingText = nav2Data.navigating ? 'Yes' : 'No';
+  const localizationText = nav2Data.localizationActive ? 'Active' : 'Inactive';
+  const goalStatusText = nav2Data.goalStatusLabel || 'UNKNOWN';
+  const feedbackStatusText = nav2Data.feedbackStatus || 'unknown';
+  const distanceText = nav2Data.distanceRemainingM != null
+    ? `${nav2Data.distanceRemainingM.toFixed(2)} m`
+    : 'N/A';
+  const etaText = nav2Data.etaSeconds != null
+    ? `${nav2Data.etaSeconds.toFixed(1)} s`
+    : 'N/A';
+  const navigationTimeText = nav2Data.navigationTimeS != null
+    ? `${nav2Data.navigationTimeS.toFixed(1)} s`
+    : 'N/A';
+  const recoveriesText = nav2Data.numberOfRecoveries ?? 'N/A';
+
+  const inputStyle = {
+    width: '100%',
+    padding: '6px 8px',
+    border: '1px solid #d1d5db',
+    borderRadius: 6,
+    fontSize: 12,
+    boxSizing: 'border-box',
+  };
+
+  const labelStyle = {
+    display: 'block',
+    fontSize: 12,
+    color: '#374151',
+    marginBottom: 4,
+  };
+
+  const sendNavGoal = () => {
+    const parsedLatitude = Number(latitude);
+    const parsedLongitude = Number(longitude);
+    const parsedAltitude = Number(altitude || 0);
+    const parsedYawDeg = Number(yawDeg || 0);
+
+    if (!Number.isFinite(parsedLatitude) || !Number.isFinite(parsedLongitude)) {
+      alert('Latitude and longitude are required.');
+      return;
+    }
+
+    sendDashboardCommand('nav_goal', {
+      latitude: parsedLatitude,
+      longitude: parsedLongitude,
+      altitude: Number.isFinite(parsedAltitude) ? parsedAltitude : 0,
+      yaw_deg: Number.isFinite(parsedYawDeg) ? parsedYawDeg : 0,
+    });
+  };
+
+  return (
+    <Panel title="Nav2 Control">
+      <div style={{ marginBottom: 12, fontSize: 12, color: '#374151' }}>
+        <p style={{ margin: '0 0 4px' }}>Server: {availableText}</p>
+        <p style={{ margin: '0 0 4px' }}>Goal: {goalStatusText}</p>
+        <p style={{ margin: '0 0 4px' }}>Navigating: {navigatingText}</p>
+        <p style={{ margin: '0 0 4px' }}>Localization: {localizationText}</p>
+        <p style={{ margin: '0 0 4px' }}>Feedback: {feedbackStatusText}</p>
+        <p style={{ margin: '0 0 4px' }}>Distance Remaining: {distanceText}</p>
+        <p style={{ margin: '0 0 4px' }}>ETA: {etaText}</p>
+        <p style={{ margin: '0 0 4px' }}>Time Taken: {navigationTimeText}</p>
+        <p style={{ margin: 0 }}>Recoveries: {recoveriesText}</p>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginBottom: 12 }}>
+        <div>
+          <label style={labelStyle}>Map X</label>
+          <input
+            type="number"
+            step="any"
+            value={latitude}
+            onChange={(e) => setLatitude(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Map Y</label>
+          <input
+            type="number"
+            step="any"
+            value={longitude}
+            onChange={(e) => setLongitude(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Altitude</label>
+          <input
+            type="number"
+            step="any"
+            value={altitude}
+            onChange={(e) => setAltitude(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Yaw (deg)</label>
+          <input
+            type="number"
+            step="any"
+            value={yawDeg}
+            onChange={(e) => setYawDeg(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={sendNavGoal}>Send Goal</button>
+        <button onClick={() => sendDashboardCommand('cancel_goal')}>Cancel Goal</button>
+      </div>
+    </Panel>
+  );
+}
+
+function normalizeCommandLogEntry(entry) {
+  if (!entry) return null;
+  return {
+    cmdId: entry.cmdId ?? entry.cmd_id ?? 'unknown',
+    cmdType: entry.cmdType ?? entry.cmd_type ?? 'unknown',
+    ackStatus: entry.ackStatus ?? entry.ack_status ?? 'UNKNOWN',
+    message: entry.message ?? '',
+    roundTripMs: entry.roundTripMs ?? entry.round_trip_ms ?? 0,
+  };
+}
+
+function CommandLogPanel() {
   const [log, setLog] = useState([]);
   const ackData = useWebSocket('/ws/cmd_ack');
 
   useEffect(() => {
+    fetch('/api/command/history')
+      .then(r => r.json())
+      .then(entries => Array.isArray(entries) ? entries.map(normalizeCommandLogEntry).filter(Boolean) : [])
+      .then(setLog)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (ackData) {
-      setLog(prev => [ackData, ...prev].slice(0, 50));
+      const nextEntry = normalizeCommandLogEntry(ackData);
+      if (!nextEntry) return;
+      setLog(prev => {
+        const filtered = prev.filter(entry => entry.cmdId !== nextEntry.cmdId);
+        return [nextEntry, ...filtered].slice(0, 50);
+      });
     }
   }, [ackData]);
 
-  const sendCmd = async (cmdType, params = {}) => {
-    try {
-      const res = await fetch('/api/command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cmd_type: cmdType, params, issued_by: 'dashboard' }),
-      });
-      const data = await res.json();
-      if (data.error) alert(`Rejected: ${data.error}`);
-    } catch (e) {
-      alert(`Failed: ${e.message}`);
-    }
-  };
-
   return (
-    <Panel title="Commands">
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <button onClick={() => sendCmd('arm')}>Arm</button>
-        <button onClick={() => sendCmd('disarm')}>Disarm</button>
-        <button onClick={() => sendCmd('estop')} style={{ background: '#ef4444', color: 'white' }}>
-          E-STOP
-        </button>
-        <button onClick={() => sendCmd('cancel_goal')}>Cancel Goal</button>
-      </div>
-      <h4 style={{ margin: '8px 0 4px', fontSize: 12 }}>Command Log</h4>
+    <Panel title="Command Log">
       <div style={{ maxHeight: 200, overflow: 'auto', fontSize: 11 }}>
         {log.map((entry, i) => (
           <div key={i} style={{ borderBottom: '1px solid #f3f4f6', padding: '2px 0' }}>
@@ -225,25 +441,51 @@ function CommandPanel() {
 }
 
 export default function App() {
-  const health = useWebSocket('/ws/health');
+  const health = useWebSocket('/ws/health', '/api/health/history');
+  const [hwMode, setHwMode] = useState({});
+
+  useEffect(() => {
+    const fetchHwMode = () => {
+      fetch('/api/hw_mode')
+        .then(r => r.json())
+        .then(setHwMode)
+        .catch(() => {});
+    };
+    fetchHwMode();
+    const interval = setInterval(fetchHwMode, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div style={{ fontFamily: 'system-ui', maxWidth: 1000, margin: '0 auto', padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, margin: 0 }}>Rover Control Center</h1>
-        <StatusBadge health={health?.overallHealth} />
-        {health && <span style={{ fontSize: 12, color: '#6b7280' }}>
-          SLAM: {health.slamLatencyMs?.toFixed(0)}ms | seq: {health.seq}
-        </span>}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h1 style={{ fontSize: 20, margin: 0 }}>Rover Control Center</h1>
+          <StatusBadge health={health?.overallHealth} />
+        </div>
+        {health && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, fontSize: 12, color: '#6b7280' }}>
+            <span>SLAM: {formatMapOdomTfAge(health.slamLatencyMs)}</span>
+            <span>seq: {health.seq}</span>
+            {health.cameras?.length > 0 && <span>📷 {health.cameras.map(c => c.cameraId || '?').join(', ')}</span>}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 0 }}>
-        <CameraPanel cam={health?.camera} />
-        <Px4Panel px4={health?.px4} />
-        <JetsonPanel jetson={health?.jetson} />
+        {(health?.cameras || []).map((cam, i) =>
+          <CameraPanel key={cam.cameraId || i} cam={cam} hwMode={hwMode.camera} />
+        )}
+        {(!health?.cameras || health.cameras.length === 0) &&
+          <CameraPanel cam={null} hwMode={hwMode.camera} />
+        }
+        <Px4Panel px4={health?.px4} hwMode={hwMode.px4} />
+        <JetsonPanel jetson={health?.jetson} hwMode={hwMode.jetson} />
         <AlertsPanel alerts={health?.activeAlerts} />
         <DrivePanel />
-        <CommandPanel />
+        <Px4CommandsPanel />
+        <Nav2ControlPanel nav2={health?.nav2} />
+        <CommandLogPanel />
       </div>
     </div>
   );

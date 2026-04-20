@@ -20,7 +20,7 @@ Real-time health monitoring for the Ackermann rover. The `rover_monitor` package
 | Camera health | Frame delta, depth FPS, IMU liveness, device enumeration |
 | PX4 health | Heartbeat, armed state, nav mode, battery voltage/current/% |
 | Platform health | CPU/GPU usage, RAM/swap, disk, thermals, throttling, Wi-Fi, uptime |
-| SLAM latency | Measures `/rtabmap/odom` → aggregator delta |
+| SLAM transform freshness | Measures age of the latest `map → odom` TF |
 | Alert detection | Rule-based engine with configurable thresholds |
 | Remote telemetry | Protobuf serialization → MQTT to host broker |
 | Remote commands | MQTT inbound → PX4 VehicleCommand / Nav2 goals |
@@ -137,7 +137,7 @@ Publishes `JetsonStatus` on `/monitor/jetson`.
 
 Timer-driven merge of latest probe data into `RoverHealth`:
 - Caches latest `CamStatus`, `Px4Status`, `JetsonStatus`
-- Computes SLAM latency from `/rtabmap/odom` timestamps
+- Computes map → odom TF age from the latest TF timestamp (`-1` when unavailable)
 - Runs the **Alert Engine** — evaluates `alert_rules.yaml` against current state
 - Sets `overall_health` to the highest severity among active alerts (`OK` / `WARN` / `ERROR`)
 - Publishes `RoverHealth` on `/monitor/health`
@@ -184,7 +184,7 @@ Defined in [`config/alert_rules.yaml`](../../src/rover_monitor/config/alert_rule
 | `PX4_BATTERY_CRITICAL` | ERROR | `battery_remaining_pct < 20` |
 | `HW_THROTTLE_THERMAL` | WARN | `is_thermal_throttled == true` |
 | `HW_THROTTLE_POWER` | WARN | `is_power_throttled == true` |
-| `SLAM_LATE` | WARN | `slam_latency_ms > 200` |
+| `SLAM_LATE` | WARN | `map → odom` TF age exceeds threshold |
 | `NET_DROP` | WARN | `wifi_signal_dbm < -75` |
 | `JETSON_DISK_LOW` | ERROR | `disk_free_gb < 2.0` |
 

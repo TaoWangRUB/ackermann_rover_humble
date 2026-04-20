@@ -47,7 +47,30 @@ Use the compose stack under `docker/` for all container management. Before start
 
 No build or startup errors are allowed. Fix issues immediately before moving on.
 
+## 0.1 Jetson Hardware Session (from host)
+
+The Jetson Xavier NX runs the real-robot stack (cameras, Nav2, PX4 bridge,
+telemetry) inside a Docker container managed by a tmux session.
+These commands are run **on the host laptop**, not inside any container.
+
+**Start the Jetson session** (T265 odom + Nav2 + telemetry, detached):
+```bash
+ssh -t jetson 'cd ~/workspace/ackermann_rover_humble && ./scripts/start_jetson_session.sh --t265-odom --nav2 --broker-host=10.42.0.1 --with-telemetry --no-attach'
+```
+
+**Stop / terminate the Jetson session**:
+```bash
+ssh -t jetson 'cd ~/workspace/ackermann_rover_humble && ./scripts/stop_all.sh --session jetson'
+```
+
+After starting, allow 30–60 s for cameras, Nav2 lifecycle nodes, and XRCE-DDS
+to become ready before sending goals or inspecting topics.
+
+---
+
 # 1. Build
+
+> **Unless explicitly told otherwise, always build inside the Docker environment defined in `docker/`.** Do not run `colcon build` directly on the host.
 
     colcon build --symlink-install --packages-ignore-regex '^example_.*' --packages-ignore px4_ros2_py
 

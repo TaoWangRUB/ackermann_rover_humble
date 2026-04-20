@@ -8,9 +8,13 @@ endif()
 # --- Dependencies ---
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(Protobuf REQUIRED)
@@ -26,6 +30,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CamStatus.msg"
   "msg/Px4Status.msg"
   "msg/JetsonStatus.msg"
+  "msg/Nav2Status.msg"
   "msg/RoverHealth.msg"
   DEPENDENCIES std_msgs
 )
@@ -58,7 +63,11 @@ ament_target_dependencies(${PROJECT_NAME}_components
   rclcpp_components
   sensor_msgs
   geometry_msgs
+  nav_msgs
+  nav2_msgs
+  action_msgs
   tf2_ros
+  rclcpp_action
   px4_msgs
 )
 
@@ -123,7 +132,11 @@ ament_export_dependencies(
   rclcpp_components
   sensor_msgs
   geometry_msgs
+  nav_msgs
+  nav2_msgs
+  action_msgs
   tf2_ros
+  rclcpp_action
   px4_msgs
 )
 

@@ -1,0 +1,32 @@
+# d435i_rgbd.yaml
+# cuVSLAM wrapper config for Intel RealSense D435i RGB-D + IMU.
+#
+# Topic names default to "/d435i/..." and can be overridden at launch time via
+# launch arguments or remappings.  Frame IDs follow the rover's standard
+# odom -> ackermann/base_link contract.
+
+cuvslam_rgbd_node:
+  ros__parameters:
+    # ─── topic configuration ─────────────────────────────────────────────
+    rgb_image_topic:         "/d435i/color/image_raw"
+    depth_image_topic:       "/d435i/depth/image_rect_raw"
+    rgb_camera_info_topic:   "/d435i/color/camera_info"
+    imu_topic:               "/d435i/imu"
+    raw_odom_topic:          "/cuvslam/rgbd/raw_odometry"
+
+    # ─── frame configuration ─────────────────────────────────────────────
+    # Parent frame of the raw odometry and the rig frame used to initialize cuVSLAM.
+    odom_frame_id:   "odom"
+    rig_frame_id:    "ackermann/base_link"
+    imu_frame_id:    "d435i_imu_optical_frame"
+
+    # ─── tracker configuration ───────────────────────────────────────────
+    use_imu:               true            # enable inertial fusion (IMU required)
+    
+    # ─── sync policy ─────────────────────────────────────────────────────
+    sync_queue_size:       10
+    sync_slop_s:           0.05            # approximate-time sync tolerance
+    rig_init_timeout_s:    10.0            # how long to wait for CameraInfo
+    
+    # ─── diagnostics ─────────────────────────────────────────────────────
+    debug:                 false           # cuVSLAM SetVerbosity(0 or 1)

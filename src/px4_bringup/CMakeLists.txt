@@ -11,12 +11,16 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(eigen3_cmake_module REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(px4_ros2_cpp REQUIRED)
 find_package(px4_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 include_directories(include)
 
@@ -54,6 +58,26 @@ ament_target_dependencies(rover_manual_mode
   rclcpp geometry_msgs px4_ros2_cpp px4_msgs
 )
 
+# --- C++ odometry bridge nodes ---
+
+# 5. PX4 Vision Odometry (ENU/FLU → NED/FRD, replaces px4_vision_odom.py)
+add_executable(px4_vision_odom_node
+  src/px4_vision_odom_node.cpp
+)
+ament_target_dependencies(px4_vision_odom_node
+  rclcpp nav_msgs tf2 tf2_ros px4_msgs
+)
+target_link_libraries(px4_vision_odom_node Eigen3::Eigen)
+
+# 6. PX4 Vehicle Odometry (NED/FRD → ENU/FLU, replaces px4_vehicle_odometry.py)
+add_executable(px4_vehicle_odometry_node
+  src/px4_vehicle_odometry_node.cpp
+)
+ament_target_dependencies(px4_vehicle_odometry_node
+  rclcpp nav_msgs tf2 tf2_ros px4_msgs
+)
+target_link_libraries(px4_vehicle_odometry_node Eigen3::Eigen)
+
 # --- Install targets ---
 
 install(TARGETS
@@ -61,6 +85,8 @@ install(TARGETS
   rover_speed_steering_mode
   rover_speed_attitude_mode
   rover_manual_mode
+  px4_vision_odom_node
+  px4_vehicle_odometry_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

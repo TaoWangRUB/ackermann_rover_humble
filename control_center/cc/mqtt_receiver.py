@@ -108,8 +108,9 @@ class MQTTReceiver:
                 asyncio.run_coroutine_threadsafe(
                     self._bus.emit("evt.health", data=health), self._loop)
                 # Also emit sub-component events
-                asyncio.run_coroutine_threadsafe(
-                    self._bus.emit("evt.health.cam", data=health.camera), self._loop)
+                for cam in health.cameras:
+                    asyncio.run_coroutine_threadsafe(
+                        self._bus.emit("evt.health.cam", data=cam), self._loop)
                 asyncio.run_coroutine_threadsafe(
                     self._bus.emit("evt.health.px4", data=health.px4), self._loop)
                 asyncio.run_coroutine_threadsafe(

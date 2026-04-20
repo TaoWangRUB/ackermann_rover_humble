@@ -26,39 +26,63 @@ IP_ADDR="$2"
 PREFIX="${3:-24}"
 IP_CIDR="${IP_ADDR}/${PREFIX}"
 
-if ! command -v nmcli >/dev/null 2>&1; then
-    echo "Error: nmcli not found. This script requires NetworkManager."
-    exit 1
+SUDO=""
+if [[ "${EUID}" -ne 0 ]]; then
+    SUDO="sudo"
 fi
 
-if ! nmcli -t -f DEVICE device status | grep -qx "${IFACE}"; then
-    echo "Error: interface '${IFACE}' not found."
-    exit 1
+if command -v nmcli >/dev/null 2>&1; then
+    if ! nmcli -t -f DEVICE device status | grep -qx "${IFACE}"; then
+        echo "Error: interface '${IFACE}' not found."
+        exit 1
+    fi
+
+    CONN_NAME="$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v dev="${IFACE}" '$1 == dev { print $2 }')"
+
+    if [[ -z "${CONN_NAME}" || "${CONN_NAME}" == "--" ]]; then
+        CONN_NAME="static-${IFACE}"
+        nmcli connection add type ethernet ifname "${IFACE}" con-name "${CONN_NAME}"
+    fi
+
+    # Set method and address in one call so NetworkManager never sees an
+    # invalid "manual with no address" intermediate state.
+    nmcli connection modify "${CONN_NAME}" ipv4.method manual ipv4.addresses "${IP_CIDR}"
+    nmcli connection modify "${CONN_NAME}" ipv4.gateway ""
+    nmcli connection modify "${CONN_NAME}" ipv4.dns ""
+
+    nmcli connection modify "${CONN_NAME}" ipv6.method ignore
+
+    nmcli connection down "${CONN_NAME}" >/dev/null 2>&1 || true
+    nmcli connection up "${CONN_NAME}"
+
+    echo ""
+    echo "Applied static IP:"
+    echo "  Interface:  ${IFACE}"
+    echo "  Connection: ${CONN_NAME}"
+    echo "  Address:    ${IP_CIDR}"
+else
+    if ! command -v ip >/dev/null 2>&1; then
+        echo "Error: neither 'nmcli' nor 'ip' is available."
+        exit 1
+    fi
+
+    if ! ip link show dev "${IFACE}" >/dev/null 2>&1; then
+        echo "Error: interface '${IFACE}' not found."
+        exit 1
+    fi
+
+    ${SUDO} ip link set dev "${IFACE}" up
+    ${SUDO} ip -4 addr flush dev "${IFACE}" scope global
+    ${SUDO} ip addr add "${IP_CIDR}" dev "${IFACE}"
+
+    echo ""
+    echo "Applied direct IPv4 configuration:"
+    echo "  Interface:  ${IFACE}"
+    echo "  Address:    ${IP_CIDR}"
+    echo ""
+    echo "Note: this fallback uses 'ip' directly, so the address may not persist"
+    echo "across reboots or interface resets."
 fi
-
-CONN_NAME="$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v dev="${IFACE}" '$1 == dev { print $2 }')"
-
-if [[ -z "${CONN_NAME}" || "${CONN_NAME}" == "--" ]]; then
-    CONN_NAME="static-${IFACE}"
-    nmcli connection add type ethernet ifname "${IFACE}" con-name "${CONN_NAME}"
-fi
-
-# Set method and address in one call so NetworkManager never sees an
-# invalid "manual with no address" intermediate state.
-nmcli connection modify "${CONN_NAME}" ipv4.method manual ipv4.addresses "${IP_CIDR}"
-nmcli connection modify "${CONN_NAME}" ipv4.gateway ""
-nmcli connection modify "${CONN_NAME}" ipv4.dns ""
-
-nmcli connection modify "${CONN_NAME}" ipv6.method ignore
-
-nmcli connection down "${CONN_NAME}" >/dev/null 2>&1 || true
-nmcli connection up "${CONN_NAME}"
-
-echo ""
-echo "Applied static IP:"
-echo "  Interface:  ${IFACE}"
-echo "  Connection: ${CONN_NAME}"
-echo "  Address:    ${IP_CIDR}"
 
 echo ""
 ip addr show "${IFACE}"

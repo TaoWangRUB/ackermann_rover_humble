@@ -53,7 +53,7 @@ import math
 
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import TwistStamped
 from sensor_msgs.msg import JointState
 
 
@@ -93,20 +93,23 @@ class CmdVelJointRelay(Node):
         self._wz = 0.0   # last commanded angular.z  (rad/s)
         self._last_t = self.get_clock().now()
 
-        self._sub = self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)
+        self._sub = self.create_subscription(
+            TwistStamped, 'cmd_vel', self._on_cmd_vel_stamped, 10
+        )
         self._pub = self.create_publisher(JointState, 'joint_states', 10)
         self.create_timer(1.0 / hz, self._publish)
 
         self.get_logger().info(
             f'cmd_vel_joint_relay ready  '
-            f'(L={L} m  T={T} m  r={r} m  ns={ns}  rate={hz} Hz)'
+            f'(listening on /cmd_vel as TwistStamped, '
+            f'L={L} m  T={T} m  r={r} m  ns={ns}  rate={hz} Hz)'
         )
 
     # ------------------------------------------------------------------
 
-    def _on_cmd_vel(self, msg: Twist) -> None:
-        self._vx = msg.linear.x
-        self._wz = msg.angular.z
+    def _on_cmd_vel_stamped(self, msg: TwistStamped) -> None:
+        self._vx = msg.twist.linear.x
+        self._wz = msg.twist.angular.z
 
     def _ackermann_angles(self, v: float, w: float):
         """
