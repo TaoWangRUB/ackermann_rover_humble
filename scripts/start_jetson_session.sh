@@ -34,6 +34,9 @@
 # Usage:
 #   ./scripts/start_jetson_session.sh
 #   ./scripts/start_jetson_session.sh --with-telemetry
+#   ./scripts/start_jetson_session.sh --cuvslam-odom --with-telemetry
+#   ./scripts/start_jetson_session.sh --vins-odom --with-telemetry
+#   ./scripts/start_jetson_session.sh --t265-odom --with-telemetry
 #   ./scripts/start_jetson_session.sh --nav2
 #   ./scripts/start_jetson_session.sh --nav2 --with-telemetry
 #   ./scripts/start_jetson_session.sh --mode-id=24
@@ -55,6 +58,10 @@ SESSION="jetson"
 ENABLE_TELEMETRY=false
 ENABLE_NAV2=false
 ENABLE_T265=false
+T265_ODOM=false
+CUVSLAM_ODOM=false
+RGBD_ODOM=false
+VINS_ODOM=false
 ACTIVATE=true
 MODE_ID="23"
 ATTACH=true
@@ -63,12 +70,18 @@ BROKER_HOST=""
 PUBLISHER_CONFIG_FILE="/workspace/src/rover_monitor/config/publisher.yaml"
 PX4_MODE_TYPE="manual"
 REVERSIBLE_DRIVE=true
+NAV2_CONTROLLER="mppi"
 
 for arg in "$@"; do
     case "${arg}" in
         --with-telemetry)  ENABLE_TELEMETRY=true ;;
         --nav2)            ENABLE_NAV2=true ;;
+        --controller=*)    NAV2_CONTROLLER="${arg#--controller=}" ;;
         --t265)            ENABLE_T265=true ;;
+        --t265-odom)       ENABLE_T265=true; T265_ODOM=true ;;
+        --cuvslam-odom)    CUVSLAM_ODOM=true ;;
+        --rgbd-odom)       RGBD_ODOM=true ;;
+        --vins-odom)       VINS_ODOM=true ;;
         --no-activate)     ACTIVATE=false ;;
         --mode-id=*)       MODE_ID="${arg#--mode-id=}" ;;
         --mode-type=*)     PX4_MODE_TYPE="${arg#--mode-type=}" ;;
@@ -86,14 +99,42 @@ done
 
 # ── Build sub-command arguments ───────────────────────────────────────
 ROS2_ARGS="--hw --rtabmap --no-rviz --depth-camera=${DEPTH_CAMERA}"
-if [[ "${ENABLE_T265}" == true ]]; then
+if [[ "${T265_ODOM}" == true ]]; then
+    ROS2_ARGS+=" --t265-odom"
+elif [[ "${ENABLE_T265}" == true ]]; then
     ROS2_ARGS+=" --t265"
 fi
+if [[ "${CUVSLAM_ODOM}" == true ]]; then
+    ROS2_ARGS+=" --cuvslam-odom"
+fi
+if [[ "${RGBD_ODOM}" == true ]]; then
+    ROS2_ARGS+=" --rgbd-odom"
+fi
+if [[ "${VINS_ODOM}" == true ]]; then
+    ROS2_ARGS+=" --vins-odom"
+fi
 if [[ "${ENABLE_NAV2}" == true ]]; then
-    ROS2_ARGS+=" --nav2"
+    ROS2_ARGS+=" --nav2 --controller=${NAV2_CONTROLLER}"
+fi
+
+# Derive canonical odom topic for readiness (same priority as rtabmap_slam.launch.py).
+# Priority: cuVSLAM > cuVSLAM RGBD > VINS > T265 > /odometry/filtered (default).
+# This determines which topic the PX4 pane waits for before launching.
+if [[ "${CUVSLAM_ODOM}" == true ]]; then
+    ODOM_READY_TOPIC="/cuvslam_odom"
+elif [[ "${RGBD_ODOM}" == true ]]; then
+    ODOM_READY_TOPIC="/cuvslam_rgbd_odom"
+elif [[ "${VINS_ODOM}" == true ]]; then
+    ODOM_READY_TOPIC="/vins_odom"
+elif [[ "${T265_ODOM}" == true ]]; then
+    ODOM_READY_TOPIC="/t265/odom_base"
+else
+    ODOM_READY_TOPIC="/odometry/filtered"
 fi
 
 ROS_SRC="source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash"
+WAIT_FOR_ROS_READY="source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && echo \"Waiting for ${ODOM_READY_TOPIC} topic...\" && timeout 120 bash -lc \"until ros2 topic list | grep -qx ${ODOM_READY_TOPIC}; do sleep 1; done\" && sleep 5'"
+WAIT_FOR_PX4_READY="source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && echo \"Waiting for PX4 DDS topics...\" && timeout 120 bash -lc \"until ros2 topic list | grep -qx /fmu/out/vehicle_status_v2; do sleep 1; done\" && sleep 10'"
 
 TELEMETRY_ARG="enable_telemetry:=false"
 PUBLISHER_CONFIG_ARG=""
@@ -122,10 +163,28 @@ if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     BROKER_HOST_ARG="broker_host:=${BROKER_HOST}"
 fi
 
-PX4_BRINGUP_ARGS=(--bridge --vo-bridge --mode-type "${PX4_MODE_TYPE}")
+TRACKING_EXPECT_STREAM=false
+if [[ "${CUVSLAM_ODOM}" == true || "${VINS_ODOM}" == true ]]; then
+    TRACKING_EXPECT_STREAM=true
+fi
+
+PX4_BRINGUP_ARGS=(--bridge --vo-bridge --mode-type "${PX4_MODE_TYPE}" --odom-topic "${ODOM_READY_TOPIC}")
 if [[ "${REVERSIBLE_DRIVE}" == true ]]; then
     PX4_BRINGUP_ARGS+=(--reversible-drive)
 fi
+
+# ── Ensure Docker container is running ────────────────────────────────
+if ! dcomp ps --services --filter status=running 2>/dev/null \
+        | grep -q '^ackermann_slam$'; then
+    echo "Container not running — starting ackermann_slam..."
+    dcomp up -d ackermann_slam
+fi
+
+# ── Kill old ROS nodes before starting new ones ─────────────────────
+"${SCRIPT_DIR}/stop_all.sh" --session="${SESSION}"
+# Brief pause for process cleanup. Camera USB recovery is now handled
+# by hardware_reset() inside the realsense_camera_node itself.
+sleep 5
 
 # ── Create tmux session ──────────────────────────────────────────────
 tmux kill-session -t "${SESSION}" 2>/dev/null || true
@@ -151,20 +210,20 @@ tmux send-keys -t "${PANE_XRCE}" \
 
 # ── Pane: System Monitor (immediate, independent) ────────────────────
 tmux send-keys -t "${PANE_MONITOR}" \
-    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ros2 launch rover_monitor monitor.launch.py use_sim_time:=false depth_camera:=${DEPTH_CAMERA} ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG} ${BROKER_HOST_ARG}'" Enter
+    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ros2 launch rover_monitor monitor.launch.py use_sim_time:=false depth_camera:=${DEPTH_CAMERA} tracking_expect_stream:=${TRACKING_EXPECT_STREAM} ${TELEMETRY_ARG} ${PUBLISHER_CONFIG_ARG} ${BROKER_HOST_ARG}'" Enter
 
 # ── Pane: ROS 2 Nodes (wait for XRCE) ────────────────────────────────
 tmux send-keys -t "${PANE_ROS2}" \
     "sleep 3 && ${SCRIPT_DIR}/start_ros2_nodes.sh ${ROS2_ARGS}" Enter
 
-# ── Pane: PX4 Bringup (wait for ROS nodes) ───────────────────────────
+# ── Pane: PX4 Bringup (wait for fused odometry) ──────────────────────
 tmux send-keys -t "${PANE_PX4}" \
-    "sleep 8 && ${SCRIPT_DIR}/start_px4_bringup_vo.sh ${PX4_BRINGUP_ARGS[*]}" Enter
+    "sleep 8 && ${WAIT_FOR_ROS_READY} && ${SCRIPT_DIR}/start_px4_bringup_vo.sh ${PX4_BRINGUP_ARGS[*]}" Enter
 
 # ── Pane: Mode Activation (wait for PX4 registration) ────────────────
 if [[ "${ACTIVATE}" == true ]]; then
     tmux send-keys -t "${PANE_ACTIVATE}" \
-        "echo 'Waiting 28s for PX4 mode registration...' && sleep 28 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
+        "${WAIT_FOR_PX4_READY} && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
 else
     tmux send-keys -t "${PANE_ACTIVATE}" \
         "source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
@@ -173,10 +232,29 @@ fi
 # ── Pane: MQTT verify (only with telemetry) ───────────────────────────
 if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     tmux send-keys -t "${PANE_MQTT}" \
-        "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'if ! command -v mosquitto_sub >/dev/null 2>&1; then echo \"mosquitto_sub not installed\"; exit 1; fi; if ! python3 -c \"import google.protobuf\" >/dev/null 2>&1; then echo \"protobuf not installed\"; exit 1; fi; cd /tmp && protoc --python_out=/tmp -I /workspace/src/rover_monitor/proto /workspace/src/rover_monitor/proto/rover_health.proto >/dev/null 2>&1 || true; echo \"Subscribing to MQTT broker ${BROKER_HOST}...\"; mosquitto_sub -h ${BROKER_HOST} -t \"rover/health/#\" -F \"%x\" | python3 /workspace/scripts/decode_rover_health_mqtt.py --hex'" Enter
+    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'set -o pipefail; if ! command -v mosquitto_sub >/dev/null 2>&1; then echo \"mosquitto_sub not installed\"; exit 1; fi; if ! python3 -c \"import google.protobuf\" >/dev/null 2>&1; then echo \"protobuf not installed\"; exit 1; fi; cd /tmp && protoc --python_out=/tmp -I /workspace/src/rover_monitor/proto /workspace/src/rover_monitor/proto/rover_health.proto >/dev/null 2>&1 || true; while true; do echo \"Subscribing to MQTT broker ${BROKER_HOST}...\"; mosquitto_sub -h ${BROKER_HOST} -t \"rover/health/#\" -F \"%x\" | python3 /workspace/scripts/decode_rover_health_mqtt.py --hex && break; status=$?; echo \"MQTT subscribe failed with status \${status}; retrying in 5s\"; sleep 5; done'" Enter
 fi
 
 tmux select-pane -t "${PANE_ROS2}"
+
+# ── Report HW mode to Control Center ─────────────────────────────────
+# Jetson session = all real hardware. Report after a short delay so CC
+# is ready to receive.
+if [[ "${ENABLE_TELEMETRY}" == true ]]; then
+    CC_URL="http://${BROKER_HOST}:8080"
+    (
+        sleep 10
+        for _ in 1 2 3 4 5 6; do
+            if curl -sf -X POST "${CC_URL}/api/hw_mode" \
+                -H 'Content-Type: application/json' \
+                -d '{"camera":"hw","t265":"hw","px4":"hw","jetson":"hw"}' \
+                >/dev/null 2>&1; then
+                exit 0
+            fi
+            sleep 5
+        done
+    ) &
+fi
 
 if [[ "${ATTACH}" == true && -t 1 ]]; then
     tmux attach-session -t "${SESSION}"

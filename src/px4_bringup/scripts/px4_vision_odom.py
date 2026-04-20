@@ -33,6 +33,11 @@ class VIOPublisher(Node):
         # ── TF2 ───────────────────────────────────────────────────────────────
         self.tf_buffer   = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        
+        # ── TF cache (to avoid lookup_transform on every high-rate message) ──
+        self._tf_cache = None  # Cached (pos_enu, q_enu) tuple or None
+        self._tf_cache_time = 0.0  # Time (seconds) of last cache refresh
+        self._tf_cache_ttl = 5.0  # Cache TTL in seconds; refresh if stale
 
         # ── I/O ───────────────────────────────────────────────────────────────
         self.odom_sub = self.create_subscription(
@@ -88,25 +93,37 @@ class VIOPublisher(Node):
         odom_frame = self.get_parameter('odom_frame').get_parameter_value().string_value
         base_frame = self.get_parameter('base_frame').get_parameter_value().string_value
 
-        # ── Step 1: pose of base_frame in odom_frame ──────────────────────────
-        try:
-            tf = self.tf_buffer.lookup_transform(
-                odom_frame, base_frame, rclpy.time.Time())
-            t = tf.transform.translation
-            r = tf.transform.rotation
-            pos_enu = np.array([t.x, t.y, t.z])
-            q_enu   = [r.x, r.y, r.z, r.w]      # [x, y, z, w]
-        except (tf2_ros.LookupException,
-                tf2_ros.ConnectivityException,
-                tf2_ros.ExtrapolationException) as exc:
-            self.get_logger().warn(
-                f'TF {odom_frame} → {base_frame} unavailable: {exc}',
-                throttle_duration_sec=2.0)
-            # Fallback: use message pose (assumes frames match)
-            p = msg.pose.pose.position
-            o = msg.pose.pose.orientation
-            pos_enu = np.array([p.x, p.y, p.z])
-            q_enu   = [o.x, o.y, o.z, o.w]
+        # ── Step 1: pose of base_frame in odom_frame (with caching) ─────────────
+        # OPTIMIZATION: Cache the transform with a 5-second TTL to avoid repeated
+        # expensive lookups at high-rate odometry input (100-200 Hz). The transform
+        # from odom_frame to base_frame is typically static or slow-changing.
+        now_sec = time()
+        if self._tf_cache is not None and (now_sec - self._tf_cache_time) < self._tf_cache_ttl:
+            # Use cached transform
+            pos_enu, q_enu = self._tf_cache
+        else:
+            # Cache is stale or empty; refresh via TF lookup
+            try:
+                tf = self.tf_buffer.lookup_transform(
+                    odom_frame, base_frame, rclpy.time.Time())
+                t = tf.transform.translation
+                r = tf.transform.rotation
+                pos_enu = np.array([t.x, t.y, t.z])
+                q_enu   = [r.x, r.y, r.z, r.w]      # [x, y, z, w]
+                # Update cache
+                self._tf_cache = (pos_enu.copy(), q_enu)
+                self._tf_cache_time = now_sec
+            except (tf2_ros.LookupException,
+                    tf2_ros.ConnectivityException,
+                    tf2_ros.ExtrapolationException) as exc:
+                self.get_logger().warn(
+                    f'TF {odom_frame} → {base_frame} unavailable: {exc}',
+                    throttle_duration_sec=2.0)
+                # Fallback: use message pose (assumes frames match)
+                p = msg.pose.pose.position
+                o = msg.pose.pose.orientation
+                pos_enu = np.array([p.x, p.y, p.z])
+                q_enu   = [o.x, o.y, o.z, o.w]
 
         # ── Step 2: position ENU → NED ────────────────────────────────────────
         # ENU: x=East, y=North, z=Up

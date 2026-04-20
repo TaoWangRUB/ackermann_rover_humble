@@ -1,5 +1,6 @@
 """CC-2: Telemetry Cache — thread-safe latest-value store with staleness detection."""
 import asyncio
+import copy
 import logging
 import time
 from typing import Any
@@ -66,6 +67,45 @@ class TelemetryCache:
                 stale = (now - updated) > self._stale_threshold
                 result[key] = (data, stale)
             return result
+
+    async def get_effective_health(self) -> tuple[Any | None, bool]:
+        """Return overall health with freshest PX4 data overlaid when available."""
+        async with self._lock:
+            health = self._data.get("health")
+            health_updated = self._updated_at.get("health")
+            px4 = self._data.get("px4")
+            px4_updated = self._updated_at.get("px4")
+
+            if health is None or health_updated is None:
+                return None, True
+
+            effective_health = copy.deepcopy(health)
+            if px4 is not None and hasattr(effective_health, "px4"):
+                effective_health.px4.CopyFrom(px4)
+
+            latest_updated = health_updated
+            if px4_updated is not None:
+                latest_updated = max(latest_updated, px4_updated)
+
+            stale = (time.monotonic() - latest_updated) > self._stale_threshold
+            return effective_health, stale
+
+    async def get_effective_px4(self) -> tuple[Any | None, bool]:
+        """Return latest PX4 status, falling back to the overall health payload."""
+        async with self._lock:
+            px4 = self._data.get("px4")
+            px4_updated = self._updated_at.get("px4")
+            if px4 is not None and px4_updated is not None:
+                stale = (time.monotonic() - px4_updated) > self._stale_threshold
+                return px4, stale
+
+            health = self._data.get("health")
+            health_updated = self._updated_at.get("health")
+            if health is None or health_updated is None:
+                return None, True
+
+            stale = (time.monotonic() - health_updated) > self._stale_threshold
+            return getattr(health, "px4", None), stale
 
     def is_stale(self, key: str) -> bool:
         """Synchronous staleness check (for safety gate)."""

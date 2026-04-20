@@ -103,6 +103,7 @@ jobs:
             robot_bringup \
             ackermann_nav2_bringup \
             rtabmap_bringup \
+            cuvslam_bringup \
             description_robot
           colcon test --event-handlers console_direct+ --packages-select ackermann_control safety
           colcon test-result --verbose

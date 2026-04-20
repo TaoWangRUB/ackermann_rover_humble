@@ -1,0 +1,87 @@
+{
+  "id": "1090afa9bc978000",
+  "orgID": "9ccdc2957dc2c3a6",
+  "name": "Rover Health Monitor",
+  "description": "",
+  "meta": {
+    "createdAt": "2026-04-15T20:07:12.37047Z",
+    "updatedAt": "2026-04-15T20:07:12.40987536Z"
+  },
+  "cells": [
+    {
+      "id": "1090afa9be578000",
+      "x": 0,
+      "y": 0,
+      "w": 4,
+      "h": 3,
+      "links": {
+        "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9be578000",
+        "view": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9be578000/view"
+      }
+    },
+    {
+      "id": "1090afa9bfd78000",
+      "x": 4,
+      "y": 0,
+      "w": 4,
+      "h": 3,
+      "links": {
+        "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9bfd78000",
+        "view": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9bfd78000/view"
+      }
+    },
+    {
+      "id": "1090afa9c1578000",
+      "x": 8,
+      "y": 0,
+      "w": 4,
+      "h": 3,
+      "links": {
+        "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c1578000",
+        "view": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c1578000/view"
+      }
+    },
+    {
+      "id": "1090afa9c2978000",
+      "x": 0,
+      "y": 3,
+      "w": 4,
+      "h": 3,
+      "links": {
+        "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c2978000",
+        "view": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c2978000/view"
+      }
+    },
+    {
+      "id": "1090afa9c4178000",
+      "x": 4,
+      "y": 3,
+      "w": 4,
+      "h": 3,
+      "links": {
+        "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c4178000",
+        "view": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c4178000/view"
+      }
+    },
+    {
+      "id": "1090afa9c6578000",
+      "x": 8,
+      "y": 3,
+      "w": 4,
+      "h": 3,
+      "links": {
+        "self": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c6578000",
+        "view": "/api/v2/dashboards/1090afa9bc978000/cells/1090afa9c6578000/view"
+      }
+    }
+  ],
+  "labels": [],
+  "links": {
+    "self": "/api/v2/dashboards/1090afa9bc978000",
+    "members": "/api/v2/dashboards/1090afa9bc978000/members",
+    "owners": "/api/v2/dashboards/1090afa9bc978000/owners",
+    "cells": "/api/v2/dashboards/1090afa9bc978000/cells",
+    "labels": "/api/v2/dashboards/1090afa9bc978000/labels",
+    "org": "/api/v2/orgs/9ccdc2957dc2c3a6"
+  }
+}

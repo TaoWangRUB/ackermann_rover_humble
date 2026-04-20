@@ -1,9 +1,14 @@
 #pragma once
 
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
 #include <rover_monitor/msg/rover_health.hpp>
+#include <rover_monitor/msg/nav2_status.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <nav2_msgs/action/navigate_to_pose.hpp>
+#include <action_msgs/msg/goal_status_array.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
+#include <array>
 
 #include <mqtt/async_client.h>
 
@@ -25,9 +30,20 @@ public:
   ~TelemetryPublisher() override;
 
 private:
+  using NavigateToPose = nav2_msgs::action::NavigateToPose;
+  using NavigateToPoseGoalHandle = rclcpp_action::ClientGoalHandle<NavigateToPose>;
+
   // --- Outbound telemetry ---
   void on_health(rover_monitor::msg::RoverHealth::ConstSharedPtr msg);
   void connect_mqtt();
+  void on_nav2_status_timer();
+  void publish_nav2_status();
+  void update_nav2_localization_flag();
+
+  // Shadow path for CLI/RViz-initiated Nav2 goals (we're not the action client).
+  using NavigateToPoseFeedbackMsg = nav2_msgs::action::NavigateToPose::Impl::FeedbackMessage;
+  void on_nav2_action_feedback(NavigateToPoseFeedbackMsg::ConstSharedPtr msg);
+  void on_nav2_action_status(action_msgs::msg::GoalStatusArray::ConstSharedPtr msg);
 
   // --- Inbound command handling ---
   void on_mqtt_message(mqtt::const_message_ptr mqtt_msg);
@@ -73,6 +89,22 @@ private:
   // E-stop twist publisher
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_pub_;
 
+  // Nav2 goal/status bridge
+  rclcpp::Publisher<rover_monitor::msg::Nav2Status>::SharedPtr nav2_status_pub_;
+  rclcpp_action::Client<NavigateToPose>::SharedPtr nav2_client_;
+  rclcpp::TimerBase::SharedPtr nav2_status_timer_;
+  std::mutex nav2_mutex_;
+  rover_monitor::msg::Nav2Status nav2_status_;
+  NavigateToPoseGoalHandle::SharedPtr active_nav2_goal_handle_;
+  std::string active_nav_goal_cmd_id_;
+
+  // Passive shadow subscribers — track goals sent by others (RViz / CLI).
+  rclcpp::Subscription<NavigateToPoseFeedbackMsg>::SharedPtr nav2_feedback_sub_;
+  rclcpp::Subscription<action_msgs::msg::GoalStatusArray>::SharedPtr nav2_status_sub_;
+  // Last external goal UUID we're tracking (non-zero when a non-RCC goal is active).
+  std::array<uint8_t, 16> external_goal_uuid_{};
+  bool external_goal_active_{false};
+
   // Command deduplication set with timestamps
   std::mutex dedup_mutex_;
   std::unordered_map<std::string, std::chrono::steady_clock::time_point> seen_cmds_;
@@ -109,6 +141,8 @@ private:
   int cmd_qos_{2};
   std::string client_id_{"xavier_rover_01"};
   int dedup_eviction_s_{30};
+  int keep_alive_s_{15};
+  int connect_timeout_s_{5};
   double heartbeat_interval_s_{5.0};
 
   bool mqtt_connected_{false};

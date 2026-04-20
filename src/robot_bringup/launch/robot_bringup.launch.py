@@ -107,6 +107,12 @@ ARGUMENTS = [
         description='Launch the Nav2 stack once localization is running.'
     ),
     DeclareLaunchArgument(
+        'nav2_controller',
+        default_value='mppi',
+        choices=['mppi', 'rpp'],
+        description='Nav2 path controller: mppi (sampling-based) or rpp (Regulated Pure Pursuit, lightweight).'
+    ),
+    DeclareLaunchArgument(
         'nav2_params_file',
         default_value=TextSubstitution(
             text=os.path.join(
@@ -213,6 +219,12 @@ ARGUMENTS = [
         description='Use cuVSLAM odometry sourced from the T265 fisheye cameras and IMU.',
     ),
     DeclareLaunchArgument(
+        'use_rgbd_odom',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Use cuVSLAM odometry sourced from the depth camera.',
+    ),
+    DeclareLaunchArgument(
         'rover_monitor',
         default_value='false',
         choices=['true', 'false'],
@@ -235,6 +247,7 @@ def generate_launch_description() -> LaunchDescription:
     rtabmap_enable = LaunchConfiguration('rtabmap')
     rtabmap_viz = LaunchConfiguration('rtabmap_viz')
     nav2_enable = LaunchConfiguration('nav2')
+    nav2_controller = LaunchConfiguration('nav2_controller')
     nav2_params_file = LaunchConfiguration('nav2_params_file')
     nav2_bt_xml = LaunchConfiguration('nav2_bt_xml')
     nav2_through_bt = LaunchConfiguration('nav2_through_poses_bt')
@@ -248,6 +261,18 @@ def generate_launch_description() -> LaunchDescription:
     use_t265_odom = LaunchConfiguration('use_t265_odom')
     use_vins_odom = LaunchConfiguration('use_vins_odom')
     use_cuvslam_odom = LaunchConfiguration('use_cuvslam_odom')
+    use_rgbd_odom = LaunchConfiguration('use_rgbd_odom')
+
+    # Canonical odom topic — mirrors the priority logic in rtabmap_slam.launch.py.
+    # Downstream readiness gates and VO bridge default use this single expression;
+    # switching odom sources only requires changing launch flags, not hardcoded topics.
+    odom_ready_topic = PythonExpression([
+        '"/cuvslam_odom" if "', use_cuvslam_odom, '" == "true"'
+        ' else ("/cuvslam_rgbd_odom" if "', use_rgbd_odom, '" == "true"'
+        ' else ("/vins_odom" if "', use_vins_odom, '" == "true"'
+        ' else ("/t265/odom_base" if "', use_t265_odom, '" == "true"'
+        ' else "/odometry/filtered")))'
+    ])
 
     robot_description_share = get_package_share_directory('description_robot')
     rtabmap_bringup_share = get_package_share_directory('rtabmap_bringup')
@@ -344,8 +369,11 @@ def generate_launch_description() -> LaunchDescription:
 
     # Real RealSense cameras (D435i / L515 / T265 selected by hw_enable_* args).
     # The T265 odom_tf_relay is also started automatically when enable_t265:=true.
-    # When T265 is enabled, delay D435i/L515 startup by 12s so T265 resets
-    # and starts streaming first (avoids USB power-state races on shared hub).
+    # T265 performs a hardware_reset() on startup to clear stale Movidius VPU
+    # state from previously killed sessions. D435i/L515 do NOT need hardware
+    # reset — they work fine without it and reset actually makes them worse
+    # (pipeline starts but on_frame callback never fires). When T265 is enabled,
+    # depth cameras are delayed 20s so the T265 finishes its reset cycle first.
     hw_cameras_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(realsense_bringup_share, 'launch', 'realsense_camera.launch.py')
@@ -357,8 +385,14 @@ def generate_launch_description() -> LaunchDescription:
             'enable_t265':  enable_t265,
             't265_enable_fisheye': t265_enable_fisheye,
             't265_relay_publish_tf': use_t265_odom,
-            'd435i_startup_delay_s': PythonExpression(['"12.0" if "', enable_t265, '" == "true" else "0.0"']),
-            'l515_startup_delay_s':  PythonExpression(['"12.0" if "', enable_t265, '" == "true" else "0.0"']),
+            # Only T265 needs hardware_reset (Movidius VPU freezes after kill).
+            # D435i/L515 work fine without it — reset actually causes no-frame stall.
+            't265_enable_hardware_reset': 'true',
+            'd435i_enable_hardware_reset': 'false',
+            'l515_enable_hardware_reset':  'false',
+            # T265 reset + re-enumeration ≈ 13s. 20s delay gives safe margin.
+            'd435i_startup_delay_s': PythonExpression(['"20.0" if "', enable_t265, '" == "true" else "0.0"']),
+            'l515_startup_delay_s':  PythonExpression(['"20.0" if "', enable_t265, '" == "true" else "0.0"']),
         }.items(),
     )
 
@@ -377,6 +411,16 @@ def generate_launch_description() -> LaunchDescription:
             os.path.join(cuvslam_bringup_share, 'launch', 'cuvslam.launch.py')
         ),
         condition=IfCondition(use_cuvslam_odom),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+        }.items(),
+    )
+
+    cuvslam_rgbd_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(cuvslam_bringup_share, 'launch', 'cuvslam_rgbd.launch.py')
+        ),
+        condition=IfCondition(use_rgbd_odom),
         launch_arguments={
             'use_sim_time': use_sim_time,
         }.items(),
@@ -406,6 +450,7 @@ def generate_launch_description() -> LaunchDescription:
             'use_t265_odom': use_t265_odom,
             'use_vins_odom': use_vins_odom,
             'use_cuvslam_odom': use_cuvslam_odom,
+            'use_rgbd_odom': use_rgbd_odom,
             'rgb_image_topic': PythonExpression([
                 '"', depth_camera, '/color/image_raw"'
                 ' if "', use_gazebo, '" == "false"'
@@ -440,11 +485,46 @@ def generate_launch_description() -> LaunchDescription:
         ),
         condition=IfCondition(nav2_enable),
         launch_arguments={
+            'controller': nav2_controller,
             'params_file': nav2_params_file,
             'bt_xml': nav2_bt_xml,
             'navigate_through_poses_bt': nav2_through_bt,
             'reversible_drive': reversible_drive,
+            'use_sim_time': use_sim_time,
         }.items()
+    )
+
+    from launch.actions import TimerAction, ExecuteProcess, RegisterEventHandler, LogInfo
+    from launch.event_handlers import OnProcessExit
+
+    # Only run the wait routine if Nav2 is requested
+    wait_for_rtabmap = ExecuteProcess(
+        condition=IfCondition(nav2_enable),
+        cmd=[
+            'bash', '-c',
+            'ODOM_TOPIC="$1"; '
+            'if [ "$0" == "true" ]; then '
+            '  echo "Waiting for RTAB-Map topics and odometry ($ODOM_TOPIC)..."; '
+            '  timeout 60 bash -lc "until ros2 topic list | grep -qx /rtabmap/info; do sleep 1; done" || true; '
+            '  timeout 60 ros2 topic echo --once "$ODOM_TOPIC" nav_msgs/msg/Odometry > /dev/null || true; '
+            '  sleep 3; '
+            'else '
+            '  echo "Waiting for odometry ($ODOM_TOPIC)..."; '
+            '  timeout 60 ros2 topic echo --once "$ODOM_TOPIC" nav_msgs/msg/Odometry > /dev/null || true; '
+            '  sleep 3; '
+            'fi',
+            LaunchConfiguration('rtabmap'),
+            odom_ready_topic,
+        ],
+        output='screen'
+    )
+
+    nav2_delayed = RegisterEventHandler(
+        condition=IfCondition(nav2_enable),
+        event_handler=OnProcessExit(
+            target_action=wait_for_rtabmap,
+            on_exit=[LogInfo(msg="Spawning Nav2 Stack..."), nav2_launch]
+        )
     )
 
     rviz_node = Node(
@@ -486,8 +566,10 @@ def generate_launch_description() -> LaunchDescription:
     # Common
     ld.add_action(vins_launch)
     ld.add_action(cuvslam_launch)
+    ld.add_action(cuvslam_rgbd_launch)
     ld.add_action(rtabmap_launch)
-    ld.add_action(nav2_launch)
+    ld.add_action(wait_for_rtabmap)
+    ld.add_action(nav2_delayed)
     ld.add_action(rviz_delayed)
     ld.add_action(rover_monitor_launch)
 

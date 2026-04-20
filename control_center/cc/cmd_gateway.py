@@ -45,8 +45,30 @@ class CommandGateway:
         self._mqtt = mqtt
         self._safety = safety
         self._qos = cfg.get("publish_qos", 2)
-        self._topics = cfg.get("topics", TOPIC_MAP)
+        self._topics = self._normalize_topics(cfg.get("topics", {}))
         self._command_log: list[dict[str, Any]] = []
+
+    @staticmethod
+    def _normalize_topics(configured_topics: dict[str, Any]) -> dict[str, str]:
+        topics = dict(TOPIC_MAP)
+        alias_map = {
+            "goal": "nav_goal",
+            "nav_goal": "nav_goal",
+            "mode": "set_mode",
+            "set_mode": "set_mode",
+            "arm": "arm",
+            "disarm": "disarm",
+            "estop": "estop",
+            "cancel_goal": "cancel_goal",
+            "drive": "drive",
+        }
+
+        for key, value in configured_topics.items():
+            canonical_key = alias_map.get(key)
+            if canonical_key and isinstance(value, str):
+                topics[canonical_key] = value
+
+        return topics
 
     async def send_command(self, cmd_type: str, params: dict[str, Any],
                            issued_by: str = "dashboard") -> str:

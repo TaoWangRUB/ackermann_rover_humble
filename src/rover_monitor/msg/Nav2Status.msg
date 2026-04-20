@@ -1,0 +1,13 @@
+bool available
+bool navigating
+bool localization_active
+string goal_status_label
+string feedback_status
+float32 distance_remaining_m
+float32 eta_seconds
+float32 navigation_time_s
+int32 number_of_recoveries
+int32 number_of_poses_remaining
+int32 error_code
+string error_msg
+int64 timestamp

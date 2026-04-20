@@ -44,8 +44,13 @@ ARGUMENTS = [
         'use_cuvslam_odom',
         default_value='false',
         choices=['true', 'false'],
-        description='Use cuVSLAM as the odometry source for EKF and RTAB-Map '
-                    'while keeping VO/ICP published on their own topics.'
+        description='Use cuVSLAM as the odometry source for EKF and RTAB-Map.'
+    ),
+    DeclareLaunchArgument(
+        'use_rgbd_odom',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Use cuVSLAM RGBD as the odometry source for EKF and RTAB-Map.'
     ),
     DeclareLaunchArgument(
         't265_odom_topic',
@@ -61,6 +66,11 @@ ARGUMENTS = [
         'cuvslam_odom_topic',
         default_value='/cuvslam_odom',
         description='cuVSLAM odometry topic (used when use_cuvslam_odom:=true).'
+    ),
+    DeclareLaunchArgument(
+        'cuvslam_rgbd_odom_topic',
+        default_value='/cuvslam_rgbd_odom',
+        description='cuVSLAM RGBD odometry topic (used when use_rgbd_odom:=true).'
     ),
     DeclareLaunchArgument(
         'rtabmap_viz',
@@ -112,18 +122,21 @@ def generate_launch_description() -> LaunchDescription:
     rtabmap_viz = LaunchConfiguration('rtabmap_viz')
     use_vins_odom = LaunchConfiguration('use_vins_odom')
     use_cuvslam_odom = LaunchConfiguration('use_cuvslam_odom')
+    use_rgbd_odom = LaunchConfiguration('use_rgbd_odom')
     use_t265_odom = LaunchConfiguration('use_t265_odom')
     t265_odom_topic = LaunchConfiguration('t265_odom_topic')
     vins_odom_topic = LaunchConfiguration('vins_odom_topic')
     cuvslam_odom_topic = LaunchConfiguration('cuvslam_odom_topic')
+    cuvslam_rgbd_odom_topic = LaunchConfiguration('cuvslam_rgbd_odom_topic')
 
-    # Priority: cuVSLAM > VINS-Fusion > T265 built-in > RGB-D VO > ICP.
+    # Priority: cuVSLAM > cuVSLAM RGBD > VINS-Fusion > T265 built-in > RGB-D VO > ICP.
     # VO/ICP remain available on their own topics for debugging or comparison.
     odom_topic = PythonExpression([
         '"', cuvslam_odom_topic, '" if "', use_cuvslam_odom, '" == "true"'
+        ' else ("', cuvslam_rgbd_odom_topic, '" if "', use_rgbd_odom, '" == "true"'
         ' else ("', vins_odom_topic, '" if "', use_vins_odom, '" == "true"'
         ' else ("', t265_odom_topic, '" if "', use_t265_odom, '" == "true"'
-        ' else ("/vo_odom" if "', vision, '" == "true" else "/icp_odom")))'
+        ' else ("/vo_odom" if "', vision, '" == "true" else "/icp_odom"))))'
     ])
 
     # Always launch VO/ICP based on vision mode (even when use_t265_odom).
@@ -155,8 +168,9 @@ def generate_launch_description() -> LaunchDescription:
         'Grid/3D': 'false',
         'Grid/RayTracing': 'true',
         'Reg/Force3DoF': 'true',
-        'topic_queue_size': 20,
-        'sync_queue_size': 20,
+        'approx_sync_max_interval': 0.1,
+        'topic_queue_size': 30,
+        'sync_queue_size': 30,
         'RGBD/LinearUpdate': '0.05',     # Update map more often (smaller motion threshold)
         'RGBD/AngularUpdate': '0.05',
     }
@@ -199,7 +213,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{
             'approx_sync': True,
             'queue_size': 30,
-            'approx_sync_max_interval': 0.02,
+            'approx_sync_max_interval': 0.1,
             'use_sim_time': use_sim_time
         }],
         remappings=sensor_remappings,
@@ -244,7 +258,7 @@ def generate_launch_description() -> LaunchDescription:
         'use_sim_time': use_sim_time,
         'approx_sync': True,
         'queue_size': 30,
-        'approx_sync_max_interval': 0.02,
+        'approx_sync_max_interval': 0.1,
         'Odom/Strategy': '0',
         'Odom/ImageDecimation': '2',
         'Vis/MinInliers': '20',
@@ -459,11 +473,11 @@ def generate_launch_description() -> LaunchDescription:
     #ld.add_action(odom_relay_node)
     ld.add_action(rgbd_sync)
     ld.add_action(depth_to_scan)
-    ld.add_action(imu_transform_node)
-    ld.add_action(imu_filter_node)
-    ld.add_action(visual_odom)
-    ld.add_action(icp_odom)
-    ld.add_action(ekf_filter_node)
+    #ld.add_action(imu_transform_node)
+    #ld.add_action(imu_filter_node)
+    #ld.add_action(visual_odom)
+    #ld.add_action(icp_odom)
+    #ld.add_action(ekf_filter_node)
     ld.add_action(slam)
     ld.add_action(localization_node)
     ld.add_action(rgbd_to_points)

@@ -16,6 +16,7 @@ Aggregator::Aggregator(const rclcpp::NodeOptions & options)
   this->declare_parameter("aggregator.cam_stale_timeout_ms", 1000);
   this->declare_parameter("aggregator.px4_stale_timeout_ms", 1000);
   this->declare_parameter("aggregator.jetson_stale_timeout_ms", 4000);
+  this->declare_parameter("aggregator.nav2_stale_timeout_ms", 2000);
   this->declare_parameter("aggregator.slam_frame_id", "map");
   this->declare_parameter("aggregator.slam_child_frame_id", "odom");
 
@@ -29,7 +30,7 @@ Aggregator::Aggregator(const rclcpp::NodeOptions & options)
   this->declare_parameter("alerts.jetson_gpu_temp_error_c", 83.0);
   this->declare_parameter("alerts.jetson_ram_warn_pct", 0.90);
   this->declare_parameter("alerts.jetson_disk_error_gb", 1.0);
-  this->declare_parameter("alerts.slam_latency_warn_ms", 100.0);
+  this->declare_parameter("alerts.slam_latency_warn_ms", 2000.0);
   this->declare_parameter("alerts.wifi_signal_warn_dbm", -75.0);
 
   double rate_hz = this->get_parameter("aggregator.publish_rate_hz").as_double();
@@ -37,6 +38,7 @@ Aggregator::Aggregator(const rclcpp::NodeOptions & options)
   px4_stale_timeout_ms_ = this->get_parameter("aggregator.px4_stale_timeout_ms").as_int();
   jetson_stale_timeout_ms_ =
     this->get_parameter("aggregator.jetson_stale_timeout_ms").as_int();
+  nav2_stale_timeout_ms_ = this->get_parameter("aggregator.nav2_stale_timeout_ms").as_int();
   slam_frame_id_ = this->get_parameter("aggregator.slam_frame_id").as_string();
   slam_child_frame_id_ =
     this->get_parameter("aggregator.slam_child_frame_id").as_string();
@@ -87,11 +89,15 @@ Aggregator::Aggregator(const rclcpp::NodeOptions & options)
     "/monitor/jetson", 1,
     std::bind(&Aggregator::on_jetson, this, std::placeholders::_1), sub_opts);
 
+  nav2_sub_ = this->create_subscription<rover_monitor::msg::Nav2Status>(
+    "/monitor/nav2", 1,
+    std::bind(&Aggregator::on_nav2, this, std::placeholders::_1), sub_opts);
+
   // Initialize stamps
   auto now = this->now();
-  cam_stamp_ = now;
   px4_stamp_ = now;
   jetson_stamp_ = now;
+  nav2_stamp_ = now;
 
   // 2 Hz merge timer
   auto period = std::chrono::duration<double>(1.0 / rate_hz);
@@ -104,8 +110,8 @@ Aggregator::Aggregator(const rclcpp::NodeOptions & options)
 
 void Aggregator::on_cam(rover_monitor::msg::CamStatus::ConstSharedPtr msg)
 {
-  cam_cache_ = *msg;
-  cam_stamp_ = this->now();
+  cam_cache_[msg->camera_id] = *msg;
+  cam_stamps_[msg->camera_id] = this->now();
 }
 
 void Aggregator::on_px4(rover_monitor::msg::Px4Status::ConstSharedPtr msg)
@@ -120,6 +126,12 @@ void Aggregator::on_jetson(rover_monitor::msg::JetsonStatus::ConstSharedPtr msg)
   jetson_stamp_ = this->now();
 }
 
+void Aggregator::on_nav2(rover_monitor::msg::Nav2Status::ConstSharedPtr msg)
+{
+  nav2_cache_ = *msg;
+  nav2_stamp_ = this->now();
+}
+
 void Aggregator::on_timer()
 {
   auto health = std::make_unique<rover_monitor::msg::RoverHealth>();
@@ -128,14 +140,21 @@ void Aggregator::on_timer()
 
   auto now = this->now();
 
-  // Populate from caches (or stale defaults)
-  auto cam_age_ms = (now - cam_stamp_).seconds() * 1000.0;
-  if (cam_cache_.has_value() && cam_age_ms < cam_stale_timeout_ms_) {
-    health->camera = cam_cache_.value();
-  } else {
-    health->camera.connected = false;
-    health->camera.error_code = 1;
-    health->camera.error_msg = "Camera data stale";
+  // Populate cameras array from cache
+  for (auto & [cam_id, cam_status] : cam_cache_) {
+    auto it = cam_stamps_.find(cam_id);
+    double age_ms = (it != cam_stamps_.end())
+      ? (now - it->second).seconds() * 1000.0 : 9999.0;
+    if (age_ms < cam_stale_timeout_ms_) {
+      health->cameras.push_back(cam_status);
+    } else {
+      rover_monitor::msg::CamStatus stale;
+      stale.camera_id = cam_id;
+      stale.connected = false;
+      stale.error_code = 1;
+      stale.error_msg = "Camera data stale";
+      health->cameras.push_back(stale);
+    }
   }
 
   auto px4_age_ms = (now - px4_stamp_).seconds() * 1000.0;
@@ -155,8 +174,22 @@ void Aggregator::on_timer()
     health->jetson.error_msg = "Jetson data stale";
   }
 
-  // SLAM latency
-  health->slam_latency_ms = compute_slam_latency();
+  auto nav2_age_ms = (now - nav2_stamp_).seconds() * 1000.0;
+  if (nav2_cache_.has_value() && nav2_age_ms < nav2_stale_timeout_ms_) {
+    health->nav2 = nav2_cache_.value();
+  } else {
+    health->nav2.available = false;
+    health->nav2.navigating = false;
+    health->nav2.localization_active = false;
+    health->nav2.goal_status_label = "STALE";
+    health->nav2.feedback_status = "stale";
+    health->nav2.error_code = 8;
+    health->nav2.error_msg = "Nav2 status stale";
+  }
+
+  // Legacy field name retained for wire compatibility.
+  // The value represents the age/freshness of the latest map -> odom TF.
+  health->slam_latency_ms = compute_slam_tf_age_ms();
 
   // Alert engine
   health->active_alerts = evaluate_alerts(*health);
@@ -165,7 +198,7 @@ void Aggregator::on_timer()
   pub_->publish(std::move(health));
 }
 
-float Aggregator::compute_slam_latency()
+float Aggregator::compute_slam_tf_age_ms()
 {
   try {
     auto tf = tf_buffer_->lookupTransform(
@@ -174,7 +207,7 @@ float Aggregator::compute_slam_latency()
     auto age = (this->now() - stamp).seconds() * 1000.0;
     return static_cast<float>(age);
   } catch (const tf2::TransformException &) {
-    return -1.0f;  // TF not available
+    return -1.0f;  // map -> odom TF not available
   }
 }
 
@@ -183,18 +216,21 @@ std::vector<std::string> Aggregator::evaluate_alerts(
 {
   std::vector<std::string> alerts;
 
-  // Camera alerts
-  if (!health.camera.connected) {
-    alerts.push_back("CAM_DISCONNECTED");
-  }
-  if (health.camera.connected && health.camera.frame_delta_ms > cam_stutter_delta_ms_) {
-    alerts.push_back("CAM_STUTTER");
-  }
-  if (health.camera.connected &&
-    health.camera.depth_quality_sampled < cam_depth_quality_warn_ &&
-    health.camera.depth_quality_sampled >= 0.0f)
-  {
-    alerts.push_back("CAM_DEPTH_QUALITY");
+  // Camera alerts (check all cameras)
+  for (const auto & cam : health.cameras) {
+    std::string prefix = cam.camera_id.empty() ? "CAM" : cam.camera_id;
+    if (!cam.connected) {
+      alerts.push_back(prefix + "_DISCONNECTED");
+    }
+    if (cam.connected && cam.frame_delta_ms > cam_stutter_delta_ms_) {
+      alerts.push_back(prefix + "_STUTTER");
+    }
+    if (cam.connected &&
+      cam.depth_quality_sampled < cam_depth_quality_warn_ &&
+      cam.depth_quality_sampled >= 0.0f)
+    {
+      alerts.push_back(prefix + "_DEPTH_QUALITY");
+    }
   }
 
   // PX4 alerts
@@ -241,6 +277,10 @@ std::vector<std::string> Aggregator::evaluate_alerts(
     alerts.push_back("NET_DROP");
   }
 
+  if (health.nav2.navigating && health.nav2.error_code != 0) {
+    alerts.push_back("NAV2_GOAL_ERROR");
+  }
+
   return alerts;
 }
 
@@ -248,16 +288,20 @@ std::string Aggregator::derive_overall_health(const std::vector<std::string> & a
 {
   if (alerts.empty()) { return "OK"; }
 
-  // ERROR-level alerts
-  static const std::vector<std::string> error_alerts = {
-    "CAM_DISCONNECTED", "PX4_HEARTBEAT_LOST", "PX4_BATTERY_CRITICAL",
-    "JETSON_CPU_HOT", "HW_THROTTLE_THERMAL", "HW_THROTTLE_POWER",
-    "JETSON_DISK_LOW"
+  // ERROR-level alerts (suffix-matched for camera alerts with dynamic prefix)
+  static const std::vector<std::string> error_suffixes = {
+    "_DISCONNECTED", "_HEARTBEAT_LOST", "_BATTERY_CRITICAL",
+    "_CPU_HOT", "_THROTTLE_THERMAL", "_THROTTLE_POWER",
+    "_DISK_LOW"
   };
 
   for (const auto & alert : alerts) {
-    for (const auto & err : error_alerts) {
-      if (alert == err) { return "ERROR"; }
+    for (const auto & suffix : error_suffixes) {
+      if (alert.size() >= suffix.size() &&
+        alert.compare(alert.size() - suffix.size(), suffix.size(), suffix) == 0)
+      {
+        return "ERROR";
+      }
     }
   }
   return "WARN";

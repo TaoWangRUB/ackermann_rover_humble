@@ -1,6 +1,8 @@
 #include "rover_monitor/px4_probe.hpp"
 #include <rclcpp_components/register_node_macro.hpp>
 
+#include <vector>
+
 namespace rover_monitor
 {
 
@@ -58,17 +60,68 @@ Px4Probe::Px4Probe(const rclcpp::NodeOptions & options)
   rclcpp::SubscriptionOptions sub_opts;
   sub_opts.callback_group = cb_group_;
 
-  vehicle_status_sub_ = this->create_subscription<px4_msgs::msg::VehicleStatus>(
-    vehicle_status_topic, px4_qos,
-    std::bind(&Px4Probe::on_vehicle_status, this, std::placeholders::_1), sub_opts);
+  auto bind_vehicle_status = std::bind(&Px4Probe::on_vehicle_status, this, std::placeholders::_1);
+  for (const auto & topic : std::vector<std::string>{
+      vehicle_status_topic,
+      "/fmu/out/vehicle_status",
+      versioned_px4_topic<px4_msgs::msg::VehicleStatus>("/fmu/out/vehicle_status")}) {
+    if (topic.empty()) {
+      continue;
+    }
+    bool already_added = false;
+    for (const auto & sub : vehicle_status_subs_) {
+      if (sub->get_topic_name() == topic) {
+        already_added = true;
+        break;
+      }
+    }
+    if (!already_added) {
+      vehicle_status_subs_.push_back(this->create_subscription<px4_msgs::msg::VehicleStatus>(
+        topic, px4_qos, bind_vehicle_status, sub_opts));
+    }
+  }
 
-  battery_sub_ = this->create_subscription<px4_msgs::msg::BatteryStatus>(
-    battery_topic, px4_qos,
-    std::bind(&Px4Probe::on_battery_status, this, std::placeholders::_1), sub_opts);
+  auto bind_battery = std::bind(&Px4Probe::on_battery_status, this, std::placeholders::_1);
+  for (const auto & topic : std::vector<std::string>{
+      battery_topic,
+      "/fmu/out/battery_status",
+      versioned_px4_topic<px4_msgs::msg::BatteryStatus>("/fmu/out/battery_status")}) {
+    if (topic.empty()) {
+      continue;
+    }
+    bool already_added = false;
+    for (const auto & sub : battery_subs_) {
+      if (sub->get_topic_name() == topic) {
+        already_added = true;
+        break;
+      }
+    }
+    if (!already_added) {
+      battery_subs_.push_back(this->create_subscription<px4_msgs::msg::BatteryStatus>(
+        topic, px4_qos, bind_battery, sub_opts));
+    }
+  }
 
-  heartbeat_sub_ = this->create_subscription<px4_msgs::msg::VehicleOdometry>(
-    heartbeat_topic, px4_qos,
-    std::bind(&Px4Probe::on_heartbeat, this, std::placeholders::_1), sub_opts);
+  auto bind_heartbeat = std::bind(&Px4Probe::on_heartbeat, this, std::placeholders::_1);
+  for (const auto & topic : std::vector<std::string>{
+      heartbeat_topic,
+      "/fmu/out/vehicle_odometry",
+      versioned_px4_topic<px4_msgs::msg::VehicleOdometry>("/fmu/out/vehicle_odometry")}) {
+    if (topic.empty()) {
+      continue;
+    }
+    bool already_added = false;
+    for (const auto & sub : heartbeat_subs_) {
+      if (sub->get_topic_name() == topic) {
+        already_added = true;
+        break;
+      }
+    }
+    if (!already_added) {
+      heartbeat_subs_.push_back(this->create_subscription<px4_msgs::msg::VehicleOdometry>(
+        topic, px4_qos, bind_heartbeat, sub_opts));
+    }
+  }
 
   last_heartbeat_stamp_ = this->now();
   last_any_msg_stamp_ = this->now();
@@ -83,6 +136,7 @@ void Px4Probe::on_vehicle_status(px4_msgs::msg::VehicleStatus::ConstSharedPtr ms
   nav_state_ = msg->nav_state;
   nav_state_display_ = msg->nav_state_display;
   last_any_msg_stamp_ = this->now();
+  has_any_msg_ = true;
   publish_status();
 }
 
@@ -92,6 +146,7 @@ void Px4Probe::on_battery_status(px4_msgs::msg::BatteryStatus::ConstSharedPtr ms
   battery_current_a_ = msg->current_a;
   battery_remaining_pct_ = msg->remaining * 100.0f;  // PX4 reports 0.0-1.0
   last_any_msg_stamp_ = this->now();
+  has_any_msg_ = true;
   publish_status();
 }
 
@@ -100,6 +155,7 @@ void Px4Probe::on_heartbeat(px4_msgs::msg::VehicleOdometry::ConstSharedPtr /*msg
   last_heartbeat_stamp_ = this->now();
   last_any_msg_stamp_ = this->now();
   has_heartbeat_ = true;
+  has_any_msg_ = true;
   publish_status();
 }
 
@@ -140,7 +196,7 @@ void Px4Probe::publish_status()
   auto any_msg_age_ms = static_cast<int32_t>(
     (this->now() - last_any_msg_stamp_).seconds() * 1000.0);
 
-  bool connected = has_heartbeat_ && (heartbeat_age_ms < heartbeat_timeout_ms_);
+  bool connected = has_any_msg_ && (any_msg_age_ms < xrce_disconnect_timeout_ms_);
 
   status->connected = connected;
   status->armed = armed_;
@@ -155,12 +211,12 @@ void Px4Probe::publish_status()
   status->heartbeat_age_ms = heartbeat_age_ms;
 
   // Error code priority: heartbeat lost > XRCE disconnect > battery critical > battery low
-  if (!has_heartbeat_ || heartbeat_age_ms >= heartbeat_timeout_ms_) {
+  if (!has_any_msg_ || any_msg_age_ms >= xrce_disconnect_timeout_ms_) {
+    status->error_code = 1;
+    status->error_msg = "No recent PX4 DDS traffic";
+  } else if (!has_heartbeat_ || heartbeat_age_ms >= heartbeat_timeout_ms_) {
     status->error_code = 1;
     status->error_msg = "PX4 uORB heartbeat lost";
-  } else if (any_msg_age_ms >= xrce_disconnect_timeout_ms_) {
-    status->error_code = 4;
-    status->error_msg = "XRCE-DDS agent disconnect";
   } else if (battery_remaining_pct_ < 20.0f) {
     status->error_code = 2;
     status->error_msg = "Battery critical — return to base";

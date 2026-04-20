@@ -26,7 +26,15 @@
 #   --nav2             Launch Nav2 navigation stack
 #   --bridge[=MODE]    Launch PX4 mode node (default: manual; options: speed_steering, trajectory, speed_attitude)
 #   --vo-bridge        Launch VO bridge: px4_vision_odom + px4_vehicle_odometry
-#   --odom-topic=TOPIC Odometry source for vision odom node (default: /odometry/filtered)
+#   --odom-topic=TOPIC Odometry topic for PX4 VO bridge and readiness gate.
+#                          Auto-resolved from odom-source flags when not set explicitly:
+#                            --cuvslam-odom → /cuvslam_odom
+#                            --rgbd-odom    → /cuvslam_rgbd_odom
+#                            --vins-odom    → /vins_odom
+#                            --t265-odom    → /t265/odom_base
+#                            (none)         → /odometry/filtered
+#                          Explicit --odom-topic=X overrides the auto-resolve.
+#   --controller=TYPE  Nav2 path controller: mppi (default) or rpp (lightweight)
 #   --reversible-drive Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
 #   --no-rviz          Disable RViz2
 #   --build[=PKG]      Build workspace (or specific pkg) before launching
@@ -143,6 +151,7 @@ HW_T265="false"
 HW_T265_ODOM="false"
 VINS_ODOM="false"
 CUVSLAM_ODOM="false"
+RGBD_ODOM="false"
 PX4="false"
 RTABMAP="false"
 NAV2="false"
@@ -152,6 +161,7 @@ BRIDGE_MODE="manual"
 VO_BRIDGE="false"
 ODOM_TOPIC="/odometry/filtered"
 REVERSIBLE_DRIVE="false"
+NAV2_CONTROLLER="mppi"
 BUILD="false"
 BUILD_ONLY="false"
 BUILD_PKGS=""
@@ -159,12 +169,13 @@ BUILD_PKGS=""
 # Parse arguments
 for arg in "$@"; do
     case "$arg" in
-        --hw)              HW="true"; RVIZ="false" ;;
+        --hw)              HW="true" ;;
         --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}"; DEPTH_CAMERA_EXPLICIT="true" ;;
         --t265)            HW_T265="true" ;;
         --t265-odom)       HW_T265="true"; HW_T265_ODOM="true" ;;
         --vins-odom)       VINS_ODOM="true" ;;
         --cuvslam-odom)    CUVSLAM_ODOM="true" ;;
+        --rgbd-odom)       RGBD_ODOM="true" ;;
         --px4)          PX4="true" ;;
         --rtabmap)      RTABMAP="true" ;;
         --nav2)         NAV2="true" ;;
@@ -174,6 +185,7 @@ for arg in "$@"; do
         --vo-bridge)         VO_BRIDGE="true" ;;
         --odom-topic=*)      ODOM_TOPIC="${arg#--odom-topic=}" ;;
         --reversible-drive)  REVERSIBLE_DRIVE="true" ;;
+        --controller=*)      NAV2_CONTROLLER="${arg#--controller=}" ;;
         --build)             BUILD="true" ;;
         --build=*)      BUILD="true"; BUILD_PKGS="${arg#--build=}" ;;
         --build-only)   BUILD="true"; BUILD_ONLY="true" ;;
@@ -183,7 +195,7 @@ for arg in "$@"; do
             exit 0 ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--cuvslam-odom] [--px4] [--rtabmap] [--nav2] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
+            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--cuvslam-odom] [--rgbd-odom] [--px4] [--rtabmap] [--nav2] [--controller=mppi|rpp] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
             exit 1
             ;;
     esac
@@ -196,11 +208,27 @@ if [[ "${PX4}" == "true" ]]; then
     VO_BRIDGE="true"
 fi
 
+# Auto-resolve ODOM_TOPIC from odom-source flags (same priority as rtabmap_slam.launch.py).
+# Priority: cuVSLAM > cuVSLAM RGBD > VINS > T265 > /odometry/filtered (default).
+# Explicit --odom-topic=X overrides this entirely.
+if [[ "${ODOM_TOPIC}" == "/odometry/filtered" ]]; then
+    if [[ "${CUVSLAM_ODOM}" == "true" ]]; then
+        ODOM_TOPIC="/cuvslam_odom"
+    elif [[ "${RGBD_ODOM}" == "true" ]]; then
+        ODOM_TOPIC="/cuvslam_rgbd_odom"
+    elif [[ "${VINS_ODOM}" == "true" ]]; then
+        ODOM_TOPIC="/vins_odom"
+    elif [[ "${HW_T265_ODOM}" == "true" ]]; then
+        ODOM_TOPIC="/t265/odom_base"
+    fi
+fi
+
 # Auto-resolve depth camera: default to 'none' when only T265/VINS/cuVSLAM is needed,
 # otherwise fall back to 'l515'.
 if [[ -z "${DEPTH_CAMERA}" ]]; then
     if [[ "${DEPTH_CAMERA_EXPLICIT}" == "false" && "${RTABMAP}" == "false" \
-          && ( "${VINS_ODOM}" == "true" || "${CUVSLAM_ODOM}" == "true" || "${HW_T265}" == "true" || "${HW_T265_ODOM}" == "true" ) ]]; then
+          && ( "${VINS_ODOM}" == "true" || "${CUVSLAM_ODOM}" == "true" || "${HW_T265}" == "true" || "${HW_T265_ODOM}" == "true" ) \
+          && "${RGBD_ODOM}" == "false" ]]; then
         DEPTH_CAMERA="none"
     else
         DEPTH_CAMERA="l515"
@@ -209,7 +237,7 @@ fi
 
 # ── Build step (if requested) ──
 if [[ "${BUILD}" == "true" ]]; then
-    if [[ "${CUVSLAM_ODOM}" == "true" && -z "${BUILD_PKGS}" ]]; then
+    if [[ ("${CUVSLAM_ODOM}" == "true" || "${RGBD_ODOM}" == "true") && -z "${BUILD_PKGS}" ]]; then
         echo "Building cuVSLAM and related bringup packages..."
         dcomp exec ackermann_slam bash -lc "source /opt/ros/\$ROS_DISTRO/setup.bash && if [ -f /workspace/install/setup.bash ]; then source /workspace/install/setup.bash; fi && bash /workspace/scripts/build_cuvslam.sh"
     else
@@ -231,6 +259,13 @@ if [[ "${BUILD}" == "true" ]]; then
     fi
 fi
 
+# ── Ensure Docker container is running ────────────────────────────────
+if ! dcomp ps --services --filter status=running 2>/dev/null \
+        | grep -q '^ackermann_slam$'; then
+    echo "Container not running — starting ackermann_slam..."
+    dcomp up -d ackermann_slam
+fi
+
 echo "Launching ROS 2 nodes inside Docker container..."
 if [[ "${HW}" == "true" ]]; then
     echo "  Mode:         hardware (real cameras)"
@@ -246,6 +281,7 @@ else
 fi
 echo "  VINS odom:    ${VINS_ODOM}"
 echo "  cuVSLAM odom: ${CUVSLAM_ODOM}"
+echo "  RGB-D odom:   ${RGBD_ODOM}"
 echo "  RTAB-Map:     ${RTABMAP}"
 echo "  Nav2:         ${NAV2}"
 echo "  RViz:         ${RVIZ}"
@@ -272,8 +308,10 @@ else
 fi
 LAUNCH_CMD+=" use_vins_odom:=${VINS_ODOM}"
 LAUNCH_CMD+=" use_cuvslam_odom:=${CUVSLAM_ODOM}"
+LAUNCH_CMD+=" use_rgbd_odom:=${RGBD_ODOM}"
 LAUNCH_CMD+=" rtabmap:=${RTABMAP}"
 LAUNCH_CMD+=" nav2:=${NAV2}"
+LAUNCH_CMD+=" nav2_controller:=${NAV2_CONTROLLER}"
 LAUNCH_CMD+=" rviz:=${RVIZ}"
 LAUNCH_CMD+=" reversible_drive:=${REVERSIBLE_DRIVE}"
 
@@ -298,4 +336,8 @@ if [[ "${BRIDGE}" == "true" || "${VO_BRIDGE}" == "true" ]]; then
     LAUNCH_CMD+=" wait"
 fi
 
-xdcomp exec ackermann_slam bash -c "${LAUNCH_CMD}"
+if [ -t 0 ]; then
+    xdcomp exec ackermann_slam bash -c "${LAUNCH_CMD}"
+else
+    xdcomp exec -T ackermann_slam bash -c "${LAUNCH_CMD}"
+fi

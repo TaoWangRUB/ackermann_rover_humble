@@ -89,6 +89,11 @@ class PX4VehicleOdometry(Node):
         # ── TF2 (for stage-2 cubepilot_link → base_frame lookup) ─────────
         self.tf_buffer   = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        
+        # ── TF cache (to avoid lookup_transform on every high-rate message) ──
+        self._tf_cache = None  # Cached (pos_CB, q_CB) tuple or None
+        self._tf_cache_time = 0.0  # Time (seconds) of last cache refresh
+        self._tf_cache_ttl = 5.0  # Cache TTL in seconds; refresh if stale
 
         # ── Stage-1: /fmu/out/vehicle_odometry → /px4_vehicle_odom ───────
         self._sub = self.create_subscription(
@@ -290,30 +295,44 @@ class PX4VehicleOdometry(Node):
         pos_WC = np.array([p.x, p.y, p.z])
         q_WC   = [o.x, o.y, o.z, o.w]   # [x,y,z,w]
 
-        # ── Step 2: TF cubepilot_link → base_frame ────────────────────────
+        # ── Step 2: TF cubepilot_link → base_frame (with caching) ──────────
         # lookup_transform(target, source) returns T that maps source → target.
         # lookup_transform(child_frame_id, base_frame):
         #   translation = position of base_frame origin in child_frame_id frame
         #   rotation    = orientation of base_frame in child_frame_id frame
         # This is T_CB: the pose of base_frame expressed in cubepilot_link.
+        # 
+        # OPTIMIZATION: Cache the transform with a 5-second TTL to avoid repeated
+        # expensive lookups at 200 Hz. Since the transform is static (from URDF),
+        # this is safe and reduces CPU usage significantly.
         child_frame = msg.child_frame_id   # 'cubepilot_link'
-        try:
-            tf_cb = self.tf_buffer.lookup_transform(
-                child_frame, base_frame, rclpy.time.Time())
-            t = tf_cb.transform.translation
-            r = tf_cb.transform.rotation
-            pos_CB = np.array([t.x, t.y, t.z])   # base_frame origin in C frame
-            q_CB   = [r.x, r.y, r.z, r.w]        # base_frame orientation in C frame
-        except (tf2_ros.LookupException,
-                tf2_ros.ConnectivityException,
-                tf2_ros.ExtrapolationException) as exc:
-            self.get_logger().warn(
-                f'TF {child_frame} → {base_frame} unavailable: {exc}',
-                throttle_duration_sec=2.0,
-            )
-            # Fallback: treat frames as coincident (no offset, no rotation)
-            pos_CB = np.zeros(3)
-            q_CB   = [0.0, 0.0, 0.0, 1.0]
+        
+        now_sec = self.get_clock().now().nanoseconds / 1e9
+        if self._tf_cache is not None and (now_sec - self._tf_cache_time) < self._tf_cache_ttl:
+            # Use cached transform
+            pos_CB, q_CB = self._tf_cache
+        else:
+            # Cache is stale or empty; refresh via TF lookup
+            try:
+                tf_cb = self.tf_buffer.lookup_transform(
+                    child_frame, base_frame, rclpy.time.Time())
+                t = tf_cb.transform.translation
+                r = tf_cb.transform.rotation
+                pos_CB = np.array([t.x, t.y, t.z])   # base_frame origin in C frame
+                q_CB   = [r.x, r.y, r.z, r.w]        # base_frame orientation in C frame
+                # Update cache
+                self._tf_cache = (pos_CB.copy(), q_CB)
+                self._tf_cache_time = now_sec
+            except (tf2_ros.LookupException,
+                    tf2_ros.ConnectivityException,
+                    tf2_ros.ExtrapolationException) as exc:
+                self.get_logger().warn(
+                    f'TF {child_frame} → {base_frame} unavailable: {exc}',
+                    throttle_duration_sec=2.0,
+                )
+                # Fallback: treat frames as coincident (no offset, no rotation)
+                pos_CB = np.zeros(3)
+                q_CB   = [0.0, 0.0, 0.0, 1.0]
 
         # ── Step 3: compose pose ──────────────────────────────────────────
         # pos_WB = pos_WC + R(q_WC) * pos_CB

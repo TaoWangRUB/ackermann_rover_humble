@@ -66,12 +66,16 @@ class InfluxDBWriter:
             p = Point("rover_telemetry")
             p.tag("source", "aggregator")
 
-            # Camera fields
-            if data.HasField("camera"):
-                cam = data.camera
-                p.field("cam_connected", cam.connected)
-                p.field("cam_frame_delta_ms", cam.frame_delta_ms)
-                p.field("cam_depth_fps", cam.depth_fps)
+            # Camera fields (one point per camera)
+            for cam in data.cameras:
+                cam_p = Point("rover_cam_telemetry")
+                cam_p.tag("source", "aggregator")
+                cam_p.tag("camera_id", cam.camera_id or "unknown")
+                cam_p.field("cam_connected", cam.connected)
+                cam_p.field("cam_stream_fps", cam.stream_fps)
+                cam_p.field("cam_frame_delta_ms", cam.frame_delta_ms)
+                cam_p.field("cam_depth_fps", cam.depth_fps)
+                self._write_api.write(bucket=self._bucket, record=cam_p)
 
             # PX4 fields
             if data.HasField("px4"):
@@ -85,6 +89,9 @@ class InfluxDBWriter:
             # Jetson fields
             if data.HasField("jetson"):
                 jet = data.jetson
+                if jet.cpu_usage_pct:
+                    avg_cpu = sum(jet.cpu_usage_pct) / len(jet.cpu_usage_pct)
+                    p.field("jetson_cpu_pct", avg_cpu)
                 p.field("jetson_gpu_pct", jet.gpu_usage_pct)
                 p.field("jetson_ram_used_mb", jet.ram_used_mb)
                 p.field("jetson_temp_cpu_c", jet.temp_cpu_c)
