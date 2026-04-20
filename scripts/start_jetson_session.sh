@@ -39,6 +39,8 @@
 #   ./scripts/start_jetson_session.sh --t265-odom --with-telemetry
 #   ./scripts/start_jetson_session.sh --nav2
 #   ./scripts/start_jetson_session.sh --nav2 --with-telemetry
+#   ./scripts/start_jetson_session.sh --localization
+#   ./scripts/start_jetson_session.sh --keep-rtabmap-db
 #   ./scripts/start_jetson_session.sh --mode-id=24
 #   ./scripts/start_jetson_session.sh --mode-type=speed_steering
 #   ./scripts/start_jetson_session.sh --reversible-drive
@@ -62,6 +64,8 @@ T265_ODOM=false
 CUVSLAM_ODOM=false
 RGBD_ODOM=false
 VINS_ODOM=false
+LOCALIZATION=false
+DELETE_DB_ON_START=""
 ACTIVATE=true
 MODE_ID="23"
 ATTACH=true
@@ -82,6 +86,9 @@ for arg in "$@"; do
         --cuvslam-odom)    CUVSLAM_ODOM=true ;;
         --rgbd-odom)       RGBD_ODOM=true ;;
         --vins-odom)       VINS_ODOM=true ;;
+        --localization)    LOCALIZATION=true ;;
+        --wipe-rtabmap-db) DELETE_DB_ON_START="true" ;;
+        --keep-rtabmap-db) DELETE_DB_ON_START="false" ;;
         --no-activate)     ACTIVATE=false ;;
         --mode-id=*)       MODE_ID="${arg#--mode-id=}" ;;
         --mode-type=*)     PX4_MODE_TYPE="${arg#--mode-type=}" ;;
@@ -98,7 +105,19 @@ for arg in "$@"; do
 done
 
 # ── Build sub-command arguments ───────────────────────────────────────
-ROS2_ARGS="--hw --rtabmap --no-rviz --depth-camera=${DEPTH_CAMERA}"
+ROS2_ARGS="--hw --no-rviz --depth-camera=${DEPTH_CAMERA}"
+if [[ "${LOCALIZATION}" == true ]]; then
+    ROS2_ARGS+=" --localization"
+else
+    ROS2_ARGS+=" --rtabmap"
+fi
+if [[ -n "${DELETE_DB_ON_START}" ]]; then
+    if [[ "${DELETE_DB_ON_START}" == "true" ]]; then
+        ROS2_ARGS+=" --wipe-rtabmap-db"
+    else
+        ROS2_ARGS+=" --keep-rtabmap-db"
+    fi
+fi
 if [[ "${T265_ODOM}" == true ]]; then
     ROS2_ARGS+=" --t265-odom"
 elif [[ "${ENABLE_T265}" == true ]]; then
