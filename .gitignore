@@ -35,3 +35,6 @@ odom_debug_bag/
 
 # RTAB-Map databases (mapping/localization sessions)
 .rtabmap/
+
+# rosbag2 recordings
+bags/
