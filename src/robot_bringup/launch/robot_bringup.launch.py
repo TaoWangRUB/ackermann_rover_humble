@@ -89,6 +89,13 @@ ARGUMENTS = [
         description='Launch RTAB-Map in localization-only mode.'
     ),
     DeclareLaunchArgument(
+        'delete_db_on_start',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Wipe the RTAB-Map database at startup (mapping mode only; '
+                    'forced off when localization:=true).'
+    ),
+    DeclareLaunchArgument(
         'rtabmap',
         default_value='false',
         choices=['true', 'false'],
@@ -446,6 +453,7 @@ def generate_launch_description() -> LaunchDescription:
             'use_sim_time': use_sim_time,
             'vision': vision,
             'localization': localization,
+            'delete_db_on_start': LaunchConfiguration('delete_db_on_start'),
             'rtabmap_viz': rtabmap_viz,
             'use_t265_odom': use_t265_odom,
             'use_vins_odom': use_vins_odom,

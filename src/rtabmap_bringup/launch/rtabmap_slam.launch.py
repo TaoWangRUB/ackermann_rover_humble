@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """Launch RTAB-Map SLAM for the Ackermann rover."""
 
+import os
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+
+# DB lives under the workspace mount so it persists across container restarts.
+# Host equivalent: <repo>/.rtabmap/rover.db (repo is mounted at /workspace).
+RTABMAP_DB_PATH = '/workspace/.rtabmap/rover.db'
 
 ARGUMENTS = [
     DeclareLaunchArgument(
@@ -18,6 +24,13 @@ ARGUMENTS = [
         default_value='false',
         choices=['true', 'false'],
         description='Run RTAB-Map in localization-only mode.'
+    ),
+    DeclareLaunchArgument(
+        'delete_db_on_start',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Wipe the RTAB-Map database at startup (mapping mode only; '
+                    'forced off when localization:=true).'
     ),
     DeclareLaunchArgument(
         'vision',
@@ -158,7 +171,8 @@ def generate_launch_description() -> LaunchDescription:
         'subscribe_scan':subscribe_scan,
         'subscribe_odom':True,
         'use_action_for_goal':True,
-        'odom_sensor_sync': False,   
+        'odom_sensor_sync': False,
+        'database_path': RTABMAP_DB_PATH,
         # RTAB-Map's parameters should be strings:
         'Mem/NotLinkedNodesKept':'false',
         'Grid/MaxGroundHeight': '0.1',
@@ -385,12 +399,36 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[ekf_parameters],
     )
 
-    slam = Node(
-        condition=UnlessCondition(localization),
+    # Mapping mode splits into two conditional nodes so that -d is only passed
+    # when the user explicitly asks for a wipe. Localization mode (handled below)
+    # never gets -d: deleting the DB would erase the map being loaded.
+    slam_mapping_keep = PythonExpression([
+        '"true" if "', localization, '" == "false" and "',
+        LaunchConfiguration('delete_db_on_start'), '" == "false" else "false"'
+    ])
+    slam_mapping_wipe = PythonExpression([
+        '"true" if "', localization, '" == "false" and "',
+        LaunchConfiguration('delete_db_on_start'), '" == "true" else "false"'
+    ])
+
+    slam_common_params = [rtabmap_parameters, shared_parameters,
+                          {'Mem/IncrementalMemory': 'True'}]
+
+    slam_keep = Node(
+        condition=IfCondition(slam_mapping_keep),
         package='rtabmap_slam',
         executable='rtabmap',
         output='screen',
-        parameters=[rtabmap_parameters, shared_parameters],
+        parameters=slam_common_params,
+        remappings=consumer_remappings,
+    )
+
+    slam_wipe = Node(
+        condition=IfCondition(slam_mapping_wipe),
+        package='rtabmap_slam',
+        executable='rtabmap',
+        output='screen',
+        parameters=slam_common_params,
         remappings=consumer_remappings,
         arguments=['-d'],
     )
@@ -469,6 +507,8 @@ def generate_launch_description() -> LaunchDescription:
         remappings=[('obstacles', '/camera/obstacles'),
                     ('ground', '/camera/ground')])
     
+    os.makedirs(os.path.dirname(RTABMAP_DB_PATH), exist_ok=True)
+
     ld = LaunchDescription(ARGUMENTS)
     #ld.add_action(odom_relay_node)
     ld.add_action(rgbd_sync)
@@ -478,7 +518,8 @@ def generate_launch_description() -> LaunchDescription:
     #ld.add_action(visual_odom)
     #ld.add_action(icp_odom)
     #ld.add_action(ekf_filter_node)
-    ld.add_action(slam)
+    ld.add_action(slam_keep)
+    ld.add_action(slam_wipe)
     ld.add_action(localization_node)
     ld.add_action(rgbd_to_points)
     ld.add_action(obstacle_detection)
