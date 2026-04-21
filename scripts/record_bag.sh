@@ -143,7 +143,6 @@ if [[ "${DEPTH_CAMERA}" != "none" ]]; then
     MESSAGE_TOPICS+=(
         "/${DEPTH_CAMERA}/color/image_raw"
         "/${DEPTH_CAMERA}/aligned_depth_to_color/image_raw"
-        "/${DEPTH_CAMERA}/imu"
     )
 fi
 
