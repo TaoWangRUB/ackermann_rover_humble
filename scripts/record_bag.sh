@@ -119,7 +119,6 @@ fi
 
 # Common topics — always recorded
 TOPICS+=(
-    /imu/data             # filtered IMU
     /odometry/filtered    # EKF output (reference for replay comparison)
     /cmd_vel              # commands issued during the run
     /tf /tf_static        # tf_static is latched — MUST be captured for replay
@@ -188,7 +187,6 @@ else
 fi
 
 READY_TOPICS+=(
-    /imu/data
     /odometry/filtered
     /tf
     /tf_static
