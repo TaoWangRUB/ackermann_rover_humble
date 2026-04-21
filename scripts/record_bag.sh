@@ -119,7 +119,6 @@ fi
 
 # Common topics — always recorded
 TOPICS+=(
-    /odometry/filtered    # EKF output (reference for replay comparison)
     /cmd_vel              # commands issued during the run
     /tf /tf_static        # tf_static is latched — MUST be captured for replay
 )
