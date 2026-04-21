@@ -232,7 +232,9 @@ xdcomp exec ackermann_slam bash -c "
     done
     for topic in ${MESSAGE_TOPICS[*]}; do
       echo \"  waiting for first message on \${topic}\"
-      timeout 30 ros2 topic echo --once \${topic} >/dev/null 2>&1
+      if ! timeout 30 ros2 topic echo --once \${topic} >/dev/null 2>&1; then
+        echo \"  WARNING: no message on \${topic} within 30s (proceeding anyway)\" >&2
+      fi
     done
   ' && \
   echo 'Topics are ready. Settling for ${WAIT_SECONDS}s...' && \
