@@ -33,3 +33,4 @@ __pycache__/
 egpu_diagnostics_20260414_141153/
 odom_debug_bag/
 .venv_graphify/
+.vscode/
