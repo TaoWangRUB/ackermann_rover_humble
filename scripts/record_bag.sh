@@ -194,7 +194,6 @@ READY_TOPICS+=(
     /tf_static
 )
 MESSAGE_TOPICS+=(
-    /imu/data
     /odometry/filtered
     /tf
     /tf_static
