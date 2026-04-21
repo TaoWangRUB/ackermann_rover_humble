@@ -90,12 +90,26 @@ esac
 #   cuVSLAM > cuVSLAM RGBD > VINS > T265. Only the selected source is recorded
 #   so replay reconstructs the exact topology the launch file subscribes to.
 if [[ "${CUVSLAM_ODOM}" == true ]]; then
+    TOPICS+=(
+        /t265/fisheye1/image_raw
+        /t265/fisheye1/camera_info
+        /t265/fisheye2/image_raw
+        /t265/fisheye2/camera_info
+        /t265/imu
+    )
     TOPICS+=(/cuvslam_odom)
     ODOM_LABEL="cuvslam_odom"
 elif [[ "${RGBD_ODOM}" == true ]]; then
     TOPICS+=(/cuvslam_rgbd_odom)
     ODOM_LABEL="cuvslam_rgbd_odom"
 elif [[ "${VINS_ODOM}" == true ]]; then
+    TOPICS+=(
+        /t265/fisheye1/image_raw
+        /t265/fisheye1/camera_info
+        /t265/fisheye2/image_raw
+        /t265/fisheye2/camera_info
+        /t265/imu
+    )
     TOPICS+=(/vins_odom)
     ODOM_LABEL="vins_odom"
 else  # T265
@@ -136,12 +150,36 @@ if [[ "${DEPTH_CAMERA}" != "none" ]]; then
 fi
 
 if [[ "${CUVSLAM_ODOM}" == true ]]; then
+    READY_TOPICS+=(
+        /t265/fisheye1/image_raw
+        /t265/fisheye1/camera_info
+        /t265/fisheye2/image_raw
+        /t265/fisheye2/camera_info
+        /t265/imu
+    )
+    MESSAGE_TOPICS+=(
+        /t265/fisheye1/image_raw
+        /t265/fisheye2/image_raw
+        /t265/imu
+    )
     READY_TOPICS+=(/cuvslam_odom)
     MESSAGE_TOPICS+=(/cuvslam_odom)
 elif [[ "${RGBD_ODOM}" == true ]]; then
     READY_TOPICS+=(/cuvslam_rgbd_odom)
     MESSAGE_TOPICS+=(/cuvslam_rgbd_odom)
 elif [[ "${VINS_ODOM}" == true ]]; then
+    READY_TOPICS+=(
+        /t265/fisheye1/image_raw
+        /t265/fisheye1/camera_info
+        /t265/fisheye2/image_raw
+        /t265/fisheye2/camera_info
+        /t265/imu
+    )
+    MESSAGE_TOPICS+=(
+        /t265/fisheye1/image_raw
+        /t265/fisheye2/image_raw
+        /t265/imu
+    )
     READY_TOPICS+=(/vins_odom)
     MESSAGE_TOPICS+=(/vins_odom)
 else
