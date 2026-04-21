@@ -1,9 +1,0 @@
-{
-  "recommendations": [
-    "github.copilot",
-    "github.copilot-chat",
-    "ms-iot.vscode-ros",
-    "ms-vscode.cpptools",
-    "eamodio.gitlens"
-  ]
-}
