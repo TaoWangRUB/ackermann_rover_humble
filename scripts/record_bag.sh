@@ -187,12 +187,10 @@ else
 fi
 
 READY_TOPICS+=(
-    /odometry/filtered
     /tf
     /tf_static
 )
 MESSAGE_TOPICS+=(
-    /odometry/filtered
     /tf
     /tf_static
 )
