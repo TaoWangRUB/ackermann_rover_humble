@@ -14,6 +14,7 @@
 #   ./scripts/record_bag.sh --depth-camera=l515      # swap depth camera
 #   ./scripts/record_bag.sh --name=kitchen_loop      # custom output name
 #   ./scripts/record_bag.sh --extra=/foo,/bar        # append topics
+#   ./scripts/record_bag.sh --wait-seconds=15        # extra settle after topics appear
 #   ./scripts/record_bag.sh --dry-run                # print, don't run
 #
 # Stop with Ctrl-C; the bag finalizes cleanly on SIGINT.
@@ -39,6 +40,7 @@ CUVSLAM_ODOM=false
 RGBD_ODOM=false
 VINS_ODOM=false
 EXTRA_TOPICS=""
+WAIT_SECONDS="10"
 DRY_RUN=false
 
 for arg in "$@"; do
@@ -50,6 +52,7 @@ for arg in "$@"; do
         --rgbd-odom)       RGBD_ODOM=true ;;
         --vins-odom)       VINS_ODOM=true ;;
         --extra=*)         EXTRA_TOPICS="${arg#--extra=}" ;;
+        --wait-seconds=*)  WAIT_SECONDS="${arg#--wait-seconds=}" ;;
         --dry-run)         DRY_RUN=true ;;
         *) echo "Unknown arg: ${arg}" >&2; exit 2 ;;
     esac
@@ -116,6 +119,32 @@ fi
 
 OUT_DIR="/workspace/bags/${NAME}"
 TOPIC_ARGS="${TOPICS[*]}"
+READY_TOPICS=()
+
+if [[ "${DEPTH_CAMERA}" != "none" ]]; then
+    READY_TOPICS+=(
+        "/${DEPTH_CAMERA}/color/image_raw"
+        "/${DEPTH_CAMERA}/aligned_depth_to_color/image_raw"
+        "/${DEPTH_CAMERA}/imu"
+    )
+fi
+
+if [[ "${CUVSLAM_ODOM}" == true ]]; then
+    READY_TOPICS+=(/cuvslam_odom)
+elif [[ "${RGBD_ODOM}" == true ]]; then
+    READY_TOPICS+=(/cuvslam_rgbd_odom)
+elif [[ "${VINS_ODOM}" == true ]]; then
+    READY_TOPICS+=(/vins_odom)
+else
+    READY_TOPICS+=(/t265/odom /t265/odom_base)
+fi
+
+READY_TOPICS+=(
+    /imu/data
+    /odometry/filtered
+    /tf
+    /tf_static
+)
 
 echo "─────────────────────────────────────────────────────────────"
 echo "  rosbag2 record"
@@ -123,6 +152,7 @@ echo "  output:       ${OUT_DIR}"
 echo "  storage:      mcap (zstd_fast)"
 echo "  depth camera: ${DEPTH_CAMERA}"
 echo "  odom source:  ${ODOM_LABEL}"
+echo "  wait extra:   ${WAIT_SECONDS}s"
 echo "  topics (${#TOPICS[@]}):"
 for t in "${TOPICS[@]}"; do echo "    ${t}"; done
 echo "─────────────────────────────────────────────────────────────"
@@ -138,6 +168,18 @@ mkdir -p "${PROJECT_DIR}/bags"
 xdcomp exec ackermann_slam bash -c "
   source /opt/ros/jazzy/setup.bash && \
   source /workspace/install/setup.bash && \
+  echo 'Waiting for required topics before recording...' && \
+  timeout 180 bash -lc '
+    for topic in ${READY_TOPICS[*]}; do
+      echo \"  waiting for \${topic}\"
+      until ros2 topic list 2>/dev/null | grep -qx \${topic}; do
+        sleep 1
+      done
+    done
+  ' && \
+  echo 'Topics are ready. Settling for ${WAIT_SECONDS}s...' && \
+  sleep ${WAIT_SECONDS} && \
+  echo 'Starting rosbag2 record...' && \
   ros2 bag record \
     -o ${OUT_DIR} \
     -s mcap \
