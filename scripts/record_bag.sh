@@ -120,9 +120,15 @@ fi
 OUT_DIR="/workspace/bags/${NAME}"
 TOPIC_ARGS="${TOPICS[*]}"
 READY_TOPICS=()
+MESSAGE_TOPICS=()
 
 if [[ "${DEPTH_CAMERA}" != "none" ]]; then
     READY_TOPICS+=(
+        "/${DEPTH_CAMERA}/color/image_raw"
+        "/${DEPTH_CAMERA}/aligned_depth_to_color/image_raw"
+        "/${DEPTH_CAMERA}/imu"
+    )
+    MESSAGE_TOPICS+=(
         "/${DEPTH_CAMERA}/color/image_raw"
         "/${DEPTH_CAMERA}/aligned_depth_to_color/image_raw"
         "/${DEPTH_CAMERA}/imu"
@@ -131,15 +137,25 @@ fi
 
 if [[ "${CUVSLAM_ODOM}" == true ]]; then
     READY_TOPICS+=(/cuvslam_odom)
+    MESSAGE_TOPICS+=(/cuvslam_odom)
 elif [[ "${RGBD_ODOM}" == true ]]; then
     READY_TOPICS+=(/cuvslam_rgbd_odom)
+    MESSAGE_TOPICS+=(/cuvslam_rgbd_odom)
 elif [[ "${VINS_ODOM}" == true ]]; then
     READY_TOPICS+=(/vins_odom)
+    MESSAGE_TOPICS+=(/vins_odom)
 else
     READY_TOPICS+=(/t265/odom /t265/odom_base)
+    MESSAGE_TOPICS+=(/t265/odom /t265/odom_base)
 fi
 
 READY_TOPICS+=(
+    /imu/data
+    /odometry/filtered
+    /tf
+    /tf_static
+)
+MESSAGE_TOPICS+=(
     /imu/data
     /odometry/filtered
     /tf
@@ -175,6 +191,10 @@ xdcomp exec ackermann_slam bash -c "
       until ros2 topic list 2>/dev/null | grep -qx \${topic}; do
         sleep 1
       done
+    done
+    for topic in ${MESSAGE_TOPICS[*]}; do
+      echo \"  waiting for first message on \${topic}\"
+      timeout 30 ros2 topic echo --once \${topic} >/dev/null 2>&1
     done
   ' && \
   echo 'Topics are ready. Settling for ${WAIT_SECONDS}s...' && \
