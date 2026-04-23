@@ -445,6 +445,25 @@ def generate_launch_description() -> LaunchDescription:
         }],
     )
 
+    sim_t265_odom_relay = Node(
+        package='realsense_camera_bringup',
+        executable='odom_tf_relay',
+        name='sim_t265_odom_relay',
+        output='screen',
+        condition=IfCondition(PythonExpression([
+            '"true" if "', use_gazebo, '" == "true" and "', use_t265_odom, '" == "true" else "false"'
+        ])),
+        parameters=[{
+            'input_topic': '/t265/odom',
+            'output_topic': '/t265/odom_base',
+            'base_frame': 'ackermann/base_link',
+            'output_frame': 'odom',
+            'publish_tf': True,
+            'use_sim_time': use_sim_time,
+            'max_rate_hz': 30.0,
+        }],
+    )
+
     # -----------------------------------------------------------------------
     # RTAB-Map — topic names derived from depth_camera in both modes.
     #
@@ -585,6 +604,7 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(hw_cameras_launch)
     # Common
     ld.add_action(t265_sim_camera_info)
+    ld.add_action(sim_t265_odom_relay)
     ld.add_action(vins_launch)
     ld.add_action(cuvslam_launch)
     ld.add_action(cuvslam_rgbd_launch)

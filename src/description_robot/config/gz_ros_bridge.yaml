@@ -89,7 +89,7 @@
   gz_type_name: "gz.msgs.IMU"
   direction: GZ_TO_ROS
 
-- ros_topic_name: "/t265/odom_base"
+- ros_topic_name: "/t265/odom"
   gz_topic_name: "/t265/odom"
   ros_type_name: "nav_msgs/msg/Odometry"
   gz_type_name: "gz.msgs.Odometry"

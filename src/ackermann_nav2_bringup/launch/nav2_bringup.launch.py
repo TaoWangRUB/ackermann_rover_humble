@@ -114,7 +114,7 @@ ARGUMENTS = [
         description=(
             'Allow reverse driving. '
             'false = unidirectional ESC: vx_min=0, min_velocity x=0. '
-            'true  = bidirectional ESC: vx_min=-0.35, min_velocity x=-0.5.'
+            'true  = bidirectional ESC: reverse-capable planner/controller.'
         ),
     ),
     DeclareLaunchArgument(
@@ -199,8 +199,26 @@ def launch_setup(context, *args, **kwargs):
         # min_velocity is a float[] — RewrittenYaml only handles scalars, so it is
         # injected directly on the velocity_smoother node below.
     }
+    planner_mode_overrides = {
+        # Keep forward-only mode conservative. In reversible mode, reduce the
+        # reverse penalty so Smac can choose short reverse maneuvers instead of
+        # large forward-only arcs when they are geometrically better.
+        'GridBased.reverse_penalty': 1.05 if is_reversible else 2.0,
+    }
+    controller_mode_overrides = {}
+    if controller_type == 'mppi':
+        controller_mode_overrides = {
+            # Forward-only mode keeps the strong forward preference. Reversible
+            # mode still prefers forward motion, but not enough to suppress
+            # useful reverse arcs from the Reeds-Shepp global path.
+            'FollowPath.PreferForwardCritic.cost_weight': 2.0 if is_reversible else 10.0,
+        }
+    elif controller_type == 'rpp':
+        controller_mode_overrides = {
+            'FollowPath.allow_reversing': is_reversible,
+        }
     min_velocity_override = {
-        'min_velocity': [-0.5, 0.0, -2.0] if is_reversible else [0.0, 0.0, -2.0],
+        'min_velocity': [-2.0, 0.0, -2.0] if is_reversible else [0.0, 0.0, -2.0],
     }
 
     configured_params = ParameterFile(
@@ -228,7 +246,7 @@ def launch_setup(context, *args, **kwargs):
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params],
+                parameters=[configured_params, controller_mode_overrides],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
             ),
@@ -239,7 +257,7 @@ def launch_setup(context, *args, **kwargs):
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params],
+                parameters=[configured_params, planner_mode_overrides],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings,
             ),
@@ -313,14 +331,14 @@ def launch_setup(context, *args, **kwargs):
                         package='nav2_controller',
                         plugin='nav2_controller::ControllerServer',
                         name='controller_server',
-                        parameters=[configured_params],
+                        parameters=[configured_params, controller_mode_overrides],
                         remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
                     ),
                     ComposableNode(
                         package='nav2_planner',
                         plugin='nav2_planner::PlannerServer',
                         name='planner_server',
-                        parameters=[configured_params],
+                        parameters=[configured_params, planner_mode_overrides],
                         remappings=remappings,
                     ),
                     ComposableNode(
