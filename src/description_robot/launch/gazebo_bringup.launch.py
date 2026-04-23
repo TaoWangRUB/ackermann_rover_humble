@@ -126,9 +126,9 @@ def generate_launch_description() -> LaunchDescription:
     # /camera_info, etc.  The fisheye xacro uses /${name}/fisheye{1,2} as the
     # prefix, so Gazebo publishes e.g. /t265/fisheye1/image.  Remappings below
     # translate these to the /image_raw names that cuVSLAM and VINS-Fusion expect.
-    # The T265 odom plugin publishes on /t265/odom; remapping bridges it directly
-    # to /t265/odom_base (matching what rtabmap_slam subscribes to) since the
-    # Gazebo odom already uses ackermann/base_link as child_frame_id.
+    # The T265 odom plugin publishes on /t265/odom. Keep that as the raw topic
+    # so robot_bringup can run the same odom_tf_relay pattern used by hardware:
+    # /t265/odom -> /t265/odom_base plus the odom -> ackermann/base_link TF.
     t265_bridge_topics = [
         '/t265/fisheye1/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
         '/t265/fisheye1@sensor_msgs/msg/Image[gz.msgs.Image',
@@ -156,7 +156,6 @@ def generate_launch_description() -> LaunchDescription:
         remappings=[
             ('/t265/fisheye1', '/t265/fisheye1/image_raw'),
             ('/t265/fisheye2', '/t265/fisheye2/image_raw'),
-            ('/t265/odom', '/t265/odom_base'),
         ],
         condition=IfCondition(enable_t265),
     )
