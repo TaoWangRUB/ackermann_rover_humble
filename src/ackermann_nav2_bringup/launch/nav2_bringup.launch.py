@@ -192,31 +192,31 @@ def launch_setup(context, *args, **kwargs):
         'autostart': autostart,
         #'use_sim_time': use_sim_time,
         #'enable_stamped_cmd_vel': enable_stamped_cmd_vel,
-        'vx_min': '-0.35' if is_reversible else '0.0',
+        'vx_min': '-1.0' if is_reversible else '0.0',
         # Planner motion model: Reeds-Shepp allows reverse arcs (bidirectional),
         # Dubin is forward-only arcs. Must match reversible_drive setting.
         'motion_model_for_search': 'REEDS_SHEPP' if is_reversible else 'DUBIN',
         # min_velocity is a float[] — RewrittenYaml only handles scalars, so it is
         # injected directly on the velocity_smoother node below.
     }
-    planner_mode_overrides = {
-        # Keep forward-only mode conservative. In reversible mode, reduce the
-        # reverse penalty so Smac can choose short reverse maneuvers instead of
-        # large forward-only arcs when they are geometrically better.
-        'GridBased.reverse_penalty': 1.05 if is_reversible else 2.0,
-    }
-    controller_mode_overrides = {}
+    # Keep forward-only mode conservative. In reversible mode, reduce the
+    # reverse penalty so Smac can choose short reverse maneuvers instead of
+    # large forward-only arcs when they are geometrically better.
+    param_substitutions['planner_server.ros__parameters.GridBased.reverse_penalty'] = (
+        '1.05' if is_reversible else '2.0'
+    )
     if controller_type == 'mppi':
-        controller_mode_overrides = {
-            # Forward-only mode keeps the strong forward preference. Reversible
-            # mode still prefers forward motion, but not enough to suppress
-            # useful reverse arcs from the Reeds-Shepp global path.
-            'FollowPath.PreferForwardCritic.cost_weight': 2.0 if is_reversible else 10.0,
-        }
+        # Forward-only mode keeps the strong forward preference. Reversible
+        # mode lets the Reeds-Shepp path decide when reverse is useful. The
+        # planner still has a small reverse_penalty, so forward motion remains
+        # preferred without MPPI dithering around zero velocity.
+        param_substitutions[
+            'controller_server.ros__parameters.FollowPath.PreferForwardCritic.cost_weight'
+        ] = '0.0' if is_reversible else '10.0'
     elif controller_type == 'rpp':
-        controller_mode_overrides = {
-            'FollowPath.allow_reversing': is_reversible,
-        }
+        param_substitutions[
+            'controller_server.ros__parameters.FollowPath.allow_reversing'
+        ] = 'true' if is_reversible else 'false'
     min_velocity_override = {
         'min_velocity': [-2.0, 0.0, -2.0] if is_reversible else [0.0, 0.0, -2.0],
     }
@@ -246,7 +246,7 @@ def launch_setup(context, *args, **kwargs):
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params, controller_mode_overrides],
+                parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
             ),
@@ -257,7 +257,7 @@ def launch_setup(context, *args, **kwargs):
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params, planner_mode_overrides],
+                parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings,
             ),
@@ -331,14 +331,14 @@ def launch_setup(context, *args, **kwargs):
                         package='nav2_controller',
                         plugin='nav2_controller::ControllerServer',
                         name='controller_server',
-                        parameters=[configured_params, controller_mode_overrides],
+                        parameters=[configured_params],
                         remappings=remappings + [('cmd_vel', 'cmd_vel_nav')],
                     ),
                     ComposableNode(
                         package='nav2_planner',
                         plugin='nav2_planner::PlannerServer',
                         name='planner_server',
-                        parameters=[configured_params, planner_mode_overrides],
+                        parameters=[configured_params],
                         remappings=remappings,
                     ),
                     ComposableNode(
