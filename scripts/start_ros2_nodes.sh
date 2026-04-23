@@ -11,8 +11,10 @@
 #                          are exposed (sim), and which RTAB-Map topics are subscribed.
 #                          Auto-set to 'none' when --vins-odom/--cuvslam-odom without --rtabmap.
 #   --t265                 [HW mode] Enable T265 tracking camera + odom_tf_relay
-#   --t265-odom            [HW mode] Use T265 as odometry source for EKF/RTAB-Map
-#                          while keeping RTAB-Map VO on /vo_odom for debugging
+#   --t265-odom            Use T265 as odometry source for EKF/RTAB-Map while
+#                          keeping RTAB-Map VO on /vo_odom for debugging.
+#                          In hardware this uses the real T265; in simulation it
+#                          auto-enables the simulated T265 odom bridge.
 #   --vins-odom            Use VINS-Fusion as the odometry source. In hardware
 #                          mode this automatically relies on the T265 fisheye
 #                          streams; in simulation it auto-enables the simulated
@@ -83,6 +85,9 @@
 #
 #   ── Gazebo + VINS odom + RTAB-Map ──
 #   ./scripts/start_ros2_nodes.sh --vins-odom --rtabmap
+#
+#   ── Gazebo + T265 odom + RTAB-Map ──
+#   ./scripts/start_ros2_nodes.sh --depth-camera=d435i --t265-odom --rtabmap
 #
 #   ── Gazebo + cuVSLAM odom + RTAB-Map ──
 #   ./scripts/start_ros2_nodes.sh --cuvslam-odom --rtabmap
@@ -304,6 +309,7 @@ if [[ "${HW}" == "true" ]]; then
 else
     echo "  Mode:         simulation (Gazebo)"
     echo "  Depth camera: ${DEPTH_CAMERA}"
+    echo "  T265 odom:    ${HW_T265_ODOM}"
     echo "  PX4 SITL:     ${PX4}"
 fi
 echo "  VINS odom:    ${VINS_ODOM}"
@@ -331,10 +337,10 @@ if [[ "${HW}" == "true" ]]; then
     LAUNCH_CMD+=" use_gazebo:=false"
     LAUNCH_CMD+=" use_sim_time:=false"
     LAUNCH_CMD+=" hw_enable_t265:=${HW_T265}"
-    LAUNCH_CMD+=" use_t265_odom:=${HW_T265_ODOM}"
 else
     LAUNCH_CMD+=" enable_px4_sitl:=${PX4}"
 fi
+LAUNCH_CMD+=" use_t265_odom:=${HW_T265_ODOM}"
 LAUNCH_CMD+=" use_vins_odom:=${VINS_ODOM}"
 LAUNCH_CMD+=" use_cuvslam_odom:=${CUVSLAM_ODOM}"
 LAUNCH_CMD+=" use_rgbd_odom:=${RGBD_ODOM}"

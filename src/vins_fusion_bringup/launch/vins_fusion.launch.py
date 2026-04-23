@@ -2,6 +2,8 @@
 """Launch VINS-Fusion and adapt its raw odometry into the rover frame contract."""
 
 import platform
+from glob import glob
+from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -54,6 +56,17 @@ ARGUMENTS = [
 ]
 
 
+def detect_wsl_cuda_dir() -> str:
+    if not Path('/dev/dxg').exists():
+        return ''
+
+    candidates = sorted(glob('/usr/lib/wsl/drivers/*/libcuda.so.1'))
+    if not candidates:
+        return ''
+
+    return str(Path(candidates[0]).resolve().parent)
+
+
 def generate_launch_description() -> LaunchDescription:
     config_file = LaunchConfiguration('config_file')
     raw_odom_topic = LaunchConfiguration('raw_odom_topic')
@@ -62,6 +75,16 @@ def generate_launch_description() -> LaunchDescription:
     output_frame = LaunchConfiguration('output_frame')
     use_sim_time = LaunchConfiguration('use_sim_time')
     opencv_prefix = LaunchConfiguration('opencv_prefix')
+    wsl_cuda_dir = detect_wsl_cuda_dir()
+
+    ld_library_path = []
+    if wsl_cuda_dir:
+        ld_library_path.extend([wsl_cuda_dir, ':'])
+    ld_library_path.extend([
+        PathJoinSubstitution([opencv_prefix, 'lib']),
+        ':',
+        EnvironmentVariable('LD_LIBRARY_PATH', default_value=''),
+    ])
 
     vins_node = Node(
         package='vins',
@@ -70,11 +93,7 @@ def generate_launch_description() -> LaunchDescription:
         output='screen',
         arguments=[config_file],
         additional_env={
-            'LD_LIBRARY_PATH': [
-                PathJoinSubstitution([opencv_prefix, 'lib']),
-                ':',
-                EnvironmentVariable('LD_LIBRARY_PATH', default_value=''),
-            ],
+            'LD_LIBRARY_PATH': ld_library_path,
         },
         remappings=[
             ('odometry', raw_odom_topic),
@@ -95,7 +114,7 @@ def generate_launch_description() -> LaunchDescription:
             'output_topic': odom_topic,
             'base_frame': base_frame,
             'output_frame': output_frame,
-            'publish_tf': False,
+            'publish_tf': True,
             'use_sim_time': use_sim_time,
         }],
     )

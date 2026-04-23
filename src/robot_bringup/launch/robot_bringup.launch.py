@@ -433,6 +433,18 @@ def generate_launch_description() -> LaunchDescription:
         }.items(),
     )
 
+    t265_sim_camera_info = Node(
+        package='robot_bringup',
+        executable='t265_sim_camera_info.py',
+        output='screen',
+        condition=IfCondition(PythonExpression([
+            '"true" if "', use_gazebo, '" == "true" and "', enable_t265, '" == "true" else "false"'
+        ])),
+        parameters=[{
+            'use_sim_time': use_sim_time,
+        }],
+    )
+
     # -----------------------------------------------------------------------
     # RTAB-Map — topic names derived from depth_camera in both modes.
     #
@@ -572,6 +584,7 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(hw_robot_state_publisher)
     ld.add_action(hw_cameras_launch)
     # Common
+    ld.add_action(t265_sim_camera_info)
     ld.add_action(vins_launch)
     ld.add_action(cuvslam_launch)
     ld.add_action(cuvslam_rgbd_launch)

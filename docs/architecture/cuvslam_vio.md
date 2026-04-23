@@ -19,8 +19,8 @@ T265 Fisheye (848x800) + IMU
   -> realsense_camera_bringup or Gazebo T265 bridges
   -> /t265/fisheye1/image_raw, /t265/fisheye2/image_raw, /t265/imu
   -> [cuvslam_odom_node]
-  -> /cuvslam/raw_odometry
-  -> [odom_tf_relay]
+  -> /cuvslam/raw_odometry (odom -> t265_pose_frame)
+  -> [odom_tf_relay] (frame adaptation: t265_pose_frame -> ackermann/base_link)
   -> /cuvslam_odom (odom -> ackermann/base_link)
   -> EKF (odom0, IMU yaw fusion disabled for external VIO)
   -> /odometry/filtered -> RTAB-Map / Nav2 / PX4
@@ -105,7 +105,7 @@ library.
   6. PUBLISH                    ▼
      /cuvslam/raw_odometry (nav_msgs/Odometry)
        frame_id: odom
-       child_frame_id: ackermann/base_link (or left optical frame fallback)
+       child_frame_id: t265_pose_frame (or left optical frame fallback)
        pose: position + quaternion from PoseEstimate
        covariance: 6×6 rotated from cuVSLAM order (rot,trans) to ROS order (pos,rot)
                                 │
@@ -115,7 +115,7 @@ library.
        Origin latch: subtract first pose for (0,0,0) start
        Velocity: lever-arm corrected
        Covariance: rotated to base frame
-       publish_tf = false (EKF owns odom→base_link TF)
+       publish_tf = true (relay owns odom→base_link TF)
 ```
 
 ### cuVSLAM C++ API Calls Used
@@ -241,6 +241,8 @@ When `use_cuvslam_odom:=true`:
 - T265 fisheye streams are enabled alongside the IMU
 - `rtabmap_bringup` prefers `/cuvslam_odom` over VINS, T265 built-in odom, VO, and ICP
 - EKF IMU yaw-rate fusion is disabled to avoid double-counting heading
+- EKF TF publishing is disabled; `cuvslam_odom_relay` owns the
+  `odom -> ackermann/base_link` TF edge
 
 ## Debugging
 

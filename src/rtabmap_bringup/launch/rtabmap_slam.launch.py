@@ -329,10 +329,13 @@ def generate_launch_description() -> LaunchDescription:
         'smooth_lagged_data': True,
         'use_sim_time': use_sim_time,
         'two_d_mode': True,
-        # When T265 odom is used, the T265 relay owns odom→base_link TF; VINS is
-        # adapted into message frame ids only, so EKF still owns the TF edge.
+        # External VIO relays adapt sensor-frame odometry into base_link and own
+        # the odom -> base_link TF edge. EKF still publishes /odometry/filtered,
+        # but must not publish a duplicate TF in those modes.
         'publish_tf': PythonExpression([
-            'False if "', use_t265_odom, '" == "true" else True'
+            'False if "', use_t265_odom, '" == "true" or "',
+            use_cuvslam_odom, '" == "true" or "', use_rgbd_odom,
+            '" == "true" or "', use_vins_odom, '" == "true" else True'
         ]),
         'map_frame': 'map',
         'odom_frame': 'odom',

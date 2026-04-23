@@ -8,6 +8,9 @@
 #
 # Usage:
 #   ./scripts/record_bag.sh                          # D435i + T265 odom
+#   ./scripts/record_bag.sh --sim                    # Gazebo sim RTAB-Map VO topics
+#   ./scripts/record_bag.sh --sim --depth-camera=d435i --t265-odom
+#   ./scripts/record_bag.sh --sim --depth-camera=d435i --cuvslam-odom
 #   ./scripts/record_bag.sh --cuvslam-odom           # D435i + cuVSLAM odom
 #   ./scripts/record_bag.sh --vins-odom              # D435i + VINS odom
 #   ./scripts/record_bag.sh --rgbd-odom              # D435i + cuVSLAM RGBD
@@ -35,6 +38,7 @@ source "${SCRIPT_DIR}/lib/dc.sh"
 # ── args (flag set matches start_jetson_session.sh) ────────────────────
 NAME="run_$(date +%Y%m%d_%H%M)"
 DEPTH_CAMERA="d435i"
+SIM=false
 T265_ODOM=false
 CUVSLAM_ODOM=false
 RGBD_ODOM=false
@@ -47,6 +51,7 @@ for arg in "$@"; do
     case "${arg}" in
         --name=*)          NAME="${arg#--name=}" ;;
         --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
+        --sim)             SIM=true ;;
         --t265-odom)       T265_ODOM=true ;;
         --cuvslam-odom)    CUVSLAM_ODOM=true ;;
         --rgbd-odom)       RGBD_ODOM=true ;;
@@ -59,62 +64,117 @@ for arg in "$@"; do
 done
 
 # Default odom source: T265 (matches the original Jetson invocation).
+# In simulation, no explicit odom flag means "record the default Gazebo +
+# RTAB-Map VO path" rather than forcing simulated T265 odom.
 if [[ "${CUVSLAM_ODOM}" == false && "${RGBD_ODOM}" == false \
    && "${VINS_ODOM}" == false && "${T265_ODOM}" == false ]]; then
-    T265_ODOM=true
+    if [[ "${SIM}" == false ]]; then
+        T265_ODOM=true
+    fi
 fi
 
 # ── topic set ──────────────────────────────────────────────────────────
 TOPICS=()
 
-# Depth camera — topic names mirror src/robot_bringup/launch/robot_bringup.launch.py (HW mode)
-case "${DEPTH_CAMERA}" in
-    d435i|l515)
-        TOPICS+=(
-            "/${DEPTH_CAMERA}/color/image_raw"
-            "/${DEPTH_CAMERA}/color/camera_info"
-            "/${DEPTH_CAMERA}/aligned_depth_to_color/image_raw"
-            "/${DEPTH_CAMERA}/aligned_depth_to_color/camera_info"
-            "/${DEPTH_CAMERA}/imu"
-        )
-        ;;
-    none)
-        ;;
-    *)
-        echo "Unknown --depth-camera: ${DEPTH_CAMERA} (expected d435i|l515|none)" >&2
-        exit 2
-        ;;
-esac
+if [[ "${SIM}" == true ]]; then
+    # Simulation topics — names come from the Gazebo ros_gz_bridge
+    # (see src/description_robot/launch/gazebo_bringup.launch.py).
+    case "${DEPTH_CAMERA}" in
+        d435i|l515)
+            TOPICS+=(
+                "/${DEPTH_CAMERA}/image"
+                "/${DEPTH_CAMERA}/camera_info"
+                "/${DEPTH_CAMERA}/depth_image"
+                "/${DEPTH_CAMERA}/imu/raw"
+            )
+            ;;
+        none) ;;
+        *) echo "Unknown --depth-camera: ${DEPTH_CAMERA}" >&2; exit 2 ;;
+    esac
 
-# Odometry source — priority mirrors rtabmap_slam.launch.py:
-#   cuVSLAM > cuVSLAM RGBD > VINS > T265. Only the selected source is recorded
-#   so replay reconstructs the exact topology the launch file subscribes to.
-if [[ "${CUVSLAM_ODOM}" == true ]]; then
-    TOPICS+=(
-        /t265/fisheye1/image_raw
-        /t265/fisheye1/camera_info
-        /t265/fisheye2/image_raw
-        /t265/fisheye2/camera_info
-        /t265/imu
-    )
-    TOPICS+=(/cuvslam_odom)
-    ODOM_LABEL="cuvslam_odom"
-elif [[ "${RGBD_ODOM}" == true ]]; then
-    TOPICS+=(/cuvslam_rgbd_odom)
-    ODOM_LABEL="cuvslam_rgbd_odom"
-elif [[ "${VINS_ODOM}" == true ]]; then
-    TOPICS+=(
-        /t265/fisheye1/image_raw
-        /t265/fisheye1/camera_info
-        /t265/fisheye2/image_raw
-        /t265/fisheye2/camera_info
-        /t265/imu
-    )
-    TOPICS+=(/vins_odom)
-    ODOM_LABEL="vins_odom"
-else  # T265
-    TOPICS+=(/t265/odom /t265/odom_base)
-    ODOM_LABEL="t265"
+    # Simulation odometry source — priority mirrors rtabmap_slam.launch.py:
+    #   cuVSLAM > cuVSLAM RGBD > VINS > T265 > RTAB-Map VO/default sim topics.
+    if [[ "${CUVSLAM_ODOM}" == true ]]; then
+        TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye1/camera_info
+            /t265/fisheye2/image_raw
+            /t265/fisheye2/camera_info
+            /t265/imu
+            /cuvslam_odom
+        )
+        ODOM_LABEL="cuvslam_odom"
+    elif [[ "${RGBD_ODOM}" == true ]]; then
+        TOPICS+=(/cuvslam_rgbd_odom)
+        ODOM_LABEL="cuvslam_rgbd_odom"
+    elif [[ "${VINS_ODOM}" == true ]]; then
+        TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye1/camera_info
+            /t265/fisheye2/image_raw
+            /t265/fisheye2/camera_info
+            /t265/imu
+            /vins_odom
+        )
+        ODOM_LABEL="vins_odom"
+    elif [[ "${T265_ODOM}" == true ]]; then
+        TOPICS+=(/t265/odom_base)
+        ODOM_LABEL="t265"
+    else
+        # Default sim recording keeps both controller odom and RTAB-Map VO so
+        # replay/debugging can compare wheel and visual odometry.
+        TOPICS+=(/ackermann_steering_controller/odometry /vo_odom)
+        ODOM_LABEL="sim_controller_vo"
+    fi
+else
+    # Hardware topics — names come from realsense_camera_bringup
+    case "${DEPTH_CAMERA}" in
+        d435i|l515)
+            TOPICS+=(
+                "/${DEPTH_CAMERA}/color/image_raw"
+                "/${DEPTH_CAMERA}/color/camera_info"
+                "/${DEPTH_CAMERA}/aligned_depth_to_color/image_raw"
+                "/${DEPTH_CAMERA}/aligned_depth_to_color/camera_info"
+                "/${DEPTH_CAMERA}/imu"
+            )
+            ;;
+        none) ;;
+        *)
+            echo "Unknown --depth-camera: ${DEPTH_CAMERA} (expected d435i|l515|none)" >&2
+            exit 2
+            ;;
+    esac
+
+    # Odometry source — priority mirrors rtabmap_slam.launch.py:
+    #   cuVSLAM > cuVSLAM RGBD > VINS > T265. Only the selected source is recorded
+    #   so replay reconstructs the exact topology the launch file subscribes to.
+    if [[ "${CUVSLAM_ODOM}" == true ]]; then
+        TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye1/camera_info
+            /t265/fisheye2/image_raw
+            /t265/fisheye2/camera_info
+            /t265/imu
+        )
+        TOPICS+=(/cuvslam_odom)
+        ODOM_LABEL="cuvslam_odom"
+    elif [[ "${RGBD_ODOM}" == true ]]; then
+        TOPICS+=(/cuvslam_rgbd_odom)
+        ODOM_LABEL="cuvslam_rgbd_odom"
+    elif [[ "${VINS_ODOM}" == true ]]; then
+        TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye1/camera_info
+            /t265/fisheye2/image_raw
+            /t265/fisheye2/camera_info
+            /t265/imu
+        )
+        TOPICS+=(/vins_odom)
+        ODOM_LABEL="vins_odom"
+    else  # T265
+        TOPICS+=(/t265/odom /t265/odom_base)
+        ODOM_LABEL="t265"
+    fi
 fi
 
 # Common topics — always recorded
@@ -134,54 +194,101 @@ TOPIC_ARGS="${TOPICS[*]}"
 READY_TOPICS=()
 MESSAGE_TOPICS=()
 
-if [[ "${DEPTH_CAMERA}" != "none" ]]; then
-    READY_TOPICS+=(
-        "/${DEPTH_CAMERA}/color/image_raw"
-        "/${DEPTH_CAMERA}/aligned_depth_to_color/image_raw"
-        "/${DEPTH_CAMERA}/imu"
-    )
-    MESSAGE_TOPICS+=(
-        "/${DEPTH_CAMERA}/color/image_raw"
-        "/${DEPTH_CAMERA}/aligned_depth_to_color/image_raw"
-    )
-fi
-
-if [[ "${CUVSLAM_ODOM}" == true ]]; then
-    READY_TOPICS+=(
-        /t265/fisheye1/image_raw
-        /t265/fisheye1/camera_info
-        /t265/fisheye2/image_raw
-        /t265/fisheye2/camera_info
-        /t265/imu
-    )
-    MESSAGE_TOPICS+=(
-        /t265/fisheye1/image_raw
-        /t265/fisheye2/image_raw
-        /t265/imu
-    )
-    READY_TOPICS+=(/cuvslam_odom)
-    MESSAGE_TOPICS+=(/cuvslam_odom)
-elif [[ "${RGBD_ODOM}" == true ]]; then
-    READY_TOPICS+=(/cuvslam_rgbd_odom)
-    MESSAGE_TOPICS+=(/cuvslam_rgbd_odom)
-elif [[ "${VINS_ODOM}" == true ]]; then
-    READY_TOPICS+=(
-        /t265/fisheye1/image_raw
-        /t265/fisheye1/camera_info
-        /t265/fisheye2/image_raw
-        /t265/fisheye2/camera_info
-        /t265/imu
-    )
-    MESSAGE_TOPICS+=(
-        /t265/fisheye1/image_raw
-        /t265/fisheye2/image_raw
-        /t265/imu
-    )
-    READY_TOPICS+=(/vins_odom)
-    MESSAGE_TOPICS+=(/vins_odom)
+if [[ "${SIM}" == true ]]; then
+    if [[ "${DEPTH_CAMERA}" != "none" ]]; then
+        READY_TOPICS+=("/${DEPTH_CAMERA}/image" "/${DEPTH_CAMERA}/depth_image")
+        MESSAGE_TOPICS+=("/${DEPTH_CAMERA}/image" "/${DEPTH_CAMERA}/depth_image")
+    fi
+    if [[ "${CUVSLAM_ODOM}" == true ]]; then
+        READY_TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye1/camera_info
+            /t265/fisheye2/image_raw
+            /t265/fisheye2/camera_info
+            /t265/imu
+            /cuvslam_odom
+        )
+        MESSAGE_TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye2/image_raw
+            /t265/imu
+            /cuvslam_odom
+        )
+    elif [[ "${RGBD_ODOM}" == true ]]; then
+        READY_TOPICS+=(/cuvslam_rgbd_odom)
+        MESSAGE_TOPICS+=(/cuvslam_rgbd_odom)
+    elif [[ "${VINS_ODOM}" == true ]]; then
+        READY_TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye1/camera_info
+            /t265/fisheye2/image_raw
+            /t265/fisheye2/camera_info
+            /t265/imu
+            /vins_odom
+        )
+        MESSAGE_TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye2/image_raw
+            /t265/imu
+            /vins_odom
+        )
+    elif [[ "${T265_ODOM}" == true ]]; then
+        READY_TOPICS+=(/t265/odom_base)
+        MESSAGE_TOPICS+=(/t265/odom_base)
+    else
+        READY_TOPICS+=(/ackermann_steering_controller/odometry /vo_odom)
+        MESSAGE_TOPICS+=(/ackermann_steering_controller/odometry /vo_odom)
+    fi
 else
-    READY_TOPICS+=(/t265/odom /t265/odom_base)
-    MESSAGE_TOPICS+=(/t265/odom /t265/odom_base)
+    if [[ "${DEPTH_CAMERA}" != "none" ]]; then
+        READY_TOPICS+=(
+            "/${DEPTH_CAMERA}/color/image_raw"
+            "/${DEPTH_CAMERA}/aligned_depth_to_color/image_raw"
+            "/${DEPTH_CAMERA}/imu"
+        )
+        MESSAGE_TOPICS+=(
+            "/${DEPTH_CAMERA}/color/image_raw"
+            "/${DEPTH_CAMERA}/aligned_depth_to_color/image_raw"
+        )
+    fi
+
+    if [[ "${CUVSLAM_ODOM}" == true ]]; then
+        READY_TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye1/camera_info
+            /t265/fisheye2/image_raw
+            /t265/fisheye2/camera_info
+            /t265/imu
+        )
+        MESSAGE_TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye2/image_raw
+            /t265/imu
+        )
+        READY_TOPICS+=(/cuvslam_odom)
+        MESSAGE_TOPICS+=(/cuvslam_odom)
+    elif [[ "${RGBD_ODOM}" == true ]]; then
+        READY_TOPICS+=(/cuvslam_rgbd_odom)
+        MESSAGE_TOPICS+=(/cuvslam_rgbd_odom)
+    elif [[ "${VINS_ODOM}" == true ]]; then
+        READY_TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye1/camera_info
+            /t265/fisheye2/image_raw
+            /t265/fisheye2/camera_info
+            /t265/imu
+        )
+        MESSAGE_TOPICS+=(
+            /t265/fisheye1/image_raw
+            /t265/fisheye2/image_raw
+            /t265/imu
+        )
+        READY_TOPICS+=(/vins_odom)
+        MESSAGE_TOPICS+=(/vins_odom)
+    else
+        READY_TOPICS+=(/t265/odom /t265/odom_base)
+        MESSAGE_TOPICS+=(/t265/odom /t265/odom_base)
+    fi
 fi
 
 READY_TOPICS+=(

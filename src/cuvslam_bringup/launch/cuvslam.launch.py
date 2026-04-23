@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Launch cuVSLAM stereo-fisheye VIO and adapt its raw odometry to the rover frame."""
 
+from glob import glob
+from pathlib import Path
+
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -34,6 +37,11 @@ ARGUMENTS = [
         description='Target child_frame_id for the adapted odometry.',
     ),
     DeclareLaunchArgument(
+        'rig_frame',
+        default_value='t265_pose_frame',
+        description='Raw cuVSLAM rig/body frame before odom_tf_relay adaptation.',
+    ),
+    DeclareLaunchArgument(
         'output_frame',
         default_value='odom',
         description='Target frame_id for the adapted odometry.',
@@ -52,14 +60,36 @@ ARGUMENTS = [
 ]
 
 
+def detect_wsl_cuda_dir() -> str:
+    if not Path('/dev/dxg').exists():
+        return ''
+
+    candidates = sorted(glob('/usr/lib/wsl/drivers/*/libcuda.so.1'))
+    if not candidates:
+        return ''
+
+    return str(Path(candidates[0]).resolve().parent)
+
+
 def generate_launch_description() -> LaunchDescription:
     config_file = LaunchConfiguration('config_file')
     raw_odom_topic = LaunchConfiguration('raw_odom_topic')
     odom_topic = LaunchConfiguration('odom_topic')
     base_frame = LaunchConfiguration('base_frame')
+    rig_frame = LaunchConfiguration('rig_frame')
     output_frame = LaunchConfiguration('output_frame')
     use_sim_time = LaunchConfiguration('use_sim_time')
     cuvslam_library_dir = LaunchConfiguration('cuvslam_library_dir')
+    wsl_cuda_dir = detect_wsl_cuda_dir()
+
+    ld_library_path = []
+    if wsl_cuda_dir:
+        ld_library_path.extend([wsl_cuda_dir, ':'])
+    ld_library_path.extend([
+        cuvslam_library_dir,
+        ':',
+        EnvironmentVariable('LD_LIBRARY_PATH', default_value=''),
+    ])
 
     cuvslam_node = Node(
         package='cuvslam_bringup',
@@ -67,11 +97,7 @@ def generate_launch_description() -> LaunchDescription:
         name='cuvslam_odom_node',
         output='screen',
         additional_env={
-            'LD_LIBRARY_PATH': [
-                cuvslam_library_dir,
-                ':',
-                EnvironmentVariable('LD_LIBRARY_PATH', default_value=''),
-            ],
+            'LD_LIBRARY_PATH': ld_library_path,
         },
         parameters=[
             config_file,
@@ -79,7 +105,7 @@ def generate_launch_description() -> LaunchDescription:
                 'use_sim_time': use_sim_time,
                 'raw_odom_topic': raw_odom_topic,
                 'odom_frame_id': output_frame,
-                'rig_frame_id': base_frame,
+                'rig_frame_id': rig_frame,
             },
         ],
     )
@@ -97,7 +123,7 @@ def generate_launch_description() -> LaunchDescription:
             'output_topic': odom_topic,
             'base_frame': base_frame,
             'output_frame': output_frame,
-            'publish_tf': False,
+            'publish_tf': True,
             'use_sim_time': use_sim_time,
             'max_rate_hz': 30.0,
         }],
