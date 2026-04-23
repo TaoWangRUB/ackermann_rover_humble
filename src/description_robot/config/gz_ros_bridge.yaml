@@ -57,6 +57,8 @@
   direction: GZ_TO_ROS
 
 # T265 camera
+# Gazebo fisheye sensors use /<name>/fisheye{1,2} as prefix, producing
+# /image and /camera_info suffixes.  ROS names use /image_raw to match HW.
 - ros_topic_name: "/t265/fisheye1/camera_info"
   gz_topic_name: "/t265/fisheye1/camera_info"
   ros_type_name: "sensor_msgs/msg/CameraInfo"
@@ -64,7 +66,7 @@
   direction: GZ_TO_ROS
 
 - ros_topic_name: "/t265/fisheye1/image_raw"
-  gz_topic_name: "/t265/fisheye1/image_raw"
+  gz_topic_name: "/t265/fisheye1"
   ros_type_name: "sensor_msgs/msg/Image"
   gz_type_name: "gz.msgs.Image"
   direction: GZ_TO_ROS
@@ -76,7 +78,7 @@
   direction: GZ_TO_ROS
 
 - ros_topic_name: "/t265/fisheye2/image_raw"
-  gz_topic_name: "/t265/fisheye2/image_raw"
+  gz_topic_name: "/t265/fisheye2"
   ros_type_name: "sensor_msgs/msg/Image"
   gz_type_name: "gz.msgs.Image"
   direction: GZ_TO_ROS
@@ -87,8 +89,8 @@
   gz_type_name: "gz.msgs.IMU"
   direction: GZ_TO_ROS
 
-- ros_topic_name: "/t265/pose"
-  gz_topic_name: "/t265/pose"
+- ros_topic_name: "/t265/odom_base"
+  gz_topic_name: "/t265/odom"
   ros_type_name: "nav_msgs/msg/Odometry"
   gz_type_name: "gz.msgs.Odometry"
   direction: GZ_TO_ROS

@@ -125,7 +125,7 @@ compatibility and fisheye numerical fixes.
      /vins_odom (nav_msgs/Odometry)
        Same relay pattern as cuVSLAM:
        Pose composition T_WB = T_WC × T_CB, origin latch, lever-arm velocity
-       child_frame_id = ackermann/base_link, publish_tf = false
+       child_frame_id = ackermann/base_link, publish_tf = true
 ```
 
 ### Key Algorithm Parameters
@@ -193,7 +193,7 @@ contract:
    poses so odometry starts at (0,0,0) — matches EKF origin expectation
 3. **Velocity lever-arm**: `v_base = R_sensor_base × (v_sensor + ω × r)`
 4. **Covariance rotation**: 6×6 covariance rotated to base frame
-5. **publish_tf = false**: EKF owns the `odom → ackermann/base_link` TF
+5. **publish_tf = true**: `vins_odom_relay` owns the `odom → ackermann/base_link` TF
 
 ### EKF Integration and Odometry Source Selection
 
@@ -207,8 +207,8 @@ When any external VIO (cuVSLAM, VINS, T265) is selected:
 - EKF `imu0_config` yaw rate is **disabled** (all-false) to prevent
   double-counting heading from both IMU and the VIO's internal IMU fusion
 - EKF `odom0` points to the selected `/cuvslam_odom` or `/vins_odom` topic
-- EKF `publish_tf` is true (EKF owns the TF edge), except when T265
-  built-in odom is used (T265 driver publishes TF directly)
+- EKF `publish_tf` is false for external VIO modes; the selected odom relay
+  owns the `odom -> ackermann/base_link` TF edge
 
 ---
 

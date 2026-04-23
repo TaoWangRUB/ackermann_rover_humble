@@ -3,8 +3,9 @@
 #
 # Topic names match the realsense_camera_bringup publisher layout
 # (camera_name defaults to "t265") and can be overridden at launch time via
-# launch arguments or remappings.  Frame IDs follow the rover's standard
-# odom -> ackermann/base_link contract after passing through odom_tf_relay.
+# launch arguments or remappings. Raw odometry follows the same pattern as
+# the built-in T265 odom: odom -> t265_pose_frame. The odom_tf_relay adapts
+# that into the rover's odom -> ackermann/base_link contract.
 
 cuvslam_odom_node:
   ros__parameters:
@@ -18,13 +19,11 @@ cuvslam_odom_node:
 
     # ─── frame configuration ─────────────────────────────────────────────
     # Parent frame of the raw odometry and the rig frame used to initialize
-    # cuVSLAM. In the normal path the rig frame is already the rover base
-    # frame, so odom_tf_relay becomes a pass-through. If TF lookup for rig
-    # extrinsics times out, the wrapper falls back to publishing the left
-    # fisheye optical frame as child_frame_id so odom_tf_relay can still
-    # adapt it to ackermann/base_link using the static TF tree.
+    # cuVSLAM. Keep this in the T265 body/pose frame so odom_tf_relay performs
+    # the same sensor-frame -> ackermann/base_link adaptation used by the
+    # built-in T265 odometry path.
     odom_frame_id:   "odom"
-    rig_frame_id:    "ackermann/base_link"
+    rig_frame_id:    "t265_pose_frame"
     imu_frame_id:    ""
 
     # ─── tracker configuration ───────────────────────────────────────────

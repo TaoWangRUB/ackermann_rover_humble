@@ -6,15 +6,22 @@
 set -euo pipefail
 
 ARCH="$(uname -m)"
+CUVSLAM_SRC="${CUVSLAM_SRC:-/workspace/src/cuVSLAM}"
+if [[ "${EUID}" -eq 0 ]]; then
+    SUDO=()
+else
+    SUDO=(sudo -n)
+fi
+
 if [[ $ARCH == "x86_64" || $ARCH == "aarch64" ]]; then
-    apt-get update && apt-get install -y gcc-11 g++-11 liblmdb-dev
+    "${SUDO[@]}" apt-get update && "${SUDO[@]}" apt-get install -y gcc-11 g++-11 liblmdb-dev
     export CC=/usr/bin/gcc-11
     export CXX=/usr/bin/g++-11
 fi
 
 # --- CUDA TOOLKIT DETECTION ---
-if command -v nvcc &>/dev/null; then
-  CUDA_VER=$(nvcc --version | grep release | sed 's/.*release \([0-9]*\.[0-9]*\).*/\1/')
+if [[ -x "/usr/local/cuda/bin/nvcc" ]]; then
+  CUDA_VER=$(/usr/local/cuda/bin/nvcc --version | grep release | sed 's/.*release \([0-9]*\.[0-9]*\).*/\1/')
 else
   CUDA_VER="unknown"
 fi
@@ -29,10 +36,18 @@ if [[ $ARCH == "aarch64" ]]; then
 fi
 
 # --- ARCHITECTURE-AWARE CACHE PATHS ---
-if [[ $ARCH == "x86_64" ]]; then
-    export CUVSLAM_CACHE_DIR="/docker_cache/cuvslam/x86_64-cuda${CUDA_VER}"
-elif [[ $ARCH == "aarch64" ]]; then
-    export CUVSLAM_CACHE_DIR="/docker_cache/cuvslam/jetson-cuda${CUDA_VER}"
+if [[ -z "${CUVSLAM_CACHE_DIR:-}" ]]; then
+    if [[ -w /docker_cache || ( ! -e /docker_cache && -w / ) ]]; then
+        CUVSLAM_CACHE_ROOT="/docker_cache/cuvslam"
+    else
+        CUVSLAM_CACHE_ROOT="/workspace/docker_cache/cuvslam"
+    fi
+
+    if [[ $ARCH == "x86_64" ]]; then
+        export CUVSLAM_CACHE_DIR="${CUVSLAM_CACHE_ROOT}/x86_64-cuda${CUDA_VER}"
+    elif [[ $ARCH == "aarch64" ]]; then
+        export CUVSLAM_CACHE_DIR="${CUVSLAM_CACHE_ROOT}/jetson-cuda${CUDA_VER}"
+    fi
 fi
 
 echo "[install_cuvslam_deps.sh] ARCH=$ARCH, CUDA_VER=$CUDA_VER, CC=$CC, CUVSLAM_CACHE_DIR=$CUVSLAM_CACHE_DIR"
@@ -64,13 +79,18 @@ if [[ "${ARCH}" == "x86_64" ]]; then
     
     echo "[x86_64] Building cuVSLAM from source..."
     cd "${CUVSLAM_BUILD_DIR}"
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${CUVSLAM_INSTALL_DIR}"
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="${CUVSLAM_INSTALL_DIR}"
     make -j$(nproc)
-    make install
+    if [[ -w "${CUVSLAM_INSTALL_DIR}" || ( ! -e "${CUVSLAM_INSTALL_DIR}" && -w "$(dirname "${CUVSLAM_INSTALL_DIR}")" ) ]]; then
+        make install
+    else
+        "${SUDO[@]}" make install
+    fi
     echo "[x86_64] cuVSLAM build complete. Installed to ${CUVSLAM_INSTALL_DIR}"
     
 elif [[ "${ARCH}" == "aarch64" ]]; then
-    CUVSLAM_SRC="${CUVSLAM_SRC:-/workspace/src/cuVSLAM}"
     CUVSLAM_BUILD_DIR="${CUVSLAM_SRC}/build"
     CUVSLAM_INSTALL_DIR="${CUVSLAM_CACHE_DIR}/install"
     mkdir -p "${CUVSLAM_BUILD_DIR}" "${CUVSLAM_INSTALL_DIR}"

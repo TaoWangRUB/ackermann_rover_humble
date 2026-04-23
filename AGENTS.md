@@ -45,6 +45,8 @@ Use the compose stack under `docker/` for all container management. Before start
 
 7. Check Nividia driver is also loaded correctly and verify via run `docker-compose -f docker/docker-compose.yml exec ackermann_slam bash` and then run `ros2 launch robot_bringup robot_bringup.launch.py` so that there's no nvidia driver related error/warning.
 
+When starting new ros2, stop the old one first.
+
 No build or startup errors are allowed. Fix issues immediately before moving on.
 
 ## 0.1 Jetson Hardware Session (from host)
