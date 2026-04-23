@@ -213,6 +213,16 @@ def launch_setup(context, *args, **kwargs):
         param_substitutions[
             'controller_server.ros__parameters.FollowPath.PreferForwardCritic.cost_weight'
         ] = '0.0' if is_reversible else '10.0'
+        # When the planner gives a feasible Reeds-Shepp path with direction
+        # changes, follow those path orientations in reversible mode so MPPI
+        # commits to the requested reverse / forward transition instead of
+        # over-optimizing a far-ahead alignment target at the start.
+        param_substitutions[
+            'controller_server.ros__parameters.FollowPath.PathAlignCritic.use_path_orientations'
+        ] = 'true' if is_reversible else 'false'
+        param_substitutions[
+            'controller_server.ros__parameters.FollowPath.PathAlignCritic.offset_from_furthest'
+        ] = '20' if is_reversible else '40'
     elif controller_type == 'rpp':
         param_substitutions[
             'controller_server.ros__parameters.FollowPath.allow_reversing'
