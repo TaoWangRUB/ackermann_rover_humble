@@ -18,7 +18,19 @@
 #   ./scripts/record_bag.sh --name=kitchen_loop      # custom output name
 #   ./scripts/record_bag.sh --extra=/foo,/bar        # append topics
 #   ./scripts/record_bag.sh --wait-seconds=15        # extra settle after topics appear
+#   ./scripts/record_bag.sh --no-compress-fisheye    # record raw T265 fisheye
 #   ./scripts/record_bag.sh --dry-run                # print, don't run
+#
+# RTAB-Map readiness gate:
+#   Always blocks until the /rtabmap node is up AND has published on one of
+#   its output topics (/mapData, /mapGraph, /rtabmap/*) before starting the
+#   recorder, so no frames are dropped.
+#
+# Fisheye compression:
+#   For --cuvslam-odom / --vins-odom (HW only), the T265 fisheye streams are
+#   republished through image_transport (PNG lossless) and the compressed
+#   topics are recorded instead of raw. Cuts fisheye bag volume ~3.3×.
+#   Replay via start_rosbag_session.sh decompresses transparently.
 #
 # Stop with Ctrl-C; the bag finalizes cleanly on SIGINT.
 #
@@ -46,19 +58,22 @@ VINS_ODOM=false
 EXTRA_TOPICS=""
 WAIT_SECONDS="10"
 DRY_RUN=false
+COMPRESS_FISHEYE=true
 
 for arg in "$@"; do
     case "${arg}" in
-        --name=*)          NAME="${arg#--name=}" ;;
-        --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
-        --sim)             SIM=true ;;
-        --t265-odom)       T265_ODOM=true ;;
-        --cuvslam-odom)    CUVSLAM_ODOM=true ;;
-        --rgbd-odom)       RGBD_ODOM=true ;;
-        --vins-odom)       VINS_ODOM=true ;;
-        --extra=*)         EXTRA_TOPICS="${arg#--extra=}" ;;
-        --wait-seconds=*)  WAIT_SECONDS="${arg#--wait-seconds=}" ;;
-        --dry-run)         DRY_RUN=true ;;
+        --name=*)              NAME="${arg#--name=}" ;;
+        --depth-camera=*)      DEPTH_CAMERA="${arg#--depth-camera=}" ;;
+        --sim)                 SIM=true ;;
+        --t265-odom)           T265_ODOM=true ;;
+        --cuvslam-odom)        CUVSLAM_ODOM=true ;;
+        --rgbd-odom)           RGBD_ODOM=true ;;
+        --vins-odom)           VINS_ODOM=true ;;
+        --extra=*)             EXTRA_TOPICS="${arg#--extra=}" ;;
+        --wait-seconds=*)      WAIT_SECONDS="${arg#--wait-seconds=}" ;;
+        --no-compress-fisheye) COMPRESS_FISHEYE=false ;;
+        --compress-fisheye)    COMPRESS_FISHEYE=true ;;
+        --dry-run)             DRY_RUN=true ;;
         *) echo "Unknown arg: ${arg}" >&2; exit 2 ;;
     esac
 done
@@ -148,11 +163,24 @@ else
     # Odometry source — priority mirrors rtabmap_slam.launch.py:
     #   cuVSLAM > cuVSLAM RGBD > VINS > T265. Only the selected source is recorded
     #   so replay reconstructs the exact topology the launch file subscribes to.
+    # When --compress-fisheye (default) is on for cuvslam/vins modes, the
+    # fisheye image topic swapped to the compressed variant; the raw stream is
+    # republished through image_transport before ros2 bag record starts.
+    if [[ "${CUVSLAM_ODOM}" == true || "${VINS_ODOM}" == true ]]; then
+        if [[ "${COMPRESS_FISHEYE}" == true ]]; then
+            FISHEYE_TOPIC_1="/t265/fisheye1/image_raw/compressed"
+            FISHEYE_TOPIC_2="/t265/fisheye2/image_raw/compressed"
+        else
+            FISHEYE_TOPIC_1="/t265/fisheye1/image_raw"
+            FISHEYE_TOPIC_2="/t265/fisheye2/image_raw"
+        fi
+    fi
+
     if [[ "${CUVSLAM_ODOM}" == true ]]; then
         TOPICS+=(
-            /t265/fisheye1/image_raw
+            "${FISHEYE_TOPIC_1}"
             /t265/fisheye1/camera_info
-            /t265/fisheye2/image_raw
+            "${FISHEYE_TOPIC_2}"
             /t265/fisheye2/camera_info
             /t265/imu
         )
@@ -163,9 +191,9 @@ else
         ODOM_LABEL="cuvslam_rgbd_odom"
     elif [[ "${VINS_ODOM}" == true ]]; then
         TOPICS+=(
-            /t265/fisheye1/image_raw
+            "${FISHEYE_TOPIC_1}"
             /t265/fisheye1/camera_info
-            /t265/fisheye2/image_raw
+            "${FISHEYE_TOPIC_2}"
             /t265/fisheye2/camera_info
             /t265/imu
         )
@@ -254,15 +282,15 @@ else
 
     if [[ "${CUVSLAM_ODOM}" == true ]]; then
         READY_TOPICS+=(
-            /t265/fisheye1/image_raw
+            "${FISHEYE_TOPIC_1}"
             /t265/fisheye1/camera_info
-            /t265/fisheye2/image_raw
+            "${FISHEYE_TOPIC_2}"
             /t265/fisheye2/camera_info
             /t265/imu
         )
         MESSAGE_TOPICS+=(
-            /t265/fisheye1/image_raw
-            /t265/fisheye2/image_raw
+            "${FISHEYE_TOPIC_1}"
+            "${FISHEYE_TOPIC_2}"
             /t265/imu
         )
         READY_TOPICS+=(/cuvslam_odom)
@@ -272,15 +300,15 @@ else
         MESSAGE_TOPICS+=(/cuvslam_rgbd_odom)
     elif [[ "${VINS_ODOM}" == true ]]; then
         READY_TOPICS+=(
-            /t265/fisheye1/image_raw
+            "${FISHEYE_TOPIC_1}"
             /t265/fisheye1/camera_info
-            /t265/fisheye2/image_raw
+            "${FISHEYE_TOPIC_2}"
             /t265/fisheye2/camera_info
             /t265/imu
         )
         MESSAGE_TOPICS+=(
-            /t265/fisheye1/image_raw
-            /t265/fisheye2/image_raw
+            "${FISHEYE_TOPIC_1}"
+            "${FISHEYE_TOPIC_2}"
             /t265/imu
         )
         READY_TOPICS+=(/vins_odom)
@@ -300,6 +328,14 @@ MESSAGE_TOPICS+=(
     /tf_static
 )
 
+# Fisheye compression is only meaningful on hardware cuvslam/vins modes
+# (those are the only modes that record fisheye streams).
+FISHEYE_COMPRESS_ACTIVE=false
+if [[ "${SIM}" == false && "${COMPRESS_FISHEYE}" == true \
+   && ( "${CUVSLAM_ODOM}" == true || "${VINS_ODOM}" == true ) ]]; then
+    FISHEYE_COMPRESS_ACTIVE=true
+fi
+
 echo "─────────────────────────────────────────────────────────────"
 echo "  rosbag2 record"
 echo "  output:       ${OUT_DIR}"
@@ -307,6 +343,9 @@ echo "  storage:      mcap (zstd_fast)"
 echo "  depth camera: ${DEPTH_CAMERA}"
 echo "  odom source:  ${ODOM_LABEL}"
 echo "  wait extra:   ${WAIT_SECONDS}s"
+if [[ "${SIM}" == false && ( "${CUVSLAM_ODOM}" == true || "${VINS_ODOM}" == true ) ]]; then
+    echo "  fisheye:      $( [[ "${FISHEYE_COMPRESS_ACTIVE}" == true ]] && echo 'compressed (PNG)' || echo 'raw' )"
+fi
 echo "  topics (${#TOPICS[@]}):"
 for t in "${TOPICS[@]}"; do echo "    ${t}"; done
 echo "─────────────────────────────────────────────────────────────"
@@ -319,9 +358,48 @@ fi
 # Host-visible bags/ dir (container mount maps /workspace → repo root).
 mkdir -p "${PROJECT_DIR}/bags"
 
+# Build republisher launch prelude (compressed mode only). The republishers
+# subscribe to the RAW fisheye topics and publish CompressedImage on the
+# /compressed child topics that rosbag2 records. They're cleaned up by
+# the EXIT trap when ros2 bag record exits on SIGINT.
+REPUBLISH_START=""
+REPUBLISH_CLEANUP=""
+if [[ "${FISHEYE_COMPRESS_ACTIVE}" == true ]]; then
+    REPUBLISH_START="
+  echo 'Starting image_transport republishers (raw -> PNG)...' && \
+  ros2 run image_transport republish raw compressed \
+      --ros-args \
+      -r in:=/t265/fisheye1/image_raw \
+      -r out/compressed:=/t265/fisheye1/image_raw/compressed \
+      -p format:=png -p png_level:=3 \
+      >/tmp/republish_fisheye1.log 2>&1 & \
+  echo \"  fisheye1 republisher pid=\$!\" && \
+  ros2 run image_transport republish raw compressed \
+      --ros-args \
+      -r in:=/t265/fisheye2/image_raw \
+      -r out/compressed:=/t265/fisheye2/image_raw/compressed \
+      -p format:=png -p png_level:=3 \
+      >/tmp/republish_fisheye2.log 2>&1 & \
+  echo \"  fisheye2 republisher pid=\$!\" && \
+  sleep 2 && \\"
+    REPUBLISH_CLEANUP="
+  trap 'echo stopping republishers...; pkill -INT -f \"image_transport/republish raw compressed\" 2>/dev/null; sleep 1; pkill -f \"image_transport/republish raw compressed\" 2>/dev/null' EXIT INT TERM && \\"
+fi
+
+# Block on the /rtabmap node being up AND publishing a message. Waits up to
+# 60s for the node and then up to 30s for the first message on any of the
+# candidate output topics (topic names depend on launch: with namespace they
+# live under /rtabmap/, without they're at root). Prints a WARNING and
+# proceeds if neither signal arrives in time.
+RTABMAP_WAIT_CMD="
+  echo 'Waiting for /rtabmap node...' && \
+  timeout 60 bash -lc 'until ros2 node list 2>/dev/null | grep -qx /rtabmap; do sleep 1; done' && \
+  echo 'Waiting for RTAB-Map to publish...' && \
+  bash -lc 'found=false; for t in /mapData /mapGraph /rtabmap/mapData /rtabmap/mapGraph /rtabmap/info /info; do if ros2 topic info \$t >/dev/null 2>&1 && timeout 30 ros2 topic echo --once \$t >/dev/null 2>&1; then echo \"  got message on \$t\"; found=true; break; fi; done; if [ \$found = false ]; then echo \"  WARNING: /rtabmap up but no messages within 30s (proceeding anyway)\" >&2; fi' && \\"
+
 xdcomp exec ackermann_slam bash -c "
   source /opt/ros/jazzy/setup.bash && \
-  source /workspace/install/setup.bash && \
+  source /workspace/install/setup.bash && ${REPUBLISH_CLEANUP}
   echo 'Waiting for required topics before recording...' && \
   timeout 180 bash -lc '
     for topic in ${READY_TOPICS[*]}; do
@@ -336,7 +414,7 @@ xdcomp exec ackermann_slam bash -c "
         echo \"  WARNING: no message on \${topic} within 30s (proceeding anyway)\" >&2
       fi
     done
-  ' && \
+  ' && ${RTABMAP_WAIT_CMD} ${REPUBLISH_START}
   echo 'Topics are ready. Settling for ${WAIT_SECONDS}s...' && \
   sleep ${WAIT_SECONDS} && \
   echo 'Starting rosbag2 record...' && \
