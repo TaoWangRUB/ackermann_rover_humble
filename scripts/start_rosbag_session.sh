@@ -133,7 +133,15 @@ if ! dcomp ps --services --filter status=running 2>/dev/null \
 fi
 
 # ── Kill old session ─────────────────────────────────────────────────
-"${SCRIPT_DIR}/stop_all.sh" --session="${SESSION}" 2>/dev/null || true
+# Record mode assumes a live stack is already running (cameras, RTAB-Map,
+# controllers) and only needs to clear the old rosbag tmux session.
+# Replay mode wants a clean slate — it launches its own RTAB-Map against
+# a bag, so kill any in-container ROS/Gazebo processes first.
+if [[ "${MODE}" == "record" ]]; then
+    tmux kill-session -t "${SESSION}" 2>/dev/null || true
+else
+    "${SCRIPT_DIR}/stop_all.sh" --session="${SESSION}" 2>/dev/null || true
+fi
 sleep 2
 
 # =====================================================================
