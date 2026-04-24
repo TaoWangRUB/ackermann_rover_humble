@@ -411,8 +411,19 @@ xdcomp exec ackermann_slam bash -c "
     stty sane 2>/dev/null || true
     printf '\n'
     if [ -n \"\${REC_PID:-}\" ] && kill -0 \$REC_PID 2>/dev/null; then
-      echo 'Finalizing bag (SIGINT -> recorder)...'
-      kill -INT \$REC_PID 2>/dev/null || true
+      echo 'Finalizing bag (SIGTERM -> recorder)...'
+      # ros2 bag record CLI wrapper ignores SIGINT from kill(2) (only reacts
+      # to Ctrl-C from a controlling TTY). Send SIGTERM, which the python
+      # launcher forwards and cleanly finalizes the MCAP + metadata.yaml.
+      kill -TERM \$REC_PID 2>/dev/null || true
+      for _ in \$(seq 1 20); do
+        kill -0 \$REC_PID 2>/dev/null || break
+        sleep 0.5
+      done
+      if kill -0 \$REC_PID 2>/dev/null; then
+        echo 'Recorder still alive after 10s, sending SIGKILL' >&2
+        kill -KILL \$REC_PID 2>/dev/null || true
+      fi
       wait \$REC_PID 2>/dev/null || true
     fi
     pkill -INT -f 'image_transport/republish raw compressed' 2>/dev/null || true
