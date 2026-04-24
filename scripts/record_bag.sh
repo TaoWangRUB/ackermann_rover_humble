@@ -7,11 +7,12 @@
 #   <repo>/bags/run_YYYYMMDD_HHMM/   (MCAP, zstd-compressed)
 #
 # Interactive controls (TTY):
-#   r   resume / start recording  (bag starts paused; press r once ready)
-#   s   pause the recorder         (data dropped until next r)
-#   Ctrl-C   finalize bag and exit (writes metadata.yaml)
-# Without a TTY (piped / non-interactive), recording auto-starts and runs
-# until SIGINT.
+#   r   start a NEW bag segment (spawns fresh ros2 bag record)
+#   s   stop & finalize current segment, keep the script alive and ready
+#       for another r (each r → its own bag dir: ${NAME}_seg1, _seg2, ...)
+#   Ctrl-C   finalize current segment (if any) and exit
+# Without a TTY (piped / non-interactive), a single segment auto-starts
+# and runs until SIGINT.
 #
 # Usage:
 #   ./scripts/record_bag.sh                          # D435i + T265 odom
@@ -405,16 +406,14 @@ xdcomp exec ackermann_slam bash -c "
   source /opt/ros/jazzy/setup.bash
   source /workspace/install/setup.bash
 
-  # Unified cleanup: restore TTY, finalize recorder, stop republishers.
-  # Safe to run even if REC_PID was never set (early failures).
-  cleanup() {
-    stty sane 2>/dev/null || true
-    printf '\n'
-    if [ -n \"\${REC_PID:-}\" ] && kill -0 \$REC_PID 2>/dev/null; then
-      echo 'Finalizing bag (SIGTERM -> recorder)...'
-      # ros2 bag record CLI wrapper ignores SIGINT from kill(2) (only reacts
-      # to Ctrl-C from a controlling TTY). Send SIGTERM, which the python
-      # launcher forwards and cleanly finalizes the MCAP + metadata.yaml.
+  SEGMENT=0
+  REC_PID=''
+
+  # SIGTERM the current recorder and wait up to 30s for it to finalize the
+  # MCAP + metadata.yaml. Escalates to SIGKILL as a last resort. No-op if
+  # no recorder is running.
+  stop_segment() {
+    if [ -n \"\$REC_PID\" ] && kill -0 \$REC_PID 2>/dev/null; then
       kill -TERM \$REC_PID 2>/dev/null || true
       for _ in \$(seq 1 60); do
         kill -0 \$REC_PID 2>/dev/null || break
@@ -425,6 +424,38 @@ xdcomp exec ackermann_slam bash -c "
         kill -KILL \$REC_PID 2>/dev/null || true
       fi
       wait \$REC_PID 2>/dev/null || true
+    fi
+    REC_PID=''
+  }
+
+  # Spawn a new ros2 bag record into its own segment directory. If the
+  # segN path already exists (e.g. from a prior interrupted run), fall
+  # back to a timestamped suffix so rosbag2 doesn't refuse to start.
+  start_segment() {
+    SEGMENT=\$((SEGMENT+1))
+    SEG_DIR=\"${OUT_DIR}_seg\${SEGMENT}\"
+    if [ -d \"\$SEG_DIR\" ]; then
+      SEG_DIR=\"\${SEG_DIR}_\$(date +%H%M%S)\"
+    fi
+    ros2 bag record \
+      -o \"\$SEG_DIR\" \
+      -s mcap \
+      --storage-preset-profile zstd_fast \
+      ${TOPIC_ARGS} \
+      > /tmp/rosbag2_recorder_seg\${SEGMENT}.log 2>&1 &
+    REC_PID=\$!
+    echo \"[recording -> \$(basename \$SEG_DIR)]\"
+  }
+
+  cleanup() {
+    stty sane 2>/dev/null || true
+    printf '\n'
+    if [ -n \"\$REC_PID\" ] && kill -0 \$REC_PID 2>/dev/null; then
+      echo 'Finalizing current segment (SIGTERM -> recorder)...'
+      # ros2 bag record's CLI wrapper ignores SIGINT from kill(2) (only
+      # reacts to Ctrl-C from a controlling TTY). SIGTERM is forwarded
+      # and cleanly finalizes the MCAP + metadata.yaml.
+      stop_segment
     fi
     pkill -INT -f 'image_transport/republish raw compressed' 2>/dev/null || true
     sleep 1
@@ -450,54 +481,34 @@ xdcomp exec ackermann_slam bash -c "
   echo 'Topics are ready. Settling for ${WAIT_SECONDS}s...'
   sleep ${WAIT_SECONDS}
 
-  echo 'Starting rosbag2 recorder (paused)...'
-  ros2 bag record --start-paused \
-    -o ${OUT_DIR} \
-    -s mcap \
-    --storage-preset-profile zstd_fast \
-    ${TOPIC_ARGS} \
-    > /tmp/rosbag2_recorder.log 2>&1 &
-  REC_PID=\$!
-
-  echo 'Waiting for recorder services...'
-  timeout 15 bash -c 'until ros2 service list 2>/dev/null | grep -qx /rosbag2_recorder/resume; do sleep 0.5; done' \
-    || echo 'WARNING: /rosbag2_recorder/resume not ready within 15s — proceeding anyway' >&2
-
   if [ -t 0 ]; then
-    state=paused
     echo
-    echo '==============================================='
-    echo '  r = RECORD   s = STOP   Ctrl-C = finalize'
-    echo '==============================================='
-    echo \"[\$state]\"
+    echo '==================================================================='
+    echo '  r = START new bag   s = STOP & finalize current   Ctrl-C = exit'
+    echo '==================================================================='
+    echo '[idle]'
     stty -icanon -echo min 1 time 0
     while IFS= read -r -n 1 key; do
       case \"\$key\" in
         r|R)
-          if [ \"\$state\" = paused ]; then
-            if ros2 service call /rosbag2_recorder/resume rosbag2_interfaces/srv/Resume '{}' >/dev/null 2>&1; then
-              state=recording
-              echo \"[\$state]\"
-            else
-              echo 'ERROR: resume call failed' >&2
-            fi
+          if [ -z \"\$REC_PID\" ] || ! kill -0 \$REC_PID 2>/dev/null; then
+            start_segment
+          else
+            echo 'Already recording — press s first to stop the current segment.'
           fi
           ;;
         s|S)
-          if [ \"\$state\" = recording ]; then
-            if ros2 service call /rosbag2_recorder/pause rosbag2_interfaces/srv/Pause '{}' >/dev/null 2>&1; then
-              state=paused
-              echo \"[\$state]\"
-            else
-              echo 'ERROR: pause call failed' >&2
-            fi
+          if [ -n \"\$REC_PID\" ] && kill -0 \$REC_PID 2>/dev/null; then
+            echo 'Stopping current segment...'
+            stop_segment
+            echo '[idle]'
           fi
           ;;
       esac
     done
   else
-    echo 'No TTY detected — auto-starting recording (send SIGINT to finalize)'
-    ros2 service call /rosbag2_recorder/resume rosbag2_interfaces/srv/Resume '{}' >/dev/null 2>&1 || true
+    echo 'No TTY detected — recording a single segment (send SIGINT to finalize)'
+    start_segment
     wait \$REC_PID
   fi
 "
