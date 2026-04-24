@@ -416,12 +416,12 @@ xdcomp exec ackermann_slam bash -c "
       # to Ctrl-C from a controlling TTY). Send SIGTERM, which the python
       # launcher forwards and cleanly finalizes the MCAP + metadata.yaml.
       kill -TERM \$REC_PID 2>/dev/null || true
-      for _ in \$(seq 1 20); do
+      for _ in \$(seq 1 60); do
         kill -0 \$REC_PID 2>/dev/null || break
         sleep 0.5
       done
       if kill -0 \$REC_PID 2>/dev/null; then
-        echo 'Recorder still alive after 10s, sending SIGKILL' >&2
+        echo 'Recorder still alive after 30s, sending SIGKILL' >&2
         kill -KILL \$REC_PID 2>/dev/null || true
       fi
       wait \$REC_PID 2>/dev/null || true
