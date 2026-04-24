@@ -19,7 +19,7 @@
 #
 # ── --record ────────────────────────────────────────────────────────
 # Launches:
-#   1. ros2 bag record (via scripts/record_bag.sh)
+#   1. ros2 bag record (via scripts/record_bag.sh, starts PAUSED)
 #   2. Inspection shell
 #
 # Layout (2 panes):
@@ -27,6 +27,11 @@
 #   │  ros2 bag record        │  Inspection shell    │
 #   │  (record_bag.sh)        │  (container bash)    │
 #   └─────────────────────────┴──────────────────────┘
+#
+# Keyboard controls (in the record pane):
+#   r        resume / start recording
+#   s        pause / stop writing (bag stays open)
+#   Ctrl-C   finalize bag (writes metadata.yaml) and exit
 #
 # Assumes the live stack is already running (e.g. via start_jetson_session.sh).
 # Fisheye compression (PNG via image_transport) is on by default for

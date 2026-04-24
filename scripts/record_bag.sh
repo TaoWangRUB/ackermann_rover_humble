@@ -6,6 +6,13 @@
 # Output:
 #   <repo>/bags/run_YYYYMMDD_HHMM/   (MCAP, zstd-compressed)
 #
+# Interactive controls (TTY):
+#   r   resume / start recording  (bag starts paused; press r once ready)
+#   s   pause the recorder         (data dropped until next r)
+#   Ctrl-C   finalize bag and exit (writes metadata.yaml)
+# Without a TTY (piped / non-interactive), recording auto-starts and runs
+# until SIGINT.
+#
 # Usage:
 #   ./scripts/record_bag.sh                          # D435i + T265 odom
 #   ./scripts/record_bag.sh --sim                    # Gazebo sim RTAB-Map VO topics
@@ -360,10 +367,9 @@ mkdir -p "${PROJECT_DIR}/bags"
 
 # Build republisher launch prelude (compressed mode only). The republishers
 # subscribe to the RAW fisheye topics and publish CompressedImage on the
-# /compressed child topics that rosbag2 records. They're cleaned up by
-# the EXIT trap when ros2 bag record exits on SIGINT.
+# /compressed child topics that rosbag2 records. The unified cleanup()
+# function below stops them when the exec block exits.
 REPUBLISH_START=""
-REPUBLISH_CLEANUP=""
 if [[ "${FISHEYE_COMPRESS_ACTIVE}" == true ]]; then
     REPUBLISH_START="
   echo 'Starting image_transport republishers (raw -> PNG)...' && \
@@ -382,8 +388,6 @@ if [[ "${FISHEYE_COMPRESS_ACTIVE}" == true ]]; then
       >/tmp/republish_fisheye2.log 2>&1 & \
   echo \"  fisheye2 republisher pid=\$!\" && \
   sleep 2 && \\"
-    REPUBLISH_CLEANUP="
-  trap 'echo stopping republishers...; pkill -INT -f \"image_transport/republish raw compressed\" 2>/dev/null; sleep 1; pkill -f \"image_transport/republish raw compressed\" 2>/dev/null' EXIT INT TERM && \\"
 fi
 
 # Block on the /rtabmap node being up AND publishing a message. Waits up to
@@ -398,8 +402,25 @@ RTABMAP_WAIT_CMD="
   bash -lc 'found=false; for t in /mapData /mapGraph /rtabmap/mapData /rtabmap/mapGraph /rtabmap/info /info; do if ros2 topic info \$t >/dev/null 2>&1 && timeout 30 ros2 topic echo --once \$t >/dev/null 2>&1; then echo \"  got message on \$t\"; found=true; break; fi; done; if [ \$found = false ]; then echo \"  WARNING: /rtabmap up but no messages within 30s (proceeding anyway)\" >&2; fi' && \\"
 
 xdcomp exec ackermann_slam bash -c "
-  source /opt/ros/jazzy/setup.bash && \
-  source /workspace/install/setup.bash && ${REPUBLISH_CLEANUP}
+  source /opt/ros/jazzy/setup.bash
+  source /workspace/install/setup.bash
+
+  # Unified cleanup: restore TTY, finalize recorder, stop republishers.
+  # Safe to run even if REC_PID was never set (early failures).
+  cleanup() {
+    stty sane 2>/dev/null || true
+    printf '\n'
+    if [ -n \"\${REC_PID:-}\" ] && kill -0 \$REC_PID 2>/dev/null; then
+      echo 'Finalizing bag (SIGINT -> recorder)...'
+      kill -INT \$REC_PID 2>/dev/null || true
+      wait \$REC_PID 2>/dev/null || true
+    fi
+    pkill -INT -f 'image_transport/republish raw compressed' 2>/dev/null || true
+    sleep 1
+    pkill -f 'image_transport/republish raw compressed' 2>/dev/null || true
+  }
+  trap cleanup EXIT INT TERM
+
   echo 'Waiting for required topics before recording...' && \
   timeout 180 bash -lc '
     for topic in ${READY_TOPICS[*]}; do
@@ -415,12 +436,57 @@ xdcomp exec ackermann_slam bash -c "
       fi
     done
   ' && ${RTABMAP_WAIT_CMD} ${REPUBLISH_START}
-  echo 'Topics are ready. Settling for ${WAIT_SECONDS}s...' && \
-  sleep ${WAIT_SECONDS} && \
-  echo 'Starting rosbag2 record...' && \
-  ros2 bag record \
+  echo 'Topics are ready. Settling for ${WAIT_SECONDS}s...'
+  sleep ${WAIT_SECONDS}
+
+  echo 'Starting rosbag2 recorder (paused)...'
+  ros2 bag record --start-paused \
     -o ${OUT_DIR} \
     -s mcap \
     --storage-preset-profile zstd_fast \
-    ${TOPIC_ARGS}
+    ${TOPIC_ARGS} \
+    > /tmp/rosbag2_recorder.log 2>&1 &
+  REC_PID=\$!
+
+  echo 'Waiting for recorder services...'
+  timeout 15 bash -c 'until ros2 service list 2>/dev/null | grep -qx /rosbag2_recorder/resume; do sleep 0.5; done' \
+    || echo 'WARNING: /rosbag2_recorder/resume not ready within 15s — proceeding anyway' >&2
+
+  if [ -t 0 ]; then
+    state=paused
+    echo
+    echo '==============================================='
+    echo '  r = RECORD   s = STOP   Ctrl-C = finalize'
+    echo '==============================================='
+    echo \"[\$state]\"
+    stty -icanon -echo min 1 time 0
+    while IFS= read -r -n 1 key; do
+      case \"\$key\" in
+        r|R)
+          if [ \"\$state\" = paused ]; then
+            if ros2 service call /rosbag2_recorder/resume rosbag2_interfaces/srv/Resume '{}' >/dev/null 2>&1; then
+              state=recording
+              echo \"[\$state]\"
+            else
+              echo 'ERROR: resume call failed' >&2
+            fi
+          fi
+          ;;
+        s|S)
+          if [ \"\$state\" = recording ]; then
+            if ros2 service call /rosbag2_recorder/pause rosbag2_interfaces/srv/Pause '{}' >/dev/null 2>&1; then
+              state=paused
+              echo \"[\$state]\"
+            else
+              echo 'ERROR: pause call failed' >&2
+            fi
+          fi
+          ;;
+      esac
+    done
+  else
+    echo 'No TTY detected — auto-starting recording (send SIGINT to finalize)'
+    ros2 service call /rosbag2_recorder/resume rosbag2_interfaces/srv/Resume '{}' >/dev/null 2>&1 || true
+    wait \$REC_PID
+  fi
 "
