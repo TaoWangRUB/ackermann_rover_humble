@@ -168,8 +168,14 @@ else
             ;;
     esac
 
-    # Odometry source — priority mirrors rtabmap_slam.launch.py:
-    #   cuVSLAM > cuVSLAM RGBD > VINS > T265. Only the selected source is recorded
+    # T265 native odometry is recorded unconditionally on hardware: the T265
+    # is always plugged in regardless of which downstream odom source feeds
+    # RTAB-Map, and keeping it in every bag lets offline replay compare any
+    # other odometry path (cuVSLAM / VINS / RGBD) against the T265 baseline.
+    TOPICS+=(/t265/odom /t265/odom_base)
+
+    # Selected odometry source — priority mirrors rtabmap_slam.launch.py:
+    #   cuVSLAM > cuVSLAM RGBD > VINS > T265. Adds the source-specific topics
     #   so replay reconstructs the exact topology the launch file subscribes to.
     # When --compress-fisheye (default) is on for cuvslam/vins modes, the
     # fisheye image topic swapped to the compressed variant; the raw stream is
@@ -208,7 +214,6 @@ else
         TOPICS+=(/vins_odom)
         ODOM_LABEL="vins_odom"
     else  # T265
-        TOPICS+=(/t265/odom /t265/odom_base)
         ODOM_LABEL="t265"
     fi
 fi
@@ -288,6 +293,12 @@ else
         )
     fi
 
+    # T265 native odometry is recorded unconditionally on hardware (see the
+    # TOPICS section above). Gate startup on it for every odom mode so we
+    # don't begin recording before the T265 streams are flowing.
+    READY_TOPICS+=(/t265/odom /t265/odom_base)
+    MESSAGE_TOPICS+=(/t265/odom /t265/odom_base)
+
     if [[ "${CUVSLAM_ODOM}" == true ]]; then
         READY_TOPICS+=(
             "${FISHEYE_TOPIC_1}"
@@ -321,9 +332,6 @@ else
         )
         READY_TOPICS+=(/vins_odom)
         MESSAGE_TOPICS+=(/vins_odom)
-    else
-        READY_TOPICS+=(/t265/odom /t265/odom_base)
-        MESSAGE_TOPICS+=(/t265/odom /t265/odom_base)
     fi
 fi
 
