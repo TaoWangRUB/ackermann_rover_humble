@@ -94,11 +94,17 @@ enum CommandType {
   CMD_CANCEL_GOAL = 6;
   CMD_SET_PARAM = 7;
   CMD_DRIVE = 8;
+  CMD_RECORD = 9;
 }
 
 message DriveCmd {
   float speed_ms = 1;      // linear.x  (m/s, forward positive)
   float steering = 2;      // angular.z (normalized -1..+1, left positive in ROS)
+}
+
+message RecordCmd {
+  // "start" | "stop" | "toggle"
+  string action = 1;
 }
 
 enum AckStatus {
@@ -134,6 +140,7 @@ message RoverCommand {
   SetMode set_mode = 6;
   SetParam set_param = 7;
   DriveCmd drive = 8;
+  RecordCmd record = 9;
 }
 
 message CommandAck {

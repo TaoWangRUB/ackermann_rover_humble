@@ -45,8 +45,17 @@
 #   ./scripts/start_jetson_session.sh --mode-type=speed_steering
 #   ./scripts/start_jetson_session.sh --reversible-drive
 #   ./scripts/start_jetson_session.sh --no-activate
+#   ./scripts/start_jetson_session.sh --record
+#   ./scripts/start_jetson_session.sh --record --bag-name=kitchen_loop
+#   ./scripts/start_jetson_session.sh --record --no-compress-fisheye
 #   ./scripts/start_jetson_session.sh --no-attach
 #   ./scripts/start_jetson_session.sh --session=mytest
+#
+# --record adds a new 'record' window to the same tmux session running
+# scripts/record_bag.sh with the right --t265-odom/--cuvslam-odom/--vins-odom/
+# --rgbd-odom flag forwarded automatically. Switch windows with Ctrl-B 0/1.
+# The recorder also subscribes to /record/cmd, so the CC dashboard's Record
+# button (start|stop|toggle) drives the same segments.
 #
 # To stop everything:
 #   ./scripts/stop_all.sh --session=jetson
@@ -75,6 +84,9 @@ PUBLISHER_CONFIG_FILE="/workspace/src/rover_monitor/config/publisher.yaml"
 PX4_MODE_TYPE="manual"
 REVERSIBLE_DRIVE=true
 NAV2_CONTROLLER="mppi"
+ENABLE_RECORD=false
+RECORD_BAG_NAME=""
+RECORD_COMPRESS_FISHEYE=""   # "" | "true" | "false"
 
 for arg in "$@"; do
     case "${arg}" in
@@ -96,6 +108,10 @@ for arg in "$@"; do
         --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
         --broker-host=*)   BROKER_HOST="${arg#--broker-host=}" ;;
         --publisher-config=*) PUBLISHER_CONFIG_FILE="${arg#--publisher-config=}" ;;
+        --record)          ENABLE_RECORD=true ;;
+        --bag-name=*)      RECORD_BAG_NAME="${arg#--bag-name=}" ;;
+        --compress-fisheye)    RECORD_COMPRESS_FISHEYE="true" ;;
+        --no-compress-fisheye) RECORD_COMPRESS_FISHEYE="false" ;;
         --no-attach)       ATTACH=false ;;
         --session=*)       SESSION="${arg#--session=}" ;;
         -h|--help)
@@ -255,6 +271,29 @@ if [[ "${ENABLE_TELEMETRY}" == true ]]; then
 fi
 
 tmux select-pane -t "${PANE_ROS2}"
+
+# ── Window: Record (only with --record) ──────────────────────────────
+# A separate tmux window keeps the existing pane grid untouched. The
+# recorder waits for live topics (record_bag.sh has its own readiness
+# gate), then idles waiting for either keystrokes (r/s) in the pane or
+# 'start'/'stop'/'toggle' messages on /record/cmd from the CC button.
+if [[ "${ENABLE_RECORD}" == true ]]; then
+    REC_ARGS=()
+    [[ -n "${RECORD_BAG_NAME}" ]]    && REC_ARGS+=("--name=${RECORD_BAG_NAME}")
+    REC_ARGS+=("--depth-camera=${DEPTH_CAMERA}")
+    if   [[ "${CUVSLAM_ODOM}" == true ]]; then REC_ARGS+=("--cuvslam-odom")
+    elif [[ "${RGBD_ODOM}"    == true ]]; then REC_ARGS+=("--rgbd-odom")
+    elif [[ "${VINS_ODOM}"    == true ]]; then REC_ARGS+=("--vins-odom")
+    elif [[ "${T265_ODOM}"    == true ]]; then REC_ARGS+=("--t265-odom")
+    fi
+    [[ "${RECORD_COMPRESS_FISHEYE}" == "true"  ]] && REC_ARGS+=("--compress-fisheye")
+    [[ "${RECORD_COMPRESS_FISHEYE}" == "false" ]] && REC_ARGS+=("--no-compress-fisheye")
+
+    tmux new-window -t "${SESSION}" -n "record"
+    PANE_RECORD="$(tmux display-message -p -t "${SESSION}:record.0" "#{pane_id}")"
+    tmux send-keys -t "${PANE_RECORD}" \
+        "${SCRIPT_DIR}/record_bag.sh ${REC_ARGS[*]}" Enter
+fi
 
 # ── Report HW mode to Control Center ─────────────────────────────────
 # Jetson session = all real hardware. Report after a short delay so CC

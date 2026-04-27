@@ -84,6 +84,12 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   twist_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(
     "/cmd_vel", 10);
 
+  // Record-control bridge: MQTT rover/cmd/record -> /record/cmd (std_msgs/String).
+  // Latched so a recorder pane that starts after the command still sees it.
+  record_cmd_pub_ = this->create_publisher<std_msgs::msg::String>(
+    "/record/cmd",
+    rclcpp::QoS(1).transient_local().reliable());
+
   nav2_status_pub_ = this->create_publisher<rover_monitor::msg::Nav2Status>(
     "/monitor/nav2", 1);
   nav2_client_ = rclcpp_action::create_client<NavigateToPose>(
@@ -179,6 +185,7 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
         mqtt_client_->subscribe("rover/cmd/disarm", cmd_qos_);
         mqtt_client_->subscribe("rover/cmd/cancel_goal", cmd_qos_);
         mqtt_client_->subscribe("rover/cmd/drive", 0);  // QoS 0 for high-freq drive
+        mqtt_client_->subscribe("rover/cmd/record", cmd_qos_);
       } catch (const mqtt::exception & e) {
         RCLCPP_WARN(this->get_logger(), "MQTT subscribe failed: %s", e.what());
       }
@@ -237,6 +244,7 @@ void TelemetryPublisher::connect_mqtt()
       mqtt_client_->subscribe("rover/cmd/disarm", cmd_qos_);
       mqtt_client_->subscribe("rover/cmd/cancel_goal", cmd_qos_);
       mqtt_client_->subscribe("rover/cmd/drive", 0);  // QoS 0 for high-freq drive
+      mqtt_client_->subscribe("rover/cmd/record", cmd_qos_);
       RCLCPP_INFO(this->get_logger(), "Subscribed to rover/cmd/* topics (QoS %d)",
         cmd_qos_);
     } catch (const mqtt::exception & e) {
@@ -341,6 +349,9 @@ void TelemetryPublisher::dispatch_command(const std::string & cmd_id, int cmd_ty
       break;
     case rover_monitor_proto::CMD_DRIVE:
       handle_drive(cmd_id, payload);
+      break;
+    case rover_monitor_proto::CMD_RECORD:
+      handle_record(cmd_id, payload);
       break;
     default:
       RCLCPP_WARN(this->get_logger(), "Unknown command type %d for cmd_id=%s",
@@ -657,6 +668,37 @@ void TelemetryPublisher::handle_drive(const std::string & cmd_id,
   twist_pub_->publish(twist);
 
   // No ACK for drive — high-frequency, fire-and-forget
+}
+
+void TelemetryPublisher::handle_record(const std::string & cmd_id,
+  const std::string & payload)
+{
+  rover_monitor_proto::RoverCommand cmd;
+  cmd.ParseFromString(payload);
+
+  if (!cmd.has_record()) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_RECORD,
+      rover_monitor_proto::ACK_REJECTED, "Missing record field");
+    return;
+  }
+
+  const std::string & action = cmd.record().action();
+  if (action != "start" && action != "stop" && action != "toggle") {
+    send_ack(cmd_id, rover_monitor_proto::CMD_RECORD,
+      rover_monitor_proto::ACK_REJECTED,
+      "Record action must be start|stop|toggle");
+    return;
+  }
+
+  std_msgs::msg::String out;
+  out.data = action;
+  record_cmd_pub_->publish(out);
+
+  RCLCPP_INFO(this->get_logger(), "RECORD command: cmd_id=%s action=%s",
+    cmd_id.c_str(), action.c_str());
+  send_ack(cmd_id, rover_monitor_proto::CMD_RECORD,
+    rover_monitor_proto::ACK_ACCEPTED,
+    "Record action forwarded to /record/cmd");
 }
 
 void TelemetryPublisher::publish_vehicle_command(uint32_t command, float param1,
