@@ -63,6 +63,7 @@ ament_target_dependencies(${PROJECT_NAME}_components
   rclcpp_components
   sensor_msgs
   geometry_msgs
+  std_msgs
   nav_msgs
   nav2_msgs
   action_msgs
@@ -132,6 +133,7 @@ ament_export_dependencies(
   rclcpp_components
   sensor_msgs
   geometry_msgs
+  std_msgs
   nav_msgs
   nav2_msgs
   action_msgs

@@ -5,6 +5,7 @@
 #include <rover_monitor/msg/rover_health.hpp>
 #include <rover_monitor/msg/nav2_status.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <action_msgs/msg/goal_status_array.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
@@ -60,6 +61,7 @@ private:
   void handle_estop(const std::string & cmd_id);
   void handle_cancel_goal(const std::string & cmd_id);
   void handle_drive(const std::string & cmd_id, const std::string & payload);
+  void handle_record(const std::string & cmd_id, const std::string & payload);
 
   // Dedup
   bool is_duplicate(const std::string & cmd_id);
@@ -88,6 +90,10 @@ private:
 
   // E-stop twist publisher
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_pub_;
+
+  // Record-control publisher — bridges MQTT rover/cmd/record to record_bag.sh
+  // (which subscribes to /record/cmd as a String: "start" | "stop" | "toggle").
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr record_cmd_pub_;
 
   // Nav2 goal/status bridge
   rclcpp::Publisher<rover_monitor::msg::Nav2Status>::SharedPtr nav2_status_pub_;

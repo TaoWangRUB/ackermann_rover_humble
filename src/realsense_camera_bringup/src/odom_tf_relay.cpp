@@ -214,6 +214,16 @@ private:
         out.header.frame_id = output_frame_;
       }
       pub_->publish(out);
+      if (publish_tf_ && tf_broadcaster_) {
+        geometry_msgs::msg::TransformStamped tf;
+        tf.header = out.header;
+        tf.child_frame_id          = out.child_frame_id;
+        tf.transform.translation.x = out.pose.pose.position.x;
+        tf.transform.translation.y = out.pose.pose.position.y;
+        tf.transform.translation.z = out.pose.pose.position.z;
+        tf.transform.rotation      = out.pose.pose.orientation;
+        tf_broadcaster_->sendTransform(tf);
+      }
       return;
     }
 

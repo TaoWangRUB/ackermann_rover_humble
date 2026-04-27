@@ -30,6 +30,20 @@ __pycache__/
 .env.local
 
 # Local files
+egpu_diagnostics_*.tar.gz
 egpu_diagnostics_20260414_141153/
 odom_debug_bag/
-.venv_graphify/
+
+# Bag analysis / plotting scratch (commit specific helpers under tools/ instead)
+/parse_bag*.py
+/plot_bag*.py
+/plot_live_bag.py
+
+# Editor / AI tooling
+opencode.json
+
+# RTAB-Map databases (mapping/localization sessions)
+.rtabmap/
+
+# rosbag2 recordings
+bags/

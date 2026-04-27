@@ -89,6 +89,13 @@ ARGUMENTS = [
         description='Launch RTAB-Map in localization-only mode.'
     ),
     DeclareLaunchArgument(
+        'delete_db_on_start',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Wipe the RTAB-Map database at startup (mapping mode only; '
+                    'forced off when localization:=true).'
+    ),
+    DeclareLaunchArgument(
         'rtabmap',
         default_value='false',
         choices=['true', 'false'],
@@ -426,6 +433,37 @@ def generate_launch_description() -> LaunchDescription:
         }.items(),
     )
 
+    t265_sim_camera_info = Node(
+        package='robot_bringup',
+        executable='t265_sim_camera_info.py',
+        output='screen',
+        condition=IfCondition(PythonExpression([
+            '"true" if "', use_gazebo, '" == "true" and "', enable_t265, '" == "true" else "false"'
+        ])),
+        parameters=[{
+            'use_sim_time': use_sim_time,
+        }],
+    )
+
+    sim_t265_odom_relay = Node(
+        package='realsense_camera_bringup',
+        executable='odom_tf_relay',
+        name='sim_t265_odom_relay',
+        output='screen',
+        condition=IfCondition(PythonExpression([
+            '"true" if "', use_gazebo, '" == "true" and "', use_t265_odom, '" == "true" else "false"'
+        ])),
+        parameters=[{
+            'input_topic': '/t265/odom',
+            'output_topic': '/t265/odom_base',
+            'base_frame': 'ackermann/base_link',
+            'output_frame': 'odom',
+            'publish_tf': True,
+            'use_sim_time': use_sim_time,
+            'max_rate_hz': 30.0,
+        }],
+    )
+
     # -----------------------------------------------------------------------
     # RTAB-Map — topic names derived from depth_camera in both modes.
     #
@@ -446,6 +484,7 @@ def generate_launch_description() -> LaunchDescription:
             'use_sim_time': use_sim_time,
             'vision': vision,
             'localization': localization,
+            'delete_db_on_start': LaunchConfiguration('delete_db_on_start'),
             'rtabmap_viz': rtabmap_viz,
             'use_t265_odom': use_t265_odom,
             'use_vins_odom': use_vins_odom,
@@ -564,6 +603,8 @@ def generate_launch_description() -> LaunchDescription:
     ld.add_action(hw_robot_state_publisher)
     ld.add_action(hw_cameras_launch)
     # Common
+    ld.add_action(t265_sim_camera_info)
+    ld.add_action(sim_t265_odom_relay)
     ld.add_action(vins_launch)
     ld.add_action(cuvslam_launch)
     ld.add_action(cuvslam_rgbd_launch)

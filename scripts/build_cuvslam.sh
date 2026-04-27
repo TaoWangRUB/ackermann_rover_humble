@@ -104,7 +104,8 @@ cmake --build "${CUVSLAM_DST_DIR}" -j"${BUILD_JOBS}" --target cuvslam
 cd "${REPO_ROOT}"
 colcon build --symlink-install \
     --packages-select cuvslam_bringup robot_bringup rtabmap_bringup description_robot realsense_camera_bringup \
-    --event-handlers console_direct+
+    --event-handlers console_direct+ \
+    --cmake-force-configure
 
 "${REPO_ROOT}/install/cuvslam_bringup/lib/cuvslam_bringup/smoke_test_cuvslam"
 

@@ -39,12 +39,23 @@
 #   ./scripts/start_jetson_session.sh --t265-odom --with-telemetry
 #   ./scripts/start_jetson_session.sh --nav2
 #   ./scripts/start_jetson_session.sh --nav2 --with-telemetry
+#   ./scripts/start_jetson_session.sh --localization
+#   ./scripts/start_jetson_session.sh --keep-rtabmap-db
 #   ./scripts/start_jetson_session.sh --mode-id=24
 #   ./scripts/start_jetson_session.sh --mode-type=speed_steering
 #   ./scripts/start_jetson_session.sh --reversible-drive
 #   ./scripts/start_jetson_session.sh --no-activate
+#   ./scripts/start_jetson_session.sh --bag-name=kitchen_loop
+#   ./scripts/start_jetson_session.sh --no-compress-fisheye
+#   ./scripts/start_jetson_session.sh --no-record         # disable recorder window
 #   ./scripts/start_jetson_session.sh --no-attach
 #   ./scripts/start_jetson_session.sh --session=mytest
+#
+# Recording is ON BY DEFAULT: a 'record' window in the same tmux session runs
+# scripts/record_bag.sh with the right --t265-odom/--cuvslam-odom/--vins-odom/
+# --rgbd-odom flag forwarded automatically. The recorder subscribes to
+# /record/cmd, so the CC dashboard's Start/Stop buttons drive the segments.
+# Pass --no-record to skip the recorder window entirely.
 #
 # To stop everything:
 #   ./scripts/stop_all.sh --session=jetson
@@ -62,6 +73,8 @@ T265_ODOM=false
 CUVSLAM_ODOM=false
 RGBD_ODOM=false
 VINS_ODOM=false
+LOCALIZATION=false
+DELETE_DB_ON_START=""
 ACTIVATE=true
 MODE_ID="23"
 ATTACH=true
@@ -71,6 +84,9 @@ PUBLISHER_CONFIG_FILE="/workspace/src/rover_monitor/config/publisher.yaml"
 PX4_MODE_TYPE="manual"
 REVERSIBLE_DRIVE=true
 NAV2_CONTROLLER="mppi"
+ENABLE_RECORD=true
+RECORD_BAG_NAME=""
+RECORD_COMPRESS_FISHEYE=""   # "" | "true" | "false"
 
 for arg in "$@"; do
     case "${arg}" in
@@ -82,6 +98,9 @@ for arg in "$@"; do
         --cuvslam-odom)    CUVSLAM_ODOM=true ;;
         --rgbd-odom)       RGBD_ODOM=true ;;
         --vins-odom)       VINS_ODOM=true ;;
+        --localization)    LOCALIZATION=true ;;
+        --wipe-rtabmap-db) DELETE_DB_ON_START="true" ;;
+        --keep-rtabmap-db) DELETE_DB_ON_START="false" ;;
         --no-activate)     ACTIVATE=false ;;
         --mode-id=*)       MODE_ID="${arg#--mode-id=}" ;;
         --mode-type=*)     PX4_MODE_TYPE="${arg#--mode-type=}" ;;
@@ -89,6 +108,10 @@ for arg in "$@"; do
         --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
         --broker-host=*)   BROKER_HOST="${arg#--broker-host=}" ;;
         --publisher-config=*) PUBLISHER_CONFIG_FILE="${arg#--publisher-config=}" ;;
+        --no-record)       ENABLE_RECORD=false ;;
+        --bag-name=*)      RECORD_BAG_NAME="${arg#--bag-name=}" ;;
+        --compress-fisheye)    RECORD_COMPRESS_FISHEYE="true" ;;
+        --no-compress-fisheye) RECORD_COMPRESS_FISHEYE="false" ;;
         --no-attach)       ATTACH=false ;;
         --session=*)       SESSION="${arg#--session=}" ;;
         -h|--help)
@@ -98,7 +121,19 @@ for arg in "$@"; do
 done
 
 # ── Build sub-command arguments ───────────────────────────────────────
-ROS2_ARGS="--hw --rtabmap --no-rviz --depth-camera=${DEPTH_CAMERA}"
+ROS2_ARGS="--hw --no-rviz --depth-camera=${DEPTH_CAMERA}"
+if [[ "${LOCALIZATION}" == true ]]; then
+    ROS2_ARGS+=" --localization"
+else
+    ROS2_ARGS+=" --rtabmap"
+fi
+if [[ -n "${DELETE_DB_ON_START}" ]]; then
+    if [[ "${DELETE_DB_ON_START}" == "true" ]]; then
+        ROS2_ARGS+=" --wipe-rtabmap-db"
+    else
+        ROS2_ARGS+=" --keep-rtabmap-db"
+    fi
+fi
 if [[ "${T265_ODOM}" == true ]]; then
     ROS2_ARGS+=" --t265-odom"
 elif [[ "${ENABLE_T265}" == true ]]; then
@@ -236,6 +271,33 @@ if [[ "${ENABLE_TELEMETRY}" == true ]]; then
 fi
 
 tmux select-pane -t "${PANE_ROS2}"
+
+# ── Window: Record (default on, --no-record to disable) ─────────────
+# A separate tmux window keeps the existing pane grid untouched. The
+# recorder waits for live topics (record_bag.sh has its own readiness
+# gate), then idles waiting for either keystrokes (r/s) in the pane or
+# 'start'/'stop'/'toggle' messages on /record/cmd from the CC button.
+if [[ "${ENABLE_RECORD}" == true ]]; then
+    REC_ARGS=()
+    [[ -n "${RECORD_BAG_NAME}" ]]    && REC_ARGS+=("--name=${RECORD_BAG_NAME}")
+    REC_ARGS+=("--depth-camera=${DEPTH_CAMERA}")
+    if   [[ "${CUVSLAM_ODOM}" == true ]]; then REC_ARGS+=("--cuvslam-odom")
+    elif [[ "${RGBD_ODOM}"    == true ]]; then REC_ARGS+=("--rgbd-odom")
+    elif [[ "${VINS_ODOM}"    == true ]]; then REC_ARGS+=("--vins-odom")
+    elif [[ "${T265_ODOM}"    == true ]]; then REC_ARGS+=("--t265-odom")
+    fi
+    [[ "${RECORD_COMPRESS_FISHEYE}" == "true"  ]] && REC_ARGS+=("--compress-fisheye")
+    [[ "${RECORD_COMPRESS_FISHEYE}" == "false" ]] && REC_ARGS+=("--no-compress-fisheye")
+
+    # Append after current window. -t "${SESSION}" alone is ambiguous when
+    # window 0 is also named "jetson" (tmux resolves the target as a window
+    # and refuses to overwrite it); -a places the new window immediately
+    # after the active one.
+    tmux new-window -a -t "${SESSION}:0" -n "record"
+    PANE_RECORD="$(tmux display-message -p -t "${SESSION}:record.0" "#{pane_id}")"
+    tmux send-keys -t "${PANE_RECORD}" \
+        "${SCRIPT_DIR}/record_bag.sh ${REC_ARGS[*]}" Enter
+fi
 
 # ── Report HW mode to Control Center ─────────────────────────────────
 # Jetson session = all real hardware. Report after a short delay so CC
