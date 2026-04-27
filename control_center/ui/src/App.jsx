@@ -272,6 +272,34 @@ function Px4CommandsPanel() {
   );
 }
 
+function RecordPanel() {
+  // The recorder publishes no liveness back to CC yet, so the UI is
+  // fire-and-forget: each click sends start/stop/toggle on rover/cmd/record
+  // and the rover-side bridge forwards it to /record/cmd.
+  return (
+    <Panel title="Recording">
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button
+          onClick={() => sendDashboardCommand('record', { action: 'start' })}
+          style={{ background: '#dc2626', color: 'white' }}
+        >
+          ● Start
+        </button>
+        <button onClick={() => sendDashboardCommand('record', { action: 'stop' })}>
+          ■ Stop
+        </button>
+        <button onClick={() => sendDashboardCommand('record', { action: 'toggle' })}>
+          Toggle
+        </button>
+      </div>
+      <p style={{ fontSize: 11, color: '#6b7280', margin: '8px 0 0' }}>
+        Each Start opens a new bag segment (run_…/_seg{N}). Stop finalizes
+        the current segment.
+      </p>
+    </Panel>
+  );
+}
+
 function Nav2ControlPanel({ nav2 }) {
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
@@ -484,6 +512,7 @@ export default function App() {
         <AlertsPanel alerts={health?.activeAlerts} />
         <DrivePanel />
         <Px4CommandsPanel />
+        <RecordPanel />
         <Nav2ControlPanel nav2={health?.nav2} />
         <CommandLogPanel />
       </div>

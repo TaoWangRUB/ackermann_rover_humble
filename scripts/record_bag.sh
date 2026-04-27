@@ -376,9 +376,10 @@ mkdir -p "${PROJECT_DIR}/bags"
 
 # Build republisher launch prelude (compressed mode only). The republishers
 # subscribe to the RAW fisheye topics and publish CompressedImage on the
-# /compressed child topics that rosbag2 records. The unified cleanup()
-# function below stops them when the exec block exits.
-REPUBLISH_START=""
+# /compressed child topics that rosbag2 records. Must run BEFORE the
+# readiness wait, since READY_TOPICS contains the /compressed names which
+# only exist once these republishers are up. cleanup() below stops them.
+REPUBLISH_START=":"
 if [[ "${FISHEYE_COMPRESS_ACTIVE}" == true ]]; then
     REPUBLISH_START="
   echo 'Starting image_transport republishers (raw -> PNG)...' && \
@@ -396,7 +397,7 @@ if [[ "${FISHEYE_COMPRESS_ACTIVE}" == true ]]; then
       -p format:=png -p png_level:=3 \
       >/tmp/republish_fisheye2.log 2>&1 & \
   echo \"  fisheye2 republisher pid=\$!\" && \
-  sleep 2 && \\"
+  sleep 2"
 fi
 
 # Block on the /rtabmap node being up AND publishing a message. Waits up to
@@ -416,6 +417,10 @@ xdcomp exec ackermann_slam bash -c "
 
   SEGMENT=0
   REC_PID=''
+  ECHO_PID=''
+  CTRL_FILE=/tmp/record_ctrl.log
+  CTRL_OFFSET=0
+  : > \"\$CTRL_FILE\"  # truncate any leftover from a prior run
 
   # SIGTERM the current recorder and wait up to 30s for it to finalize the
   # MCAP + metadata.yaml. Escalates to SIGKILL as a last resort. No-op if
@@ -455,6 +460,49 @@ xdcomp exec ackermann_slam bash -c "
     echo \"[recording -> \$(basename \$SEG_DIR)]\"
   }
 
+  # High-level actions shared by TTY keys and remote /record/cmd messages.
+  do_start() {
+    if [ -z \"\$REC_PID\" ] || ! kill -0 \$REC_PID 2>/dev/null; then
+      start_segment
+    else
+      echo 'Already recording — stop the current segment first.'
+    fi
+  }
+  do_stop() {
+    if [ -n \"\$REC_PID\" ] && kill -0 \$REC_PID 2>/dev/null; then
+      echo 'Stopping current segment...'
+      stop_segment
+      echo '[idle]'
+    fi
+  }
+  do_toggle() {
+    if [ -n \"\$REC_PID\" ] && kill -0 \$REC_PID 2>/dev/null; then
+      do_stop
+    else
+      do_start
+    fi
+  }
+
+  # Drain any new lines from the /record/cmd capture file. Each line is a raw
+  # action string ('start' | 'stop' | 'toggle') as published by rover_monitor's
+  # MQTT->ROS bridge. Subshell-free so the offset variable persists.
+  drain_ctrl() {
+    [ -s \"\$CTRL_FILE\" ] || return 0
+    local sz
+    sz=\$(wc -c < \"\$CTRL_FILE\" 2>/dev/null || echo 0)
+    [ \"\$sz\" -le \"\$CTRL_OFFSET\" ] && return 0
+    local action
+    while IFS= read -r action; do
+      [ -z \"\$action\" ] && continue
+      case \"\$action\" in
+        start)  do_start ;;
+        stop)   do_stop ;;
+        toggle) do_toggle ;;
+      esac
+    done < <(tail -c +\$((CTRL_OFFSET+1)) \"\$CTRL_FILE\")
+    CTRL_OFFSET=\$sz
+  }
+
   cleanup() {
     stty sane 2>/dev/null || true
     printf '\n'
@@ -465,12 +513,16 @@ xdcomp exec ackermann_slam bash -c "
       # and cleanly finalizes the MCAP + metadata.yaml.
       stop_segment
     fi
+    if [ -n \"\$ECHO_PID\" ] && kill -0 \$ECHO_PID 2>/dev/null; then
+      kill -TERM \$ECHO_PID 2>/dev/null || true
+    fi
     pkill -INT -f 'image_transport/republish raw compressed' 2>/dev/null || true
     sleep 1
     pkill -f 'image_transport/republish raw compressed' 2>/dev/null || true
   }
   trap cleanup EXIT INT TERM
 
+  ${REPUBLISH_START}
   echo 'Waiting for required topics before recording...' && \
   timeout 180 bash -lc '
     for topic in ${READY_TOPICS[*]}; do
@@ -485,38 +537,44 @@ xdcomp exec ackermann_slam bash -c "
         echo \"  WARNING: no message on \${topic} within 30s (proceeding anyway)\" >&2
       fi
     done
-  ' && ${RTABMAP_WAIT_CMD} ${REPUBLISH_START}
+  ' && ${RTABMAP_WAIT_CMD}
   echo 'Topics are ready. Settling for ${WAIT_SECONDS}s...'
   sleep ${WAIT_SECONDS}
+
+  # Spawn /record/cmd subscriber. Match rover_monitor's QoS (transient_local +
+  # reliable) so a 'start' command published before this subscriber comes up
+  # is still delivered. Output is one action per line into CTRL_FILE.
+  echo 'Subscribing to /record/cmd for remote control (CC button)...'
+  ros2 topic echo \
+      --qos-reliability reliable \
+      --qos-durability transient_local \
+      --field data /record/cmd std_msgs/msg/String \
+      >> \"\$CTRL_FILE\" 2>/dev/null &
+  ECHO_PID=\$!
 
   if [ -t 0 ]; then
     echo
     echo '==================================================================='
-    echo '  r = START new bag   s = STOP & finalize current   Ctrl-C = exit'
+    echo '  r = START | s = STOP | Ctrl-C = exit | also accepts /record/cmd'
     echo '==================================================================='
     echo '[idle]'
-    stty -icanon -echo min 1 time 0
-    while IFS= read -r -n 1 key; do
+    # min=0 time=0 makes the read non-blocking; loop polls TTY + ctrl file.
+    stty -icanon -echo min 0 time 0
+    while :; do
+      key=''
+      IFS= read -t 0.5 -r -n 1 key 2>/dev/null || true
       case \"\$key\" in
-        r|R)
-          if [ -z \"\$REC_PID\" ] || ! kill -0 \$REC_PID 2>/dev/null; then
-            start_segment
-          else
-            echo 'Already recording — press s first to stop the current segment.'
-          fi
-          ;;
-        s|S)
-          if [ -n \"\$REC_PID\" ] && kill -0 \$REC_PID 2>/dev/null; then
-            echo 'Stopping current segment...'
-            stop_segment
-            echo '[idle]'
-          fi
-          ;;
+        r|R) do_start ;;
+        s|S) do_stop ;;
       esac
+      drain_ctrl
     done
   else
-    echo 'No TTY detected — recording a single segment (send SIGINT to finalize)'
+    echo 'No TTY detected — recording one segment + listening for /record/cmd'
     start_segment
-    wait \$REC_PID
+    while [ -n \"\$REC_PID\" ] && kill -0 \$REC_PID 2>/dev/null; do
+      sleep 0.5
+      drain_ctrl
+    done
   fi
 "
