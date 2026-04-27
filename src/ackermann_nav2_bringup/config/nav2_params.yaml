@@ -60,15 +60,15 @@ controller_server:
       ay_max: 3.0
       ay_min: -3.0
       az_max: 3.5
-      vx_std: 0.2
+      vx_std: 0.6
       vy_std: 0.2
       wz_std: 0.4
-      vx_max: 0.5
+      vx_max: 2.0
       vx_min: -0.35
       vy_max: 0.5
       wz_max: 1.9
       iteration_count: 1
-      prune_distance: 1.0
+      prune_distance: 4.0
       transform_tolerance: 1.0
       temperature: 0.3
       gamma: 0.015
@@ -79,7 +79,9 @@ controller_server:
         trajectory_step: 5
         time_step: 3
       AckermannConstraints:
-        min_turning_r: 0.2
+        # Gazebo steering_limit=0.4 rad with wheelbase=0.174 m gives
+        # a practical minimum radius of ~0.41 m; keep margin for tracking.
+        min_turning_r: 0.45
       critics:
         [
           "ConstraintCritic",
@@ -127,19 +129,19 @@ controller_server:
         max_path_occupancy_ratio: 0.05
         trajectory_point_step: 4
         threshold_to_consider: 0.5
-        offset_from_furthest: 20
+        offset_from_furthest: 40
         use_path_orientations: false
       PathFollowCritic:
         enabled: true
         cost_power: 1
         cost_weight: 5.0
-        offset_from_furthest: 5
+        offset_from_furthest: 20
         threshold_to_consider: 1.4
       PathAngleCritic:
         enabled: true
         cost_power: 1
         cost_weight: 2.0
-        offset_from_furthest: 4
+        offset_from_furthest: 16
         threshold_to_consider: 0.5
         max_angle_to_furthest: 1.0
         mode: 2
@@ -156,8 +158,8 @@ local_costmap:
       global_frame: odom
       robot_base_frame: ackermann/base_link
       rolling_window: true
-      width: 3
-      height: 3
+      width: 8
+      height: 8
       resolution: 0.05
       robot_radius: 0.22
       plugins: ["voxel_layer", "inflation_layer"]
@@ -255,7 +257,7 @@ planner_server:
       angle_quantization_bins: 72
       analytic_expansion_ratio: 3.5
       analytic_expansion_max_length: 5.0
-      minimum_turning_radius: 0.25            # matches rover physical geometry; 0.50 was too restrictive for 1 m goals near startup
+      minimum_turning_radius: 0.45            # matches Gazebo steering_limit=0.4 rad with margin for tracking
       reverse_penalty: 2.0
       change_penalty: 0.05
       non_straight_penalty: 1.05
@@ -350,8 +352,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.5, 0.0, 2.0]
-    min_velocity: [-0.5, 0.0, -2.0]
+    max_velocity: [2.0, 0.0, 2.0]
+    min_velocity: [-2.0, 0.0, -2.0]
     max_accel: [2.5, 0.0, 3.2]
     max_decel: [-2.5, 0.0, -3.2]
     odom_duration: 0.1

@@ -122,13 +122,21 @@ def generate_launch_description() -> LaunchDescription:
 
     # Simulated T265 feeds VIO consumers such as VINS-Fusion and cuVSLAM on x86.
     # Bridge them only when the T265 model is enabled to avoid noisy unused bridges.
+    # Gazebo camera sensors use the <topic> tag as a prefix and append /image,
+    # /camera_info, etc.  The fisheye xacro uses /${name}/fisheye{1,2} as the
+    # prefix, so Gazebo publishes e.g. /t265/fisheye1/image.  Remappings below
+    # translate these to the /image_raw names that cuVSLAM and VINS-Fusion expect.
+    # The T265 odom plugin publishes on /t265/odom. Keep that as the raw topic
+    # so robot_bringup can run the same odom_tf_relay pattern used by hardware:
+    # /t265/odom -> /t265/odom_base plus the odom -> ackermann/base_link TF.
     t265_bridge_topics = [
         '/t265/fisheye1/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
-        '/t265/fisheye1/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+        '/t265/fisheye1@sensor_msgs/msg/Image[gz.msgs.Image',
         '/t265/fisheye2/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
-        '/t265/fisheye2/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+        '/t265/fisheye2@sensor_msgs/msg/Image[gz.msgs.Image',
         '/t265/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
-        '/t265/pose/sample@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+        '/t265/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+        '/t265/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
     ]
 
     parameter_bridge = Node(
@@ -145,6 +153,10 @@ def generate_launch_description() -> LaunchDescription:
         arguments=t265_bridge_topics,
         output='screen',
         parameters=[{'use_sim_time': use_sim_time}],
+        remappings=[
+            ('/t265/fisheye1', '/t265/fisheye1/image_raw'),
+            ('/t265/fisheye2', '/t265/fisheye2/image_raw'),
+        ],
         condition=IfCondition(enable_t265),
     )
 

@@ -9,6 +9,7 @@ install(DIRECTORY launch config rviz
 
 install(PROGRAMS
   scripts/cmd_vel_joint_relay.py
+  scripts/t265_sim_camera_info.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

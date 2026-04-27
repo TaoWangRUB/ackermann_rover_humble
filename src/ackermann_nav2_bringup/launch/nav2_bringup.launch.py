@@ -114,7 +114,7 @@ ARGUMENTS = [
         description=(
             'Allow reverse driving. '
             'false = unidirectional ESC: vx_min=0, min_velocity x=0. '
-            'true  = bidirectional ESC: vx_min=-0.35, min_velocity x=-0.5.'
+            'true  = bidirectional ESC: reverse-capable planner/controller.'
         ),
     ),
     DeclareLaunchArgument(
@@ -192,15 +192,43 @@ def launch_setup(context, *args, **kwargs):
         'autostart': autostart,
         #'use_sim_time': use_sim_time,
         #'enable_stamped_cmd_vel': enable_stamped_cmd_vel,
-        'vx_min': '-0.35' if is_reversible else '0.0',
+        'vx_min': '-1.0' if is_reversible else '0.0',
         # Planner motion model: Reeds-Shepp allows reverse arcs (bidirectional),
         # Dubin is forward-only arcs. Must match reversible_drive setting.
         'motion_model_for_search': 'REEDS_SHEPP' if is_reversible else 'DUBIN',
         # min_velocity is a float[] — RewrittenYaml only handles scalars, so it is
         # injected directly on the velocity_smoother node below.
     }
+    # Keep forward-only mode conservative. In reversible mode, reduce the
+    # reverse penalty so Smac can choose short reverse maneuvers instead of
+    # large forward-only arcs when they are geometrically better.
+    param_substitutions['planner_server.ros__parameters.GridBased.reverse_penalty'] = (
+        '1.05' if is_reversible else '2.0'
+    )
+    if controller_type == 'mppi':
+        # Forward-only mode keeps the strong forward preference. Reversible
+        # mode lets the Reeds-Shepp path decide when reverse is useful. The
+        # planner still has a small reverse_penalty, so forward motion remains
+        # preferred without MPPI dithering around zero velocity.
+        param_substitutions[
+            'controller_server.ros__parameters.FollowPath.PreferForwardCritic.cost_weight'
+        ] = '0.0' if is_reversible else '10.0'
+        # When the planner gives a feasible Reeds-Shepp path with direction
+        # changes, follow those path orientations in reversible mode so MPPI
+        # commits to the requested reverse / forward transition instead of
+        # over-optimizing a far-ahead alignment target at the start.
+        param_substitutions[
+            'controller_server.ros__parameters.FollowPath.PathAlignCritic.use_path_orientations'
+        ] = 'true' if is_reversible else 'false'
+        param_substitutions[
+            'controller_server.ros__parameters.FollowPath.PathAlignCritic.offset_from_furthest'
+        ] = '20' if is_reversible else '40'
+    elif controller_type == 'rpp':
+        param_substitutions[
+            'controller_server.ros__parameters.FollowPath.allow_reversing'
+        ] = 'true' if is_reversible else 'false'
     min_velocity_override = {
-        'min_velocity': [-0.5, 0.0, -2.0] if is_reversible else [0.0, 0.0, -2.0],
+        'min_velocity': [-2.0, 0.0, -2.0] if is_reversible else [0.0, 0.0, -2.0],
     }
 
     configured_params = ParameterFile(

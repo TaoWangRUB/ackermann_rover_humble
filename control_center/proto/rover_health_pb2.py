@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='rover_monitor_proto',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x12rover_health.proto\x12\x13rover_monitor_proto\"\xc9\x01\n\tCamStatus\x12\x11\n\tcamera_id\x18\x01 \x01(\t\x12\x11\n\tconnected\x18\x02 \x01(\x08\x12\x16\n\x0e\x66rame_delta_ms\x18\x03 \x01(\x02\x12\x11\n\tdepth_fps\x18\x04 \x01(\x02\x12\x1d\n\x15\x64\x65pth_quality_sampled\x18\x05 \x01(\x02\x12\x12\n\nimu_active\x18\x06 \x01(\x08\x12\x12\n\nerror_code\x18\x07 \x01(\x05\x12\x11\n\terror_msg\x18\x08 \x01(\t\x12\x11\n\ttimestamp\x18\t \x01(\x03\"\x93\x02\n\tPx4Status\x12\x11\n\tconnected\x18\x01 \x01(\x08\x12\r\n\x05\x61rmed\x18\x02 \x01(\x08\x12\x0f\n\x07\x61rmable\x18\x03 \x01(\x08\x12\x11\n\tnav_state\x18\x04 \x01(\x05\x12\x17\n\x0fnav_state_label\x18\x05 \x01(\t\x12\x19\n\x11\x62\x61ttery_voltage_v\x18\x06 \x01(\x02\x12\x19\n\x11\x62\x61ttery_current_a\x18\x07 \x01(\x02\x12\x1d\n\x15\x62\x61ttery_remaining_pct\x18\x08 \x01(\x02\x12\x18\n\x10heartbeat_age_ms\x18\t \x01(\x05\x12\x12\n\nerror_code\x18\n \x01(\x05\x12\x11\n\terror_msg\x18\x0b \x01(\t\x12\x11\n\ttimestamp\x18\x0c \x01(\x03\"\x84\x03\n\x0cJetsonStatus\x12\x15\n\rcpu_usage_pct\x18\x01 \x03(\x02\x12\x15\n\rgpu_usage_pct\x18\x02 \x01(\x02\x12\x13\n\x0bram_used_mb\x18\x03 \x01(\x05\x12\x14\n\x0cram_total_mb\x18\x04 \x01(\x05\x12\x14\n\x0cswap_used_mb\x18\x05 \x01(\x05\x12\x14\n\x0c\x64isk_free_gb\x18\x06 \x01(\x02\x12\x12\n\ntemp_cpu_c\x18\x07 \x01(\x02\x12\x12\n\ntemp_gpu_c\x18\x08 \x01(\x02\x12\x14\n\x0ctemp_board_c\x18\t \x01(\x02\x12\x1c\n\x14is_thermal_throttled\x18\n \x01(\x08\x12\x1a\n\x12is_power_throttled\x18\x0b \x01(\x08\x12\x12\n\npower_mode\x18\x0c \x01(\t\x12\x17\n\x0fwifi_signal_dbm\x18\r \x01(\x02\x12\x10\n\x08uptime_s\x18\x0e \x01(\x05\x12\x12\n\nerror_code\x18\x0f \x01(\x05\x12\x11\n\terror_msg\x18\x10 \x01(\t\x12\x11\n\ttimestamp\x18\x11 \x01(\x03\"\x85\x02\n\x0bRoverHealth\x12\x0b\n\x03seq\x18\x01 \x01(\x05\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12.\n\x06\x63\x61mera\x18\x03 \x01(\x0b\x32\x1e.rover_monitor_proto.CamStatus\x12+\n\x03px4\x18\x04 \x01(\x0b\x32\x1e.rover_monitor_proto.Px4Status\x12\x31\n\x06jetson\x18\x05 \x01(\x0b\x32!.rover_monitor_proto.JetsonStatus\x12\x17\n\x0fslam_latency_ms\x18\x06 \x01(\x02\x12\x16\n\x0eoverall_health\x18\x07 \x01(\t\x12\x15\n\ractive_alerts\x18\x08 \x03(\t\".\n\x08\x44riveCmd\x12\x10\n\x08speed_ms\x18\x01 \x01(\x02\x12\x10\n\x08steering\x18\x02 \x01(\x02\"Q\n\x07NavGoal\x12\x10\n\x08latitude\x18\x01 \x01(\x01\x12\x11\n\tlongitude\x18\x02 \x01(\x01\x12\x10\n\x08\x61ltitude\x18\x03 \x01(\x01\x12\x0f\n\x07yaw_deg\x18\x04 \x01(\x02\"\x1c\n\x07SetMode\x12\x11\n\tmode_name\x18\x01 \x01(\t\"3\n\x08SetParam\x12\x12\n\nparam_name\x18\x01 \x01(\t\x12\x13\n\x0bparam_value\x18\x02 \x01(\t\"\xb8\x02\n\x0cRoverCommand\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\t\x12\x32\n\x08\x63md_type\x18\x02 \x01(\x0e\x32 .rover_monitor_proto.CommandType\x12\x11\n\ttimestamp\x18\x03 \x01(\x03\x12\x11\n\tissued_by\x18\x04 \x01(\t\x12.\n\x08nav_goal\x18\x05 \x01(\x0b\x32\x1c.rover_monitor_proto.NavGoal\x12.\n\x08set_mode\x18\x06 \x01(\x0b\x32\x1c.rover_monitor_proto.SetMode\x12\x30\n\tset_param\x18\x07 \x01(\x0b\x32\x1d.rover_monitor_proto.SetParam\x12,\n\x05\x64rive\x18\x08 \x01(\x0b\x32\x1d.rover_monitor_proto.DriveCmd\"\xbb\x01\n\nCommandAck\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\t\x12\x32\n\x08\x63md_type\x18\x02 \x01(\x0e\x32 .rover_monitor_proto.CommandType\x12.\n\x06status\x18\x03 \x01(\x0e\x32\x1e.rover_monitor_proto.AckStatus\x12\x0f\n\x07message\x18\x04 \x01(\t\x12\x11\n\ttimestamp\x18\x05 \x01(\x03\x12\x15\n\rround_trip_ms\x18\x06 \x01(\x05*\xa5\x01\n\x0b\x43ommandType\x12\x0f\n\x0b\x43MD_UNKNOWN\x10\x00\x12\x10\n\x0c\x43MD_NAV_GOAL\x10\x01\x12\x0b\n\x07\x43MD_ARM\x10\x02\x12\x0e\n\nCMD_DISARM\x10\x03\x12\x10\n\x0c\x43MD_SET_MODE\x10\x04\x12\r\n\tCMD_ESTOP\x10\x05\x12\x13\n\x0f\x43MD_CANCEL_GOAL\x10\x06\x12\x11\n\rCMD_SET_PARAM\x10\x07\x12\r\n\tCMD_DRIVE\x10\x08*d\n\tAckStatus\x12\x10\n\x0c\x41\x43K_RECEIVED\x10\x00\x12\x10\n\x0c\x41\x43K_ACCEPTED\x10\x01\x12\x10\n\x0c\x41\x43K_REJECTED\x10\x02\x12\x11\n\rACK_COMPLETED\x10\x03\x12\x0e\n\nACK_FAILED\x10\x04\x62\x06proto3')
+  serialized_pb=_b('\n\x12rover_health.proto\x12\x13rover_monitor_proto\"\x8c\x02\n\tCamStatus\x12\x11\n\tcamera_id\x18\x01 \x01(\t\x12\x11\n\tconnected\x18\x02 \x01(\x08\x12\x16\n\x0e\x66rame_delta_ms\x18\x03 \x01(\x02\x12\x12\n\nstream_fps\x18\x04 \x01(\x02\x12\x11\n\tdepth_fps\x18\x05 \x01(\x02\x12\x1d\n\x15\x64\x65pth_quality_sampled\x18\x06 \x01(\x02\x12\x12\n\nimu_active\x18\x07 \x01(\x08\x12\x12\n\nerror_code\x18\x08 \x01(\x05\x12\x11\n\terror_msg\x18\t \x01(\t\x12\x11\n\ttimestamp\x18\n \x01(\x03\x12\x18\n\x10stream_available\x18\x0b \x01(\x08\x12\x13\n\x0bodom_active\x18\x0c \x01(\x08\"\x93\x02\n\tPx4Status\x12\x11\n\tconnected\x18\x01 \x01(\x08\x12\r\n\x05\x61rmed\x18\x02 \x01(\x08\x12\x0f\n\x07\x61rmable\x18\x03 \x01(\x08\x12\x11\n\tnav_state\x18\x04 \x01(\x05\x12\x17\n\x0fnav_state_label\x18\x05 \x01(\t\x12\x19\n\x11\x62\x61ttery_voltage_v\x18\x06 \x01(\x02\x12\x19\n\x11\x62\x61ttery_current_a\x18\x07 \x01(\x02\x12\x1d\n\x15\x62\x61ttery_remaining_pct\x18\x08 \x01(\x02\x12\x18\n\x10heartbeat_age_ms\x18\t \x01(\x05\x12\x12\n\nerror_code\x18\n \x01(\x05\x12\x11\n\terror_msg\x18\x0b \x01(\t\x12\x11\n\ttimestamp\x18\x0c \x01(\x03\"\x84\x03\n\x0cJetsonStatus\x12\x15\n\rcpu_usage_pct\x18\x01 \x03(\x02\x12\x15\n\rgpu_usage_pct\x18\x02 \x01(\x02\x12\x13\n\x0bram_used_mb\x18\x03 \x01(\x05\x12\x14\n\x0cram_total_mb\x18\x04 \x01(\x05\x12\x14\n\x0cswap_used_mb\x18\x05 \x01(\x05\x12\x14\n\x0c\x64isk_free_gb\x18\x06 \x01(\x02\x12\x12\n\ntemp_cpu_c\x18\x07 \x01(\x02\x12\x12\n\ntemp_gpu_c\x18\x08 \x01(\x02\x12\x14\n\x0ctemp_board_c\x18\t \x01(\x02\x12\x1c\n\x14is_thermal_throttled\x18\n \x01(\x08\x12\x1a\n\x12is_power_throttled\x18\x0b \x01(\x08\x12\x12\n\npower_mode\x18\x0c \x01(\t\x12\x17\n\x0fwifi_signal_dbm\x18\r \x01(\x02\x12\x10\n\x08uptime_s\x18\x0e \x01(\x05\x12\x12\n\nerror_code\x18\x0f \x01(\x05\x12\x11\n\terror_msg\x18\x10 \x01(\t\x12\x11\n\ttimestamp\x18\x11 \x01(\x03\"\xcd\x02\n\nNav2Status\x12\x11\n\tavailable\x18\x01 \x01(\x08\x12\x12\n\nnavigating\x18\x02 \x01(\x08\x12\x1b\n\x13localization_active\x18\x03 \x01(\x08\x12\x19\n\x11goal_status_label\x18\x04 \x01(\t\x12\x17\n\x0f\x66\x65\x65\x64\x62\x61\x63k_status\x18\x05 \x01(\t\x12\x1c\n\x14\x64istance_remaining_m\x18\x06 \x01(\x02\x12\x13\n\x0b\x65ta_seconds\x18\x07 \x01(\x02\x12\x19\n\x11navigation_time_s\x18\x08 \x01(\x02\x12\x1c\n\x14number_of_recoveries\x18\t \x01(\x05\x12!\n\x19number_of_poses_remaining\x18\n \x01(\x05\x12\x12\n\nerror_code\x18\x0b \x01(\x05\x12\x11\n\terror_msg\x18\x0c \x01(\t\x12\x11\n\ttimestamp\x18\r \x01(\x03\"\xbb\x02\n\x0bRoverHealth\x12\x0b\n\x03seq\x18\x01 \x01(\x05\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12+\n\x03px4\x18\x04 \x01(\x0b\x32\x1e.rover_monitor_proto.Px4Status\x12\x31\n\x06jetson\x18\x05 \x01(\x0b\x32!.rover_monitor_proto.JetsonStatus\x12\x17\n\x0fslam_latency_ms\x18\x06 \x01(\x02\x12\x16\n\x0eoverall_health\x18\x07 \x01(\t\x12\x15\n\ractive_alerts\x18\x08 \x03(\t\x12/\n\x07\x63\x61meras\x18\t \x03(\x0b\x32\x1e.rover_monitor_proto.CamStatus\x12-\n\x04nav2\x18\n \x01(\x0b\x32\x1f.rover_monitor_proto.Nav2StatusJ\x04\x08\x03\x10\x04\".\n\x08\x44riveCmd\x12\x10\n\x08speed_ms\x18\x01 \x01(\x02\x12\x10\n\x08steering\x18\x02 \x01(\x02\"\x1b\n\tRecordCmd\x12\x0e\n\x06\x61\x63tion\x18\x01 \x01(\t\"Q\n\x07NavGoal\x12\x10\n\x08latitude\x18\x01 \x01(\x01\x12\x11\n\tlongitude\x18\x02 \x01(\x01\x12\x10\n\x08\x61ltitude\x18\x03 \x01(\x01\x12\x0f\n\x07yaw_deg\x18\x04 \x01(\x02\"\x1c\n\x07SetMode\x12\x11\n\tmode_name\x18\x01 \x01(\t\"3\n\x08SetParam\x12\x12\n\nparam_name\x18\x01 \x01(\t\x12\x13\n\x0bparam_value\x18\x02 \x01(\t\"\xe8\x02\n\x0cRoverCommand\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\t\x12\x32\n\x08\x63md_type\x18\x02 \x01(\x0e\x32 .rover_monitor_proto.CommandType\x12\x11\n\ttimestamp\x18\x03 \x01(\x03\x12\x11\n\tissued_by\x18\x04 \x01(\t\x12.\n\x08nav_goal\x18\x05 \x01(\x0b\x32\x1c.rover_monitor_proto.NavGoal\x12.\n\x08set_mode\x18\x06 \x01(\x0b\x32\x1c.rover_monitor_proto.SetMode\x12\x30\n\tset_param\x18\x07 \x01(\x0b\x32\x1d.rover_monitor_proto.SetParam\x12,\n\x05\x64rive\x18\x08 \x01(\x0b\x32\x1d.rover_monitor_proto.DriveCmd\x12.\n\x06record\x18\t \x01(\x0b\x32\x1e.rover_monitor_proto.RecordCmd\"\xbb\x01\n\nCommandAck\x12\x0e\n\x06\x63md_id\x18\x01 \x01(\t\x12\x32\n\x08\x63md_type\x18\x02 \x01(\x0e\x32 .rover_monitor_proto.CommandType\x12.\n\x06status\x18\x03 \x01(\x0e\x32\x1e.rover_monitor_proto.AckStatus\x12\x0f\n\x07message\x18\x04 \x01(\t\x12\x11\n\ttimestamp\x18\x05 \x01(\x03\x12\x15\n\rround_trip_ms\x18\x06 \x01(\x05*\xb5\x01\n\x0b\x43ommandType\x12\x0f\n\x0b\x43MD_UNKNOWN\x10\x00\x12\x10\n\x0c\x43MD_NAV_GOAL\x10\x01\x12\x0b\n\x07\x43MD_ARM\x10\x02\x12\x0e\n\nCMD_DISARM\x10\x03\x12\x10\n\x0c\x43MD_SET_MODE\x10\x04\x12\r\n\tCMD_ESTOP\x10\x05\x12\x13\n\x0f\x43MD_CANCEL_GOAL\x10\x06\x12\x11\n\rCMD_SET_PARAM\x10\x07\x12\r\n\tCMD_DRIVE\x10\x08\x12\x0e\n\nCMD_RECORD\x10\t*d\n\tAckStatus\x12\x10\n\x0c\x41\x43K_RECEIVED\x10\x00\x12\x10\n\x0c\x41\x43K_ACCEPTED\x10\x01\x12\x10\n\x0c\x41\x43K_REJECTED\x10\x02\x12\x11\n\rACK_COMPLETED\x10\x03\x12\x0e\n\nACK_FAILED\x10\x04\x62\x06proto3')
 )
 
 _COMMANDTYPE = _descriptor.EnumDescriptor(
@@ -65,11 +65,15 @@ _COMMANDTYPE = _descriptor.EnumDescriptor(
       name='CMD_DRIVE', index=8, number=8,
       serialized_options=None,
       type=None),
+    _descriptor.EnumValueDescriptor(
+      name='CMD_RECORD', index=9, number=9,
+      serialized_options=None,
+      type=None),
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=1900,
-  serialized_end=2065,
+  serialized_start=2434,
+  serialized_end=2615,
 )
 _sym_db.RegisterEnumDescriptor(_COMMANDTYPE)
 
@@ -103,8 +107,8 @@ _ACKSTATUS = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2067,
-  serialized_end=2167,
+  serialized_start=2617,
+  serialized_end=2717,
 )
 _sym_db.RegisterEnumDescriptor(_ACKSTATUS)
 
@@ -118,6 +122,7 @@ CMD_ESTOP = 5
 CMD_CANCEL_GOAL = 6
 CMD_SET_PARAM = 7
 CMD_DRIVE = 8
+CMD_RECORD = 9
 ACK_RECEIVED = 0
 ACK_ACCEPTED = 1
 ACK_REJECTED = 2
@@ -155,44 +160,65 @@ _CAMSTATUS = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='depth_fps', full_name='rover_monitor_proto.CamStatus.depth_fps', index=3,
+      name='stream_fps', full_name='rover_monitor_proto.CamStatus.stream_fps', index=3,
       number=4, type=2, cpp_type=6, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='depth_quality_sampled', full_name='rover_monitor_proto.CamStatus.depth_quality_sampled', index=4,
+      name='depth_fps', full_name='rover_monitor_proto.CamStatus.depth_fps', index=4,
       number=5, type=2, cpp_type=6, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='imu_active', full_name='rover_monitor_proto.CamStatus.imu_active', index=5,
-      number=6, type=8, cpp_type=7, label=1,
+      name='depth_quality_sampled', full_name='rover_monitor_proto.CamStatus.depth_quality_sampled', index=5,
+      number=6, type=2, cpp_type=6, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='imu_active', full_name='rover_monitor_proto.CamStatus.imu_active', index=6,
+      number=7, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='error_code', full_name='rover_monitor_proto.CamStatus.error_code', index=6,
-      number=7, type=5, cpp_type=1, label=1,
+      name='error_code', full_name='rover_monitor_proto.CamStatus.error_code', index=7,
+      number=8, type=5, cpp_type=1, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='error_msg', full_name='rover_monitor_proto.CamStatus.error_msg', index=7,
-      number=8, type=9, cpp_type=9, label=1,
+      name='error_msg', full_name='rover_monitor_proto.CamStatus.error_msg', index=8,
+      number=9, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='timestamp', full_name='rover_monitor_proto.CamStatus.timestamp', index=8,
-      number=9, type=3, cpp_type=2, label=1,
+      name='timestamp', full_name='rover_monitor_proto.CamStatus.timestamp', index=9,
+      number=10, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='stream_available', full_name='rover_monitor_proto.CamStatus.stream_available', index=10,
+      number=11, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='odom_active', full_name='rover_monitor_proto.CamStatus.odom_active', index=11,
+      number=12, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
@@ -209,7 +235,7 @@ _CAMSTATUS = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=44,
-  serialized_end=245,
+  serialized_end=312,
 )
 
 
@@ -316,8 +342,8 @@ _PX4STATUS = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=248,
-  serialized_end=523,
+  serialized_start=315,
+  serialized_end=590,
 )
 
 
@@ -459,8 +485,123 @@ _JETSONSTATUS = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=526,
-  serialized_end=914,
+  serialized_start=593,
+  serialized_end=981,
+)
+
+
+_NAV2STATUS = _descriptor.Descriptor(
+  name='Nav2Status',
+  full_name='rover_monitor_proto.Nav2Status',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='available', full_name='rover_monitor_proto.Nav2Status.available', index=0,
+      number=1, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='navigating', full_name='rover_monitor_proto.Nav2Status.navigating', index=1,
+      number=2, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='localization_active', full_name='rover_monitor_proto.Nav2Status.localization_active', index=2,
+      number=3, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='goal_status_label', full_name='rover_monitor_proto.Nav2Status.goal_status_label', index=3,
+      number=4, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='feedback_status', full_name='rover_monitor_proto.Nav2Status.feedback_status', index=4,
+      number=5, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='distance_remaining_m', full_name='rover_monitor_proto.Nav2Status.distance_remaining_m', index=5,
+      number=6, type=2, cpp_type=6, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='eta_seconds', full_name='rover_monitor_proto.Nav2Status.eta_seconds', index=6,
+      number=7, type=2, cpp_type=6, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='navigation_time_s', full_name='rover_monitor_proto.Nav2Status.navigation_time_s', index=7,
+      number=8, type=2, cpp_type=6, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='number_of_recoveries', full_name='rover_monitor_proto.Nav2Status.number_of_recoveries', index=8,
+      number=9, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='number_of_poses_remaining', full_name='rover_monitor_proto.Nav2Status.number_of_poses_remaining', index=9,
+      number=10, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='error_code', full_name='rover_monitor_proto.Nav2Status.error_code', index=10,
+      number=11, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='error_msg', full_name='rover_monitor_proto.Nav2Status.error_msg', index=11,
+      number=12, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='timestamp', full_name='rover_monitor_proto.Nav2Status.timestamp', index=12,
+      number=13, type=3, cpp_type=2, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=984,
+  serialized_end=1317,
 )
 
 
@@ -486,44 +627,51 @@ _ROVERHEALTH = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='camera', full_name='rover_monitor_proto.RoverHealth.camera', index=2,
-      number=3, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='px4', full_name='rover_monitor_proto.RoverHealth.px4', index=3,
+      name='px4', full_name='rover_monitor_proto.RoverHealth.px4', index=2,
       number=4, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='jetson', full_name='rover_monitor_proto.RoverHealth.jetson', index=4,
+      name='jetson', full_name='rover_monitor_proto.RoverHealth.jetson', index=3,
       number=5, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='slam_latency_ms', full_name='rover_monitor_proto.RoverHealth.slam_latency_ms', index=5,
+      name='slam_latency_ms', full_name='rover_monitor_proto.RoverHealth.slam_latency_ms', index=4,
       number=6, type=2, cpp_type=6, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='overall_health', full_name='rover_monitor_proto.RoverHealth.overall_health', index=6,
+      name='overall_health', full_name='rover_monitor_proto.RoverHealth.overall_health', index=5,
       number=7, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='active_alerts', full_name='rover_monitor_proto.RoverHealth.active_alerts', index=7,
+      name='active_alerts', full_name='rover_monitor_proto.RoverHealth.active_alerts', index=6,
       number=8, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='cameras', full_name='rover_monitor_proto.RoverHealth.cameras', index=7,
+      number=9, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='nav2', full_name='rover_monitor_proto.RoverHealth.nav2', index=8,
+      number=10, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
@@ -539,8 +687,8 @@ _ROVERHEALTH = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=917,
-  serialized_end=1178,
+  serialized_start=1320,
+  serialized_end=1635,
 )
 
 
@@ -577,8 +725,39 @@ _DRIVECMD = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1180,
-  serialized_end=1226,
+  serialized_start=1637,
+  serialized_end=1683,
+)
+
+
+_RECORDCMD = _descriptor.Descriptor(
+  name='RecordCmd',
+  full_name='rover_monitor_proto.RecordCmd',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='action', full_name='rover_monitor_proto.RecordCmd.action', index=0,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=1685,
+  serialized_end=1712,
 )
 
 
@@ -629,8 +808,8 @@ _NAVGOAL = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1228,
-  serialized_end=1309,
+  serialized_start=1714,
+  serialized_end=1795,
 )
 
 
@@ -660,8 +839,8 @@ _SETMODE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1311,
-  serialized_end=1339,
+  serialized_start=1797,
+  serialized_end=1825,
 )
 
 
@@ -698,8 +877,8 @@ _SETPARAM = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1341,
-  serialized_end=1392,
+  serialized_start=1827,
+  serialized_end=1878,
 )
 
 
@@ -766,6 +945,13 @@ _ROVERCOMMAND = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='record', full_name='rover_monitor_proto.RoverCommand.record', index=8,
+      number=9, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -778,8 +964,8 @@ _ROVERCOMMAND = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1395,
-  serialized_end=1707,
+  serialized_start=1881,
+  serialized_end=2241,
 )
 
 
@@ -844,25 +1030,29 @@ _COMMANDACK = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1710,
-  serialized_end=1897,
+  serialized_start=2244,
+  serialized_end=2431,
 )
 
-_ROVERHEALTH.fields_by_name['camera'].message_type = _CAMSTATUS
 _ROVERHEALTH.fields_by_name['px4'].message_type = _PX4STATUS
 _ROVERHEALTH.fields_by_name['jetson'].message_type = _JETSONSTATUS
+_ROVERHEALTH.fields_by_name['cameras'].message_type = _CAMSTATUS
+_ROVERHEALTH.fields_by_name['nav2'].message_type = _NAV2STATUS
 _ROVERCOMMAND.fields_by_name['cmd_type'].enum_type = _COMMANDTYPE
 _ROVERCOMMAND.fields_by_name['nav_goal'].message_type = _NAVGOAL
 _ROVERCOMMAND.fields_by_name['set_mode'].message_type = _SETMODE
 _ROVERCOMMAND.fields_by_name['set_param'].message_type = _SETPARAM
 _ROVERCOMMAND.fields_by_name['drive'].message_type = _DRIVECMD
+_ROVERCOMMAND.fields_by_name['record'].message_type = _RECORDCMD
 _COMMANDACK.fields_by_name['cmd_type'].enum_type = _COMMANDTYPE
 _COMMANDACK.fields_by_name['status'].enum_type = _ACKSTATUS
 DESCRIPTOR.message_types_by_name['CamStatus'] = _CAMSTATUS
 DESCRIPTOR.message_types_by_name['Px4Status'] = _PX4STATUS
 DESCRIPTOR.message_types_by_name['JetsonStatus'] = _JETSONSTATUS
+DESCRIPTOR.message_types_by_name['Nav2Status'] = _NAV2STATUS
 DESCRIPTOR.message_types_by_name['RoverHealth'] = _ROVERHEALTH
 DESCRIPTOR.message_types_by_name['DriveCmd'] = _DRIVECMD
+DESCRIPTOR.message_types_by_name['RecordCmd'] = _RECORDCMD
 DESCRIPTOR.message_types_by_name['NavGoal'] = _NAVGOAL
 DESCRIPTOR.message_types_by_name['SetMode'] = _SETMODE
 DESCRIPTOR.message_types_by_name['SetParam'] = _SETPARAM
@@ -893,6 +1083,13 @@ JetsonStatus = _reflection.GeneratedProtocolMessageType('JetsonStatus', (_messag
   ))
 _sym_db.RegisterMessage(JetsonStatus)
 
+Nav2Status = _reflection.GeneratedProtocolMessageType('Nav2Status', (_message.Message,), dict(
+  DESCRIPTOR = _NAV2STATUS,
+  __module__ = 'rover_health_pb2'
+  # @@protoc_insertion_point(class_scope:rover_monitor_proto.Nav2Status)
+  ))
+_sym_db.RegisterMessage(Nav2Status)
+
 RoverHealth = _reflection.GeneratedProtocolMessageType('RoverHealth', (_message.Message,), dict(
   DESCRIPTOR = _ROVERHEALTH,
   __module__ = 'rover_health_pb2'
@@ -906,6 +1103,13 @@ DriveCmd = _reflection.GeneratedProtocolMessageType('DriveCmd', (_message.Messag
   # @@protoc_insertion_point(class_scope:rover_monitor_proto.DriveCmd)
   ))
 _sym_db.RegisterMessage(DriveCmd)
+
+RecordCmd = _reflection.GeneratedProtocolMessageType('RecordCmd', (_message.Message,), dict(
+  DESCRIPTOR = _RECORDCMD,
+  __module__ = 'rover_health_pb2'
+  # @@protoc_insertion_point(class_scope:rover_monitor_proto.RecordCmd)
+  ))
+_sym_db.RegisterMessage(RecordCmd)
 
 NavGoal = _reflection.GeneratedProtocolMessageType('NavGoal', (_message.Message,), dict(
   DESCRIPTOR = _NAVGOAL,

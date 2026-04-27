@@ -19,7 +19,7 @@
         <always_on>true</always_on>
         <update_rate>${fisheye_fps}</update_rate>
         <visualize>false</visualize>
-        <topic>/${name}/fisheye1/image_raw</topic>
+        <topic>/${name}/fisheye1</topic>
         <camera>
           <optical_frame_id>${name}_fisheye1_optical_frame</optical_frame_id>
           <horizontal_fov>${fov}</horizontal_fov>
@@ -65,7 +65,7 @@
         <always_on>true</always_on>
         <update_rate>${fisheye_fps}</update_rate>
         <visualize>false</visualize>
-        <topic>/${name}/fisheye2/image_raw</topic>
+        <topic>/${name}/fisheye2</topic>
         <camera>
           <optical_frame_id>${name}_fisheye2_optical_frame</optical_frame_id>
           <horizontal_fov>${fov}</horizontal_fov>
@@ -129,12 +129,12 @@
       <!-- World odometry plugin (by default, odometry topic is used) -->
       <plugin filename="ignition-gazebo-odometry-publisher-system" name="ignition::gazebo::systems::OdometryPublisher">
         <dimensions>3</dimensions>
-        <odom_frame>odom_frame</odom_frame>
-        <robot_base_frame>${name}_link</robot_base_frame>
+        <odom_frame>odom</odom_frame>
+        <robot_base_frame>${parent}</robot_base_frame>
         <publish_link_pose>true</publish_link_pose>
-        <tf_topic>$(arg ns)/tf</tf_topic> 
-        <odom_topic>/${name}/pose/sample</odom_topic>
-        <publish_tf>false</publish_tf>
+        <tf_topic>/${name}/tf</tf_topic>
+        <odom_topic>/${name}/odom</odom_topic>
+        <publish_tf>true</publish_tf>
       </plugin>
     </gazebo>
   </xacro:macro>

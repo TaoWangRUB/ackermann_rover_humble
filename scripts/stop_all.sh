@@ -61,18 +61,45 @@ else
         " 2>/dev/null || true
     }
 
+    # Gazebo Harmonic is started by ros_gz_sim through the gz CLI, which is a
+    # Ruby wrapper on many installs. Those processes do not include /opt/ros or
+    # /workspace/install in their argv, so handle them explicitly. Keep the
+    # match tied to Gazebo/GZ arguments so unrelated Ruby processes survive.
+    sweep_gazebo() {
+        ${DC} exec -T ackermann_slam bash -c '
+            ps -eo pid=,comm=,args= \
+              | awk '"'"'
+                  $2 ~ /^(ruby|gz|gazebo|gzserver|gzclient|ign)$/ &&
+                  $0 ~ /(\/usr\/bin\/gz|(^|[[:space:]])gz[[:space:]]+sim|(^|[[:space:]])ign[[:space:]]+gazebo|gazebo|gzserver|gzclient)/ {
+                      print $1
+                  }
+                '"'"' \
+              | xargs -r kill -9 2>/dev/null || true
+        ' 2>/dev/null || true
+    }
+
     sweep
     sweep_python_helpers
+    sweep_gazebo
     sleep 1
     sweep   # second pass catches orphans that re-parented after first kill
     sweep_python_helpers
+    sweep_gazebo
 
     # Verify
     REMAINING=$(${DC} exec -T ackermann_slam bash -c "
-        ps aux --no-headers \
-          | grep -E '/opt/ros|/opt/microxrce|/workspace/install|python3 /workspace/scripts/' \
-          | grep -v 'docker\|grep' \
-          | wc -l
+        {
+          ps aux --no-headers \
+            | grep -E '/opt/ros|/opt/microxrce|/workspace/install|python3 /workspace/scripts/' \
+            | grep -v 'docker\|grep'
+          ps -eo pid=,comm=,args= \
+            | awk '
+                \$2 ~ /^(ruby|gz|gazebo|gzserver|gzclient|ign)$/ &&
+                \$0 ~ /(\/usr\/bin\/gz|(^|[[:space:]])gz[[:space:]]+sim|(^|[[:space:]])ign[[:space:]]+gazebo|gazebo|gzserver|gzclient)/ {
+                    print
+                }
+              '
+        } | wc -l
     " 2>/dev/null || echo "0")
 
     if [[ "${REMAINING}" -eq 0 ]]; then
@@ -83,6 +110,13 @@ else
             ps aux --no-headers \
               | grep -E '/opt/ros|/opt/microxrce|/workspace/install|python3 /workspace/scripts/' \
               | grep -v 'docker\|grep'
+            ps -eo pid=,comm=,args= \
+              | awk '
+                  \$2 ~ /^(ruby|gz|gazebo|gzserver|gzclient|ign)$/ &&
+                  \$0 ~ /(\/usr\/bin\/gz|(^|[[:space:]])gz[[:space:]]+sim|(^|[[:space:]])ign[[:space:]]+gazebo|gazebo|gzserver|gzclient)/ {
+                      print
+                  }
+                '
         " 2>/dev/null || true
     fi
 fi

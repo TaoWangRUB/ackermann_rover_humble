@@ -17,13 +17,16 @@
  *      odom_tf_relay -> EKF -> RTAB-Map / Nav2 / PX4.
  *
  * Frame conventions:
- *   - In the normal path the rig frame is "ackermann/base_link", so the raw
- *     odometry is already expressed as odom -> ackermann/base_link and the
- *     relay becomes a pass-through.
+ *   - In the normal T265 path the rig frame is "t265_pose_frame", matching
+ *     the raw built-in T265 odometry contract.
+ *   - odom_tf_relay adapts that raw sensor-frame odometry into
+ *     ackermann/base_link, latches the origin, and optionally publishes the
+ *     final odom -> ackermann/base_link TF edge.
  *   - If TF lookup for rig extrinsics times out, the node falls back to
  *     rig = left camera optical frame. In that fallback mode the published
  *     child_frame_id becomes the left fisheye optical frame so odom_tf_relay
- *     can compose the pose into ackermann/base_link via the static TF tree.
+ *     can still compose the pose into ackermann/base_link via the static TF
+ *     tree.
  */
 
 #include <cstdint>
@@ -194,7 +197,7 @@ public:
 
     odom_frame_id_ = declare_parameter<std::string>("odom_frame_id", "odom");
     rig_frame_id_ = declare_parameter<std::string>(
-      "rig_frame_id", "ackermann/base_link");
+      "rig_frame_id", "t265_pose_frame");
     imu_frame_id_param_ = declare_parameter<std::string>("imu_frame_id", "");
 
     use_imu_ = declare_parameter<bool>("use_imu", true);

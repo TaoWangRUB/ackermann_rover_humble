@@ -20,6 +20,10 @@ class SafetyGate:
         if cmd_type == "estop":
             return True, "E-STOP always allowed"
 
+        # Record control is independent of vehicle/PX4 state.
+        if cmd_type == "record":
+            return True, "Record always allowed"
+
         # Check cache staleness
         health_data, health_stale = await self._cache.get("health")
 

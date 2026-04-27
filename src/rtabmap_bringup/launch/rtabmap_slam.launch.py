@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """Launch RTAB-Map SLAM for the Ackermann rover."""
 
+import os
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+
+# DB lives under the workspace mount so it persists across container restarts.
+# Host equivalent: <repo>/.rtabmap/rover.db (repo is mounted at /workspace).
+RTABMAP_DB_PATH = '/workspace/.rtabmap/rover.db'
 
 ARGUMENTS = [
     DeclareLaunchArgument(
@@ -18,6 +25,13 @@ ARGUMENTS = [
         default_value='false',
         choices=['true', 'false'],
         description='Run RTAB-Map in localization-only mode.'
+    ),
+    DeclareLaunchArgument(
+        'delete_db_on_start',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Wipe the RTAB-Map database at startup (mapping mode only; '
+                    'forced off when localization:=true).'
     ),
     DeclareLaunchArgument(
         'vision',
@@ -79,6 +93,21 @@ ARGUMENTS = [
         description='Launch rtabmap_viz for debugging.'
     ),
     DeclareLaunchArgument(
+        'rtabmap_detection_rate',
+        default_value='1.0',
+        description='RTAB-Map signature creation rate in Hz. Use 0 to process every frame.'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap_vis_min_inliers',
+        default_value='20',
+        description='Minimum visual inliers required by RTAB-Map to accept loop closures.'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap_vis_max_features',
+        default_value='800',
+        description='Maximum number of visual features extracted by RTAB-Map for loop closure.'
+    ),
+    DeclareLaunchArgument(
         'imu_raw_topic', default_value='/l515/imu/raw',
         description='imu topic from sensor'),
     
@@ -124,6 +153,9 @@ def generate_launch_description() -> LaunchDescription:
     use_cuvslam_odom = LaunchConfiguration('use_cuvslam_odom')
     use_rgbd_odom = LaunchConfiguration('use_rgbd_odom')
     use_t265_odom = LaunchConfiguration('use_t265_odom')
+    rtabmap_detection_rate = LaunchConfiguration('rtabmap_detection_rate')
+    rtabmap_vis_min_inliers = LaunchConfiguration('rtabmap_vis_min_inliers')
+    rtabmap_vis_max_features = LaunchConfiguration('rtabmap_vis_max_features')
     t265_odom_topic = LaunchConfiguration('t265_odom_topic')
     vins_odom_topic = LaunchConfiguration('vins_odom_topic')
     cuvslam_odom_topic = LaunchConfiguration('cuvslam_odom_topic')
@@ -158,7 +190,8 @@ def generate_launch_description() -> LaunchDescription:
         'subscribe_scan':subscribe_scan,
         'subscribe_odom':True,
         'use_action_for_goal':True,
-        'odom_sensor_sync': False,   
+        'odom_sensor_sync': False,
+        'database_path': RTABMAP_DB_PATH,
         # RTAB-Map's parameters should be strings:
         'Mem/NotLinkedNodesKept':'false',
         'Grid/MaxGroundHeight': '0.1',
@@ -171,8 +204,11 @@ def generate_launch_description() -> LaunchDescription:
         'approx_sync_max_interval': 0.1,
         'topic_queue_size': 30,
         'sync_queue_size': 30,
+        'Rtabmap/DetectionRate': ParameterValue(rtabmap_detection_rate, value_type=str),
         'RGBD/LinearUpdate': '0.05',     # Update map more often (smaller motion threshold)
         'RGBD/AngularUpdate': '0.05',
+        'Vis/MinInliers': ParameterValue(rtabmap_vis_min_inliers, value_type=str),
+        'Vis/MaxFeatures': ParameterValue(rtabmap_vis_max_features, value_type=str),
     }
 
     shared_parameters = {
@@ -315,10 +351,13 @@ def generate_launch_description() -> LaunchDescription:
         'smooth_lagged_data': True,
         'use_sim_time': use_sim_time,
         'two_d_mode': True,
-        # When T265 odom is used, the T265 relay owns odom→base_link TF; VINS is
-        # adapted into message frame ids only, so EKF still owns the TF edge.
+        # External VIO relays adapt sensor-frame odometry into base_link and own
+        # the odom -> base_link TF edge. EKF still publishes /odometry/filtered,
+        # but must not publish a duplicate TF in those modes.
         'publish_tf': PythonExpression([
-            'False if "', use_t265_odom, '" == "true" else True'
+            'False if "', use_t265_odom, '" == "true" or "',
+            use_cuvslam_odom, '" == "true" or "', use_rgbd_odom,
+            '" == "true" or "', use_vins_odom, '" == "true" else True'
         ]),
         'map_frame': 'map',
         'odom_frame': 'odom',
@@ -385,12 +424,36 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[ekf_parameters],
     )
 
-    slam = Node(
-        condition=UnlessCondition(localization),
+    # Mapping mode splits into two conditional nodes so that -d is only passed
+    # when the user explicitly asks for a wipe. Localization mode (handled below)
+    # never gets -d: deleting the DB would erase the map being loaded.
+    slam_mapping_keep = PythonExpression([
+        '"true" if "', localization, '" == "false" and "',
+        LaunchConfiguration('delete_db_on_start'), '" == "false" else "false"'
+    ])
+    slam_mapping_wipe = PythonExpression([
+        '"true" if "', localization, '" == "false" and "',
+        LaunchConfiguration('delete_db_on_start'), '" == "true" else "false"'
+    ])
+
+    slam_common_params = [rtabmap_parameters, shared_parameters,
+                          {'Mem/IncrementalMemory': 'True'}]
+
+    slam_keep = Node(
+        condition=IfCondition(slam_mapping_keep),
         package='rtabmap_slam',
         executable='rtabmap',
         output='screen',
-        parameters=[rtabmap_parameters, shared_parameters],
+        parameters=slam_common_params,
+        remappings=consumer_remappings,
+    )
+
+    slam_wipe = Node(
+        condition=IfCondition(slam_mapping_wipe),
+        package='rtabmap_slam',
+        executable='rtabmap',
+        output='screen',
+        parameters=slam_common_params,
         remappings=consumer_remappings,
         arguments=['-d'],
     )
@@ -469,6 +532,8 @@ def generate_launch_description() -> LaunchDescription:
         remappings=[('obstacles', '/camera/obstacles'),
                     ('ground', '/camera/ground')])
     
+    os.makedirs(os.path.dirname(RTABMAP_DB_PATH), exist_ok=True)
+
     ld = LaunchDescription(ARGUMENTS)
     #ld.add_action(odom_relay_node)
     ld.add_action(rgbd_sync)
@@ -478,7 +543,8 @@ def generate_launch_description() -> LaunchDescription:
     #ld.add_action(visual_odom)
     #ld.add_action(icp_odom)
     #ld.add_action(ekf_filter_node)
-    ld.add_action(slam)
+    ld.add_action(slam_keep)
+    ld.add_action(slam_wipe)
     ld.add_action(localization_node)
     ld.add_action(rgbd_to_points)
     ld.add_action(obstacle_detection)
