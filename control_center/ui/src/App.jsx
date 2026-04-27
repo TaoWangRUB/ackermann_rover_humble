@@ -274,7 +274,7 @@ function Px4CommandsPanel() {
 
 function RecordPanel() {
   // The recorder publishes no liveness back to CC yet, so the UI is
-  // fire-and-forget: each click sends start/stop/toggle on rover/cmd/record
+  // fire-and-forget: each click sends start/stop on rover/cmd/record
   // and the rover-side bridge forwards it to /record/cmd.
   return (
     <Panel title="Recording">
@@ -287,9 +287,6 @@ function RecordPanel() {
         </button>
         <button onClick={() => sendDashboardCommand('record', { action: 'stop' })}>
           ■ Stop
-        </button>
-        <button onClick={() => sendDashboardCommand('record', { action: 'toggle' })}>
-          Toggle
         </button>
       </div>
       <p style={{ fontSize: 11, color: '#6b7280', margin: '8px 0 0' }}>

@@ -45,17 +45,17 @@
 #   ./scripts/start_jetson_session.sh --mode-type=speed_steering
 #   ./scripts/start_jetson_session.sh --reversible-drive
 #   ./scripts/start_jetson_session.sh --no-activate
-#   ./scripts/start_jetson_session.sh --record
-#   ./scripts/start_jetson_session.sh --record --bag-name=kitchen_loop
-#   ./scripts/start_jetson_session.sh --record --no-compress-fisheye
+#   ./scripts/start_jetson_session.sh --bag-name=kitchen_loop
+#   ./scripts/start_jetson_session.sh --no-compress-fisheye
+#   ./scripts/start_jetson_session.sh --no-record         # disable recorder window
 #   ./scripts/start_jetson_session.sh --no-attach
 #   ./scripts/start_jetson_session.sh --session=mytest
 #
-# --record adds a new 'record' window to the same tmux session running
+# Recording is ON BY DEFAULT: a 'record' window in the same tmux session runs
 # scripts/record_bag.sh with the right --t265-odom/--cuvslam-odom/--vins-odom/
-# --rgbd-odom flag forwarded automatically. Switch windows with Ctrl-B 0/1.
-# The recorder also subscribes to /record/cmd, so the CC dashboard's Record
-# button (start|stop|toggle) drives the same segments.
+# --rgbd-odom flag forwarded automatically. The recorder subscribes to
+# /record/cmd, so the CC dashboard's Start/Stop buttons drive the segments.
+# Pass --no-record to skip the recorder window entirely.
 #
 # To stop everything:
 #   ./scripts/stop_all.sh --session=jetson
@@ -84,7 +84,7 @@ PUBLISHER_CONFIG_FILE="/workspace/src/rover_monitor/config/publisher.yaml"
 PX4_MODE_TYPE="manual"
 REVERSIBLE_DRIVE=true
 NAV2_CONTROLLER="mppi"
-ENABLE_RECORD=false
+ENABLE_RECORD=true
 RECORD_BAG_NAME=""
 RECORD_COMPRESS_FISHEYE=""   # "" | "true" | "false"
 
@@ -108,7 +108,7 @@ for arg in "$@"; do
         --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
         --broker-host=*)   BROKER_HOST="${arg#--broker-host=}" ;;
         --publisher-config=*) PUBLISHER_CONFIG_FILE="${arg#--publisher-config=}" ;;
-        --record)          ENABLE_RECORD=true ;;
+        --no-record)       ENABLE_RECORD=false ;;
         --bag-name=*)      RECORD_BAG_NAME="${arg#--bag-name=}" ;;
         --compress-fisheye)    RECORD_COMPRESS_FISHEYE="true" ;;
         --no-compress-fisheye) RECORD_COMPRESS_FISHEYE="false" ;;
@@ -272,7 +272,7 @@ fi
 
 tmux select-pane -t "${PANE_ROS2}"
 
-# ── Window: Record (only with --record) ──────────────────────────────
+# ── Window: Record (default on, --no-record to disable) ─────────────
 # A separate tmux window keeps the existing pane grid untouched. The
 # recorder waits for live topics (record_bag.sh has its own readiness
 # gate), then idles waiting for either keystrokes (r/s) in the pane or
