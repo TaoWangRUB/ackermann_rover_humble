@@ -289,7 +289,11 @@ if [[ "${ENABLE_RECORD}" == true ]]; then
     [[ "${RECORD_COMPRESS_FISHEYE}" == "true"  ]] && REC_ARGS+=("--compress-fisheye")
     [[ "${RECORD_COMPRESS_FISHEYE}" == "false" ]] && REC_ARGS+=("--no-compress-fisheye")
 
-    tmux new-window -t "${SESSION}" -n "record"
+    # Append after current window. -t "${SESSION}" alone is ambiguous when
+    # window 0 is also named "jetson" (tmux resolves the target as a window
+    # and refuses to overwrite it); -a places the new window immediately
+    # after the active one.
+    tmux new-window -a -t "${SESSION}:0" -n "record"
     PANE_RECORD="$(tmux display-message -p -t "${SESSION}:record.0" "#{pane_id}")"
     tmux send-keys -t "${PANE_RECORD}" \
         "${SCRIPT_DIR}/record_bag.sh ${REC_ARGS[*]}" Enter
