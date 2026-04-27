@@ -636,7 +636,48 @@ Without a TTY (e.g. piped or non-interactive run), the script falls
 back to recording a single segment that auto-starts and runs until
 SIGINT.
 
-### 7.2.5 Replay workflow
+### 7.2.5 Recording workflow (live stack already up)
+
+The record path assumes the Jetson session
+(`start_jetson_session.sh`) is already running — cameras, RTAB-Map,
+TF, and PX4 bridge stay up across recording sessions. From a fresh
+SSH terminal:
+
+```bash
+# 1. Verify the Jetson session is up (rover_stack tmux + container nodes)
+ssh jetson 'tmux ls && \
+  cd ~/workspace/ackermann_rover_humble && \
+  source scripts/lib/dc.sh && \
+  dcomp exec -T ackermann_slam bash -lc \
+    "source /opt/ros/jazzy/setup.bash && ros2 node list" \
+    | grep -E "/d435i|/t265|/rtabmap"'
+
+# 2. Launch the record session (tmux session "rosbag", record_bag.sh in pane 0)
+ssh -tt jetson 'cd ~/workspace/ackermann_rover_humble && \
+  ./scripts/start_rosbag_session.sh --record --t265-odom \
+    --name=run_$(date +%Y%m%d_%H%M)'
+
+# 3. Once "[idle]" appears in the record pane, drive segments with r / s.
+#    Ctrl-C in the pane finalizes the active segment and exits.
+```
+
+Re-attach to a detached session at any time:
+
+```bash
+ssh -tt jetson 'tmux attach -t rosbag'
+```
+
+Use `--cuvslam-odom`, `--vins-odom`, or `--rgbd-odom` to record the
+matching SLAM-input topology (T265 fisheye streams + the chosen
+`*_odom` topic). T265 native odometry (`/t265/odom`,
+`/t265/odom_base`) is included in every hardware bag regardless of
+flag (see 7.2.2).
+
+After Ctrl-C, the bag lives at `~/workspace/ackermann_rover_humble/bags/<NAME>_seg<N>/`
+on the Jetson; sync it to the host with rsync (see next section)
+before replay.
+
+### 7.2.6 Replay workflow
 
 ```bash
 # Sync bag from Jetson to host (rsync over WLAN, ~4 MB/s steady)
@@ -656,7 +697,7 @@ inspection shell (right). The bag-play pane waits for `/rtabmap` to
 appear before starting playback, so the first frames don't get
 dropped during RTAB-Map's lifecycle init.
 
-### 7.2.6 Round-trip validation (Jetson, 2026-04-24)
+### 7.2.7 Round-trip validation (Jetson, 2026-04-24)
 
 End-to-end test on real HW:
 

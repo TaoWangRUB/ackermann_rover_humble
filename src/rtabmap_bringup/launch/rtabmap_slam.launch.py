@@ -8,6 +8,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 # DB lives under the workspace mount so it persists across container restarts.
 # Host equivalent: <repo>/.rtabmap/rover.db (repo is mounted at /workspace).
@@ -92,6 +93,21 @@ ARGUMENTS = [
         description='Launch rtabmap_viz for debugging.'
     ),
     DeclareLaunchArgument(
+        'rtabmap_detection_rate',
+        default_value='1.0',
+        description='RTAB-Map signature creation rate in Hz. Use 0 to process every frame.'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap_vis_min_inliers',
+        default_value='20',
+        description='Minimum visual inliers required by RTAB-Map to accept loop closures.'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap_vis_max_features',
+        default_value='800',
+        description='Maximum number of visual features extracted by RTAB-Map for loop closure.'
+    ),
+    DeclareLaunchArgument(
         'imu_raw_topic', default_value='/l515/imu/raw',
         description='imu topic from sensor'),
     
@@ -137,6 +153,9 @@ def generate_launch_description() -> LaunchDescription:
     use_cuvslam_odom = LaunchConfiguration('use_cuvslam_odom')
     use_rgbd_odom = LaunchConfiguration('use_rgbd_odom')
     use_t265_odom = LaunchConfiguration('use_t265_odom')
+    rtabmap_detection_rate = LaunchConfiguration('rtabmap_detection_rate')
+    rtabmap_vis_min_inliers = LaunchConfiguration('rtabmap_vis_min_inliers')
+    rtabmap_vis_max_features = LaunchConfiguration('rtabmap_vis_max_features')
     t265_odom_topic = LaunchConfiguration('t265_odom_topic')
     vins_odom_topic = LaunchConfiguration('vins_odom_topic')
     cuvslam_odom_topic = LaunchConfiguration('cuvslam_odom_topic')
@@ -185,8 +204,11 @@ def generate_launch_description() -> LaunchDescription:
         'approx_sync_max_interval': 0.1,
         'topic_queue_size': 30,
         'sync_queue_size': 30,
+        'Rtabmap/DetectionRate': ParameterValue(rtabmap_detection_rate, value_type=str),
         'RGBD/LinearUpdate': '0.05',     # Update map more often (smaller motion threshold)
         'RGBD/AngularUpdate': '0.05',
+        'Vis/MinInliers': ParameterValue(rtabmap_vis_min_inliers, value_type=str),
+        'Vis/MaxFeatures': ParameterValue(rtabmap_vis_max_features, value_type=str),
     }
 
     shared_parameters = {
