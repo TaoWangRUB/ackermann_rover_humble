@@ -290,7 +290,7 @@ function RecordPanel() {
         </button>
       </div>
       <p style={{ fontSize: 11, color: '#6b7280', margin: '8px 0 0' }}>
-        Each Start opens a new bag segment (run_…/_seg{N}). Stop finalizes
+        Each Start opens a new bag segment (run_…/_segN). Stop finalizes
         the current segment.
       </p>
     </Panel>
