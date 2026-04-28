@@ -4,7 +4,18 @@
 #
 # Usage:
 #   ./scripts/start_docker.sh
+#   ./scripts/start_docker.sh --dds-mode=local
 set -euo pipefail
+
+ROS_DDS_MODE_OVERRIDE=""
+
+for arg in "$@"; do
+    case "$arg" in
+        --dds-mode=*) ROS_DDS_MODE_OVERRIDE="${arg#--dds-mode=}" ;;
+        -h|--help) ;;
+        *) echo "Unknown argument: $arg" >&2; exit 2 ;;
+    esac
+done
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
@@ -17,6 +28,10 @@ source "${SCRIPT_DIR}/lib/dc.sh"
 # Allow local X11 connections only when an X server is available.
 if [[ -n "${DISPLAY:-}" ]] && command -v xhost >/dev/null 2>&1; then
     xhost +local: || true
+fi
+
+if [[ -n "${ROS_DDS_MODE_OVERRIDE}" ]]; then
+    export ROS_DDS_MODE="${ROS_DDS_MODE_OVERRIDE}"
 fi
 
 if ! dcomp ps --services --filter status=running \
