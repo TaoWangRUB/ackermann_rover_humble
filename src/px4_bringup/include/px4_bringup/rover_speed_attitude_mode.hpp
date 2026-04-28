@@ -45,7 +45,7 @@ class RoverSpeedAttitudeMode : public px4_ros2::ModeBase
 {
 public:
   explicit RoverSpeedAttitudeMode(rclcpp::Node & node)
-  : ModeBase(node, Settings{"Rover Speed Attitude"}),
+  : ModeBase(node, Settings{"Rover Speed Attitude"}.preventArming(false)),
     node_(node)
   {
     speed_attitude_setpoint_ =

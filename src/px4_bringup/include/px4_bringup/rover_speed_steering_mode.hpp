@@ -41,7 +41,7 @@ class RoverSpeedSteeringMode : public px4_ros2::ModeBase
 {
 public:
   explicit RoverSpeedSteeringMode(rclcpp::Node & node)
-  : ModeBase(node, Settings{"Rover Speed Steering"}),
+  : ModeBase(node, Settings{"Rover Speed Steering"}.preventArming(false)),
     node_(node)
   {
     speed_steering_setpoint_ =
