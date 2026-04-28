@@ -3,34 +3,65 @@ set -e
 
 # Base ROS 2 distro (default to jazzy if not set)
 : "${ROS_DISTRO:=jazzy}"
+: "${ROS_DDS_MODE:=eth+shm}"
 
-FASTDDS_PROFILE="/workspace/config/fastdds_eth_only.xml"
 FASTDDS_SHELL_HOOK="${HOME}/.fastdds_eth_env.sh"
 
 cat > "${FASTDDS_SHELL_HOOK}" <<'EOF'
 #!/bin/bash
-_fastdds_profile="/workspace/config/fastdds_eth_only.xml"
+_eth_only_profile="/workspace/config/fastdds_eth_only.xml"
+_eth_shm_profile="/workspace/config/fastdds_eth_shm.xml"
+_fastdds_profile=""
+_ros_dds_mode="${ROS_DDS_MODE:-eth+shm}"
 
-if [[ -f "${_fastdds_profile}" ]]; then
+_detect_eth_ip() {
+  hostname -I 2>/dev/null \
+    | tr ' ' '\n' \
+    | awk '/^10\.42\./ { print; exit }'
+}
+
+# Reset profile-related variables each time the hook runs so switching modes
+# in a fresh shell reliably changes the DDS transport configuration.
+unset FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
+
+if [[ -z "${RMW_IMPLEMENTATION:-}" ]]; then
+  export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+fi
+
+case "${_ros_dds_mode}" in
+  local)
+    ;;
+  eth+shm|eth_shm|eth-shm)
+    _fastdds_profile="${_eth_shm_profile}"
+    ;;
+  eth-only|eth_only|eth)
+    _fastdds_profile="${_eth_only_profile}"
+    ;;
+  *)
+    echo "Unknown ROS_DDS_MODE='${_ros_dds_mode}'. Supported values: eth+shm, eth-only, local. Falling back to local." >&2
+    _ros_dds_mode="local"
+    ;;
+esac
+
+if [[ -n "${_fastdds_profile}" ]]; then
   if [[ -z "${ROS_ETH_INTERFACE_IP:-}" ]]; then
-    _detected_eth_ip="$(
-      hostname -I 2>/dev/null \
-      | tr ' ' '\n' \
-      | awk '/^10\.42\./ { print; exit }'
-    )"
+    _detected_eth_ip="$(_detect_eth_ip)"
     if [[ -n "${_detected_eth_ip}" ]]; then
       export ROS_ETH_INTERFACE_IP="${_detected_eth_ip}"
     fi
   fi
 
   if [[ -n "${ROS_ETH_INTERFACE_IP:-}" ]]; then
-    export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     export FASTRTPS_DEFAULT_PROFILES_FILE="${_fastdds_profile}"
     export FASTDDS_DEFAULT_PROFILES_FILE="${_fastdds_profile}"
+  else
+    echo "ROS_DDS_MODE=${_ros_dds_mode}, but no 10.42.x.x ethernet IP was detected; skipping Fast DDS profile." >&2
   fi
 fi
 
-unset _fastdds_profile _detected_eth_ip
+export ROS_DDS_MODE="${_ros_dds_mode}"
+
+unset _eth_only_profile _eth_shm_profile _fastdds_profile _ros_dds_mode _detect_eth_ip _detected_eth_ip
 EOF
 chmod +x "${FASTDDS_SHELL_HOOK}"
 
@@ -49,6 +80,12 @@ ensure_shell_hook "${HOME}/.profile"
 
 # Load the Fast DDS shell hook for the initial container command too.
 source "${FASTDDS_SHELL_HOOK}"
+
+if [[ -n "${FASTRTPS_DEFAULT_PROFILES_FILE:-}" ]]; then
+  echo "ROS DDS mode: ${ROS_DDS_MODE} (profile: ${FASTRTPS_DEFAULT_PROFILES_FILE})"
+else
+  echo "ROS DDS mode: ${ROS_DDS_MODE} (Fast DDS builtin transports)"
+fi
 
 # Update apt index and install ROS package dependencies via rosdep
 sudo apt-get update -qq
