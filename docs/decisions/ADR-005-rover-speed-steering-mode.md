@@ -79,9 +79,13 @@ flexibility for mixed sim/hw launch configurations.
 - Steering is still open-loop (normalized, not angle-controlled) — lateral
   tracking quality depends on tuning `max_steering_rate` to match the physical
   vehicle.
-- Does not implement the FMU reconnect retry loop (unlike `RoverManualMode`)
+- ~~Does not implement the FMU reconnect retry loop (unlike `RoverManualMode`)
   — the `rover_speed_steering_main.cpp` entry point uses the single-spin
-  pattern. A future ADR or task should align this with ADR-004.
+  pattern. A future ADR or task should align this with ADR-004.~~
+  **Resolved:** `rover_speed_steering_main.cpp` now mirrors the
+  `while(true) { rclcpp::init(); try {...} catch (px4_ros2::Exception&) {
+  shutdown; sleep; } }` pattern from `rover_manual_main.cpp`. Settings ctor
+  also gained an explicit `.preventArming(false)` for symmetry.
 
 ## Implementation Notes
 

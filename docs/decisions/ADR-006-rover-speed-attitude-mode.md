@@ -95,8 +95,12 @@ provides heading hold; the correct approach is to use the right setpoint type.
 - Not suitable for continuous Nav2 path following — Nav2 recomputes `cmd_vel`
   at high frequency, and the cumulative integration of its angular corrections
   drifts from Nav2's intended heading. Use `RoverSpeedSteeringMode` for Nav2.
-- Does not implement the FMU reconnect retry loop (unlike `RoverManualMode`).
-  A future task should align this with ADR-004.
+- ~~Does not implement the FMU reconnect retry loop (unlike `RoverManualMode`).
+  A future task should align this with ADR-004.~~
+  **Resolved:** `rover_speed_attitude_main.cpp` now mirrors the
+  `while(true) { rclcpp::init(); try {...} catch (px4_ros2::Exception&) {
+  shutdown; sleep; } }` pattern from `rover_manual_main.cpp`. Settings ctor
+  also gained an explicit `.preventArming(false)` for symmetry.
 
 ## Implementation Notes
 
