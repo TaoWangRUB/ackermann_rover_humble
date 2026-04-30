@@ -84,6 +84,7 @@ RGBD_ODOM=false
 VINS_ODOM=false
 RTABMAP_VIZ=true
 DELETE_DB=true
+LOCALIZATION=false
 RTABMAP_VIS_MIN_INLIERS="6"
 RTABMAP_DETECTION_RATE="0"
 RTABMAP_VIS_ESTIMATION_TYPE="1"
@@ -119,6 +120,8 @@ while [[ $# -gt 0 ]]; do
         --no-viz)              RTABMAP_VIZ=false ;;
         --keep-db)             DELETE_DB=false ;;
         --delete-db)           DELETE_DB=true ;;
+        --localization)        LOCALIZATION=true; DELETE_DB=false ;;
+        --mapping)             LOCALIZATION=false ;;
         --rtabmap-detection-rate=*) RTABMAP_DETECTION_RATE="${1#--rtabmap-detection-rate=}" ;;
         --rtabmap-vis-min-inliers=*) RTABMAP_VIS_MIN_INLIERS="${1#--rtabmap-vis-min-inliers=}" ;;
         --rtabmap-vis-estimation-type=*) RTABMAP_VIS_ESTIMATION_TYPE="${1#--rtabmap-vis-estimation-type=}" ;;
@@ -270,6 +273,7 @@ RTABMAP_ARGS=(
     "use_sim_time:=true"
     "rtabmap_viz:=${RTABMAP_VIZ}"
     "delete_db_on_start:=${DELETE_DB}"
+    "localization:=${LOCALIZATION}"
     "rtabmap_detection_rate:=${RTABMAP_DETECTION_RATE}"
     "rtabmap_vis_min_inliers:=${RTABMAP_VIS_MIN_INLIERS}"
     "rtabmap_vis_max_features:=1500"
@@ -361,6 +365,7 @@ echo "  rate:         ${RATE}  loop=${LOOP}"
 [[ -n "${START_OFFSET}" ]] && echo "  start:        +${START_OFFSET}s"
 echo "  depth camera: ${DEPTH_CAMERA}"
 echo "  odom source:  ${ODOM_LABEL}"
+echo "  mode:         $( [[ "${LOCALIZATION}" == true ]] && echo 'localization (DB read-only)' || echo 'mapping' )"
 echo "  delete db:    ${DELETE_DB}"
 echo "  detection:    ${RTABMAP_DETECTION_RATE} Hz"
 echo "  min inliers:  ${RTABMAP_VIS_MIN_INLIERS}"
