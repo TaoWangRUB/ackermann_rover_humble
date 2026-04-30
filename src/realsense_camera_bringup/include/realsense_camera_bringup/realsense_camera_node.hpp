@@ -2,6 +2,7 @@
 #define REALSENSE_CAMERA_BINGUP_REALSENSE_CAMERA_NODE_HPP
 
 #include <rclcpp/rclcpp.hpp>
+#include <rcl_interfaces/msg/set_parameters_result.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/imu.hpp>
@@ -38,6 +39,9 @@ private:
   void start_imu_sensor(rs2::device device);
   void on_frame(rs2::frame frame);
   void apply_sensor_options(rs2::pipeline_profile & profile);
+  void apply_rgb_sensor_options(rs2::sensor & sensor, bool auto_exposure, int exposure, int gain);
+  rcl_interfaces::msg::SetParametersResult handle_runtime_parameters(
+    const std::vector<rclcpp::Parameter> & parameters);
   void align_worker();
 #ifdef HAVE_CUDA
   void enable_cpu_alignment_fallback(const std::string & reason);
@@ -59,6 +63,9 @@ private:
   rs2::pipeline pipe_;
   rs2::config cfg_;
   std::shared_ptr<rs2::align> align_to_color_;
+  std::mutex sensor_options_mutex_;
+  rs2::sensor color_sensor_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
 
   // Parameters — identity
   std::string camera_name_, serial_no_;
