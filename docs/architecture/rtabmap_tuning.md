@@ -22,6 +22,158 @@ loops" again.
 > tune individual `Vis/*` knobs until you've verified the scan
 > subscription. See also the [rtabmap_viz visualization guide](#rtabmap_viz-visualization-guide)
 > for how to read the cyan/white/red/yellow/green markers.
+>
+> **Just want the commands?** See [operational quick reference](#operational-quick-reference)
+> below.
+
+## Operational quick reference
+
+Standard invocations for the bag-replay and live-mapping paths, plus
+diagnostic and live-tuning commands. All flags are documented in the
+respective scripts (`-h` / `--help`).
+
+### Live mapping
+
+```bash
+# Jetson Xavier deployment — Jetson preset auto-applied:
+./scripts/start_jetson_session.sh --t265-odom
+
+# Same, with telemetry/MQTT bridge to the control center:
+./scripts/start_jetson_session.sh --t265-odom --with-telemetry
+
+# Disable Jetson preset on Jetson (e.g. to A/B against full preset):
+./scripts/start_jetson_session.sh --t265-odom --no-jetson-profile
+
+# x86 desktop dev / SITL — full closure config:
+./scripts/start_ros2_nodes.sh --hw --rtabmap --depth-camera=d435i --t265-odom
+
+# x86 desktop with Jetson preset (verify Jetson behavior locally):
+./scripts/start_ros2_nodes.sh --hw --rtabmap --depth-camera=d435i --t265-odom --jetson-profile
+
+# Stop a running session:
+./scripts/stop_all.sh --session=jetson      # or --session=ackermann_slam
+```
+
+### Bag replay (offline tuning)
+
+```bash
+# Default config — matches what live mapping does on x86 dev:
+./scripts/start_rosbag_session.sh \
+  --replay --name=run_20260429_1342_seg2 \
+  --t265-odom --depth-camera=d435i \
+  --no-attach
+
+# Replay with the Jetson preset (verify performance for deployment):
+./scripts/start_rosbag_session.sh \
+  --replay --name=run_20260429_1342_seg2 \
+  --t265-odom --depth-camera=d435i \
+  --jetson-profile --no-attach
+
+# Override an individual RTAB-Map knob without editing the launch:
+./scripts/start_rosbag_session.sh \
+  --replay --name=run_X --t265-odom \
+  --rtabmap-param=Vis/MinInliers:=15 \
+  --rtabmap-param=RGBD/LinearUpdate:=0.4
+
+# Slower replay rate for debugging sync issues:
+./scripts/start_rosbag_session.sh --replay --name=run_X --t265-odom --rate=0.5
+
+# Stop the replay session:
+./scripts/stop_all.sh --session=rosbag
+```
+
+### Diagnostic — verbose RTAB-Map logs
+
+```bash
+# Pass --udebug to the rtabmap binary so its internal UDEBUG logs print
+# (matcher counts, RANSAC inliers, Bayesian hypothesis values, ...).
+# See "Diagnostic technique: --rtabmap-udebug" below for what to grep for.
+./scripts/start_rosbag_session.sh \
+  --replay --name=run_X --t265-odom \
+  --rtabmap-udebug --no-attach
+
+# Tail the udebug output (the rtabmap pane echoes it; capture if needed):
+tmux pipe-pane -t rosbag:rosbag.0 'cat >> /tmp/rtab_udebug.log'
+```
+
+### Inspecting an RTAB-Map session DB
+
+```bash
+# Quick summary of nodes and link types from the host (no Docker needed):
+python3 -c "
+import sqlite3
+c = sqlite3.connect('.rtabmap/rover.db').cursor()
+print('nodes:', c.execute('SELECT COUNT(*) FROM Node').fetchone()[0])
+for r in c.execute('SELECT type, COUNT(*) FROM Link GROUP BY type ORDER BY type'):
+    print(f'  type={r[0]:<2}  count={r[1]}')
+"
+
+# Full RTAB-Map summary (parameters used, neighbor/closure breakdowns, RMSE):
+docker exec jazzy_slam_x86_64 bash -lc \
+  'source /opt/ros/jazzy/setup.bash && rtabmap-info /workspace/.rtabmap/rover.db' \
+  | sed 's/\x1b\[[0-9;]*m//g' \
+  | grep -E 'Sessions|Total odom|^  Neighbor:|GlobalClosure|LocalSpace'
+
+# Interactive viewer — click closure edges to see the matched RGB pair:
+docker exec -it \
+  -e DISPLAY=$DISPLAY -e XAUTHORITY=$XAUTHORITY \
+  jazzy_slam_x86_64 bash -lc \
+  "rtabmap-databaseViewer /workspace/.rtabmap/rover.db"
+```
+
+### Verifying live RTAB-Map params
+
+```bash
+# Confirm Jetson preset is in effect (or not):
+docker exec jazzy_slam_x86_64 bash -lc '
+  source /opt/ros/jazzy/setup.bash; source /workspace/install/setup.bash
+  for p in subscribe_scan Reg/Strategy Vis/MaxFeatures Kp/MaxFeatures \
+           Vis/Iterations Vis/MinInliers Rtabmap/DetectionRate \
+           RGBD/LinearUpdate RGBD/AngularUpdate Mem/ImagePostDecimation; do
+    echo -n "$p="; ros2 param get /rtabmap "$p" 2>/dev/null | tail -1
+  done'
+
+# Watch loop closure activity live:
+ros2 topic echo /info --field loop_closure_id --once   # 0 = no closure
+ros2 topic echo /info --field proximity_detection_id --once
+```
+
+### Camera (RealSense) live tuning
+
+The realsense_camera_bringup node now honors runtime parameter changes
+on RGB exposure/gain (no restart needed):
+
+```bash
+# Manual mode with known-good values:
+ros2 param set /d435i rgb_camera.enable_auto_exposure false
+ros2 param set /d435i rgb_camera.exposure 80
+ros2 param set /d435i rgb_camera.gain     32
+
+# Or let the device auto-expose:
+ros2 param set /d435i rgb_camera.enable_auto_exposure true
+
+# Find good values for a new environment (camera STATIONARY, pointed at scene):
+./scripts/tune_camera_exposure.sh --preset=normal --apply
+
+# Watch live image-quality metrics while tuning:
+docker exec -it jazzy_slam_x86_64 bash -lc '
+  source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash &&
+  python3 /workspace/scripts/watch_image_quality.py /d435i/color/image_raw'
+```
+
+### Bag-side sanity check (does the bag *contain* loop opportunities?)
+
+When RTAB-Map produces 0 closures and you want to verify it's the
+algorithm, not the data:
+
+```bash
+# Image quality + revisit-distance survey on a bag:
+python3 scripts/bag_loop_diag.py bags/run_20260429_1342_seg2
+
+# Heading-aligned revisit pairs + offline ORB+RANSAC inlier check
+# (answers: should this bag close loops at all, in any SLAM system?):
+python3 scripts/bag_loop_pairs.py bags/run_20260429_1342_seg2
+```
 
 ## TL;DR
 
