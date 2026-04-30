@@ -112,8 +112,8 @@ def generate_launch_description() -> LaunchDescription:
         ('d435i_depth_height',      '480'),
         ('d435i_depth_fps',         '30'),
         ('d435i_rgb_auto_exposure', 'false'),
-        ('d435i_rgb_exposure',      '200'),
-        ('d435i_rgb_gain',          '128'),
+        ('d435i_rgb_exposure',      '80'), #200
+        ('d435i_rgb_gain',          '32'), #128
         ('d435i_depth_auto_exposure', 'false'),
         ('d435i_depth_exposure',    '7500'),
         ('d435i_depth_gain',        '16'),
