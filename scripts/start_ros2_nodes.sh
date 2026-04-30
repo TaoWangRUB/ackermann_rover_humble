@@ -42,6 +42,7 @@
 #   --controller=TYPE  Nav2 path controller: mppi (default) or rpp (lightweight)
 #   --reversible-drive Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
 #   --no-rviz          Disable RViz2
+#   --rtabmap-viz      Launch rtabmap_viz alongside RTAB-Map for graph/loop monitoring
 #   --build[=PKG]      Build workspace (or specific pkg) before launching
 #   --build-only[=PKG] Build only, do not launch
 #
@@ -172,6 +173,12 @@ LOCALIZATION="false"
 DELETE_DB_ON_START=""
 NAV2="false"
 RVIZ="true"
+RTABMAP_VIZ="false"
+RTABMAP_VIS_ESTIMATION_TYPE="1"
+RTABMAP_VIS_MAX_DEPTH="4.0"
+RTABMAP_VIS_MIN_INLIERS="10"
+RTABMAP_KP_DETECTOR_STRATEGY="6"
+JETSON_PROFILE="false"
 BRIDGE="false"
 BRIDGE_MODE="manual"
 VO_BRIDGE="false"
@@ -199,6 +206,13 @@ for arg in "$@"; do
         --keep-rtabmap-db) DELETE_DB_ON_START="false" ;;
         --nav2)         NAV2="true" ;;
         --no-rviz)      RVIZ="false" ;;
+        --rtabmap-viz)  RTABMAP_VIZ="true" ;;
+        --rtabmap-vis-estimation-type=*) RTABMAP_VIS_ESTIMATION_TYPE="${arg#--rtabmap-vis-estimation-type=}" ;;
+        --rtabmap-vis-max-depth=*)       RTABMAP_VIS_MAX_DEPTH="${arg#--rtabmap-vis-max-depth=}" ;;
+        --rtabmap-vis-min-inliers=*)     RTABMAP_VIS_MIN_INLIERS="${arg#--rtabmap-vis-min-inliers=}" ;;
+        --rtabmap-kp-detector-strategy=*) RTABMAP_KP_DETECTOR_STRATEGY="${arg#--rtabmap-kp-detector-strategy=}" ;;
+        --jetson-profile)    JETSON_PROFILE="true" ;;
+        --no-jetson-profile) JETSON_PROFILE="false" ;;
         --bridge)       BRIDGE="true" ;;
         --bridge=*)     BRIDGE="true"; BRIDGE_MODE="${arg#--bridge=}" ;;
         --vo-bridge)         VO_BRIDGE="true" ;;
@@ -350,6 +364,12 @@ LAUNCH_CMD+=" delete_db_on_start:=${DELETE_DB_ON_START}"
 LAUNCH_CMD+=" nav2:=${NAV2}"
 LAUNCH_CMD+=" nav2_controller:=${NAV2_CONTROLLER}"
 LAUNCH_CMD+=" rviz:=${RVIZ}"
+LAUNCH_CMD+=" rtabmap_viz:=${RTABMAP_VIZ}"
+LAUNCH_CMD+=" rtabmap_vis_estimation_type:=${RTABMAP_VIS_ESTIMATION_TYPE}"
+LAUNCH_CMD+=" rtabmap_vis_max_depth:=${RTABMAP_VIS_MAX_DEPTH}"
+LAUNCH_CMD+=" rtabmap_vis_min_inliers:=${RTABMAP_VIS_MIN_INLIERS}"
+LAUNCH_CMD+=" jetson_profile:=${JETSON_PROFILE}"
+LAUNCH_CMD+=" rtabmap_kp_detector_strategy:=${RTABMAP_KP_DETECTOR_STRATEGY}"
 LAUNCH_CMD+=" reversible_drive:=${REVERSIBLE_DRIVE}"
 
 # Chain px4_bringup after robot_bringup when --bridge and/or --vo-bridge

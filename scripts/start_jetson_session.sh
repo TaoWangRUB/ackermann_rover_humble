@@ -87,6 +87,7 @@ NAV2_CONTROLLER="mppi"
 ENABLE_RECORD=true
 RECORD_BAG_NAME=""
 RECORD_COMPRESS_FISHEYE=""   # "" | "true" | "false"
+JETSON_PROFILE=true          # auto-on for Jetson; pass --no-jetson-profile to disable
 
 for arg in "$@"; do
     case "${arg}" in
@@ -109,6 +110,8 @@ for arg in "$@"; do
         --broker-host=*)   BROKER_HOST="${arg#--broker-host=}" ;;
         --publisher-config=*) PUBLISHER_CONFIG_FILE="${arg#--publisher-config=}" ;;
         --no-record)       ENABLE_RECORD=false ;;
+        --jetson-profile)    JETSON_PROFILE=true ;;
+        --no-jetson-profile) JETSON_PROFILE=false ;;
         --bag-name=*)      RECORD_BAG_NAME="${arg#--bag-name=}" ;;
         --compress-fisheye)    RECORD_COMPRESS_FISHEYE="true" ;;
         --no-compress-fisheye) RECORD_COMPRESS_FISHEYE="false" ;;
@@ -150,6 +153,9 @@ if [[ "${VINS_ODOM}" == true ]]; then
 fi
 if [[ "${ENABLE_NAV2}" == true ]]; then
     ROS2_ARGS+=" --nav2 --controller=${NAV2_CONTROLLER}"
+fi
+if [[ "${JETSON_PROFILE}" == true ]]; then
+    ROS2_ARGS+=" --jetson-profile"
 fi
 
 # Derive canonical odom topic for readiness (same priority as rtabmap_slam.launch.py).

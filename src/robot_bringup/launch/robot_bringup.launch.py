@@ -108,6 +108,24 @@ ARGUMENTS = [
         description='Start rtabmap_viz for monitoring.'
     ),
     DeclareLaunchArgument(
+        'rtabmap_vis_estimation_type', default_value='1',
+        description='Loop verification estimator: 0=3D-3D, 1=PnP, 2=2D-2D epipolar.'),
+    DeclareLaunchArgument(
+        'rtabmap_vis_max_depth', default_value='0',
+        description='Max depth [m] for loop verification keypoints. 0 = no limit.'),
+    DeclareLaunchArgument(
+        'rtabmap_vis_min_inliers', default_value='10',
+        description='Minimum visual inliers required to accept a loop closure.'),
+    DeclareLaunchArgument(
+        'rtabmap_kp_detector_strategy', default_value='6',
+        description='BoW feature detector: 0=SURF, 2=ORB, 6=GFTT/BRIEF, 8=GFTT/BRISK, 9=KAZE.'),
+    DeclareLaunchArgument(
+        'jetson_profile', default_value='false',
+        choices=['true', 'false'],
+        description='Apply RTAB-Map Jetson-Xavier constrained-CPU profile '
+                    '(see rtabmap_bringup/config/jetson_profile.yaml). '
+                    'Auto-applied by start_jetson_session.sh.'),
+    DeclareLaunchArgument(
         'nav2',
         default_value='false',
         choices=['true', 'false'],
@@ -515,6 +533,11 @@ def generate_launch_description() -> LaunchDescription:
                 ' if "', use_gazebo, '" == "false"'
                 ' else "/', depth_camera, '/imu/raw"'
             ]),
+            'rtabmap_vis_estimation_type': LaunchConfiguration('rtabmap_vis_estimation_type'),
+            'rtabmap_vis_max_depth':       LaunchConfiguration('rtabmap_vis_max_depth'),
+            'rtabmap_vis_min_inliers':     LaunchConfiguration('rtabmap_vis_min_inliers'),
+            'rtabmap_kp_detector_strategy': LaunchConfiguration('rtabmap_kp_detector_strategy'),
+            'jetson_profile':              LaunchConfiguration('jetson_profile'),
         }.items()
     )
 

@@ -14,6 +14,9 @@ from launch_ros.parameter_descriptions import ParameterValue
 EMPTY_PARAMS_FILE = os.path.join(
     get_package_share_directory('rtabmap_bringup'), 'config', 'empty_overrides.yaml'
 )
+JETSON_PROFILE_FILE = os.path.join(
+    get_package_share_directory('rtabmap_bringup'), 'config', 'jetson_profile.yaml'
+)
 
 # DB lives under the workspace mount so it persists across container restarts.
 # Host equivalent: <repo>/.rtabmap/rover.db (repo is mounted at /workspace).
@@ -205,6 +208,16 @@ ARGUMENTS = [
         description='Pass --udebug to the rtabmap binary so its internal UDEBUG '
                     'logs appear (matcher counts, RANSAC inliers, etc.). Verbose; '
                     'use for diagnostic runs only.'),
+
+    DeclareLaunchArgument(
+        'jetson_profile', default_value='false',
+        choices=['true', 'false'],
+        description='Apply the Jetson-Xavier constrained-CPU profile '
+                    '(config/jetson_profile.yaml): half the per-frame feature '
+                    'pool, 1Hz detection rate, larger node-update threshold, '
+                    'depth-image post-decimation. ~3x lower verifier latency '
+                    'at the cost of ~3-4x fewer closures. Auto-applied by '
+                    'start_jetson_session.sh.'),
 
     DeclareLaunchArgument(
         'extra_rtabmap_params_file', default_value=EMPTY_PARAMS_FILE,
@@ -535,8 +548,19 @@ def generate_launch_description() -> LaunchDescription:
 
     extra_params_file = LaunchConfiguration('extra_rtabmap_params_file')
 
+    # When jetson_profile=true, load jetson_profile.yaml; otherwise use the
+    # empty stub. Both are valid file paths so launch_ros doesn't choke. Order
+    # in slam_common_params puts user `extra_rtabmap_params_file` last, so
+    # explicit per-run overrides still win over the Jetson defaults.
+    jetson_profile_file = PythonExpression([
+        "'", JETSON_PROFILE_FILE, "' if '",
+        LaunchConfiguration('jetson_profile'), "' == 'true' else '",
+        EMPTY_PARAMS_FILE, "'"
+    ])
+
     slam_common_params = [rtabmap_parameters, shared_parameters,
                           {'Mem/IncrementalMemory': 'True'},
+                          jetson_profile_file,
                           extra_params_file]
 
     # rtabmap binary's --udebug enables UDEBUG output via utilite. Each variant
@@ -588,7 +612,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[rtabmap_parameters, shared_parameters, {
             'Mem/IncrementalMemory': 'False',
             'Mem/InitWMWithAllNodes': 'True'
-        }, extra_params_file],
+        }, jetson_profile_file, extra_params_file],
         remappings=consumer_remappings,
     )
 

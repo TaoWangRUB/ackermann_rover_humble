@@ -100,6 +100,7 @@ EXTRA_TOPICS=""
 COMPRESS_FISHEYE=""   # unset → let record_bag.sh default apply
 RTABMAP_PARAM_OVERRIDES=()
 RTABMAP_UDEBUG=false
+JETSON_PROFILE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -130,6 +131,8 @@ while [[ $# -gt 0 ]]; do
         --approx-sync-max-interval=*) APPROX_SYNC_MAX_INTERVAL="${1#--approx-sync-max-interval=}" ;;
         --rtabmap-param=*)       RTABMAP_PARAM_OVERRIDES+=("${1#--rtabmap-param=}") ;;
         --rtabmap-udebug)        RTABMAP_UDEBUG=true ;;
+        --jetson-profile)        JETSON_PROFILE=true ;;
+        --no-jetson-profile)     JETSON_PROFILE=false ;;
         --wait-seconds=*)      WAIT_SECONDS="${1#--wait-seconds=}" ;;
         --extra=*)             EXTRA_TOPICS="${1#--extra=}" ;;
         --compress-fisheye)    COMPRESS_FISHEYE=true ;;
@@ -284,6 +287,7 @@ RTABMAP_ARGS=(
     "depth_camera_info_topic:=/${DEPTH_CAMERA}/aligned_depth_to_color/camera_info"
     "imu_raw_topic:=/${DEPTH_CAMERA}/imu"
     "rtabmap_udebug:=${RTABMAP_UDEBUG}"
+    "jetson_profile:=${JETSON_PROFILE}"
 )
 if [[ "${CUVSLAM_ODOM}" == true ]]; then
     RTABMAP_ARGS+=("use_cuvslam_odom:=true")
