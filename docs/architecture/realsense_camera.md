@@ -76,12 +76,31 @@ on_frame(rs2::frame)
 
 ### Sensor Options
 
-Applied after pipeline start via `apply_sensor_options()`:
+Applied after pipeline start via `apply_sensor_options()` (initial config) and
+re-applied through `apply_rgb_sensor_options()` whenever the corresponding
+ROS parameters change at runtime (`add_on_set_parameters_callback`):
 
 1. Identify color vs depth sensor by iterating `dev.query_sensors()` and checking stream types
 2. Set `RS2_OPTION_ENABLE_AUTO_EXPOSURE` first (must be set before manual values)
 3. If auto_exposure off and value > 0: set `RS2_OPTION_EXPOSURE` and `RS2_OPTION_GAIN`
 4. Each call guarded by `sensor.supports()` + try/catch (best-effort)
+5. The cached `color_sensor_` handle and `sensor_options_mutex_` make runtime
+   tuning safe between the pipeline thread and the parameter callback
+
+**Live tuning** (no restart needed once camera is up):
+
+```bash
+# Disable auto and bake in a known-good (exposure, gain) for the current scene:
+ros2 param set /d435i rgb_camera.enable_auto_exposure false
+ros2 param set /d435i rgb_camera.exposure 80
+ros2 param set /d435i rgb_camera.gain     32
+```
+
+Use [`scripts/sweep_exp_gain.py`](../../scripts/sweep_exp_gain.py) /
+[`scripts/tune_camera_exposure.sh`](../../scripts/tune_camera_exposure.sh)
+to find suitable values for a new environment, and
+[`scripts/watch_image_quality.py`](../../scripts/watch_image_quality.py)
+to monitor the live brightness / blur / ORB count while tuning.
 
 ## Published Topics
 
@@ -154,8 +173,8 @@ Each camera has its own prefixed launch arguments (e.g. `d435i_rgb_exposure`, `l
 | `d435i_color_profile` | `""` | WxHxFPS override (e.g. `640x480x60`) |
 | `d435i_depth_profile` | `""` | WxHxFPS override |
 | `d435i_rgb_auto_exposure` | `false` | Manual exposure by default |
-| `d435i_rgb_exposure` | `200` | Microseconds |
-| `d435i_rgb_gain` | `128` | |
+| `d435i_rgb_exposure` | `80` | Microseconds. Tuned for typical kitchen / corridor scene; raise to 200+ in low-light. Override at runtime via `ros2 param set`. |
+| `d435i_rgb_gain` | `32` | Tuned alongside exposure to keep ORB count > 500 without saturating bright scenes. |
 | `d435i_depth_auto_exposure` | `false` | |
 | `d435i_depth_exposure` | `7500` | Microseconds (7.5ms) |
 | `d435i_depth_gain` | `16` | |

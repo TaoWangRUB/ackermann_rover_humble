@@ -304,8 +304,10 @@ The screening confirmed:
 | [`scripts/watch_image_quality.py`](../../scripts/watch_image_quality.py) | Live brightness / blur / ORB count from a topic |
 | [`scripts/sweep_exp_gain.py`](../../scripts/sweep_exp_gain.py) | Grid sweep of D435i `exposure` × `gain` with metric output |
 | [`scripts/publish_bag_tf_static.py`](../../scripts/publish_bag_tf_static.py) | One-shot tf_static republisher for `--start-offset` bag replays |
-| [`artifacts/ai/2026-04-28_rtabmap_loop_closure_diag/loop_diag.py`](../../artifacts/ai/2026-04-28_rtabmap_loop_closure_diag/loop_diag.py) | Bag-side image-quality + trajectory analysis |
-| [`artifacts/ai/2026-04-28_rtabmap_loop_closure_diag/loop_pairs.py`](../../artifacts/ai/2026-04-28_rtabmap_loop_closure_diag/loop_pairs.py) | Heading-aligned revisit detection + offline ORB-match check |
+| [`scripts/bag_loop_diag.py`](../../scripts/bag_loop_diag.py) | Bag-side image-quality + trajectory analysis (brightness, blur, ORB count, revisit detection) |
+| [`scripts/bag_loop_pairs.py`](../../scripts/bag_loop_pairs.py) | Heading-aligned revisit pair detection + offline ORB+RANSAC inlier check (sanity-check whether a bag *should* close loops) |
+| [`scripts/visualize_cloud_pose.sh`](../../scripts/visualize_cloud_pose.sh) | View `.ply` map cloud + pose `.txt` track in Open3D |
+| [`scripts/tune_camera_exposure.sh`](../../scripts/tune_camera_exposure.sh) | Wrapper around `sweep_exp_gain.py` that brings up the camera (or uses a running one) and recommends `(exposure, gain)` for the current scene |
 
 ## Future work
 

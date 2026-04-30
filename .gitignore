@@ -41,6 +41,11 @@ odom_debug_bag/
 
 # Editor / AI tooling
 opencode.json
+.claude/
+.tmp/
+
+# Per-session AI / diagnostic artifacts (commit reusable helpers under tools/ instead)
+artifacts/ai/
 
 # RTAB-Map databases (mapping/localization sessions)
 .rtabmap/
