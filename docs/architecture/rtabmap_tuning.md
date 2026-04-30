@@ -528,6 +528,73 @@ breakdown shown in `rtabmap-info`.
   (re-read [structural fix: subscribe_scan](#structural-fix-subscribe_scan)
   first; only after that, parameters).
 
+## Jetson-Xavier profile
+
+For deployment on Jetson Xavier-class hardware where compute is the binding
+constraint, the package ships a constrained-CPU profile in
+[`config/jetson_profile.yaml`](../../src/rtabmap_bringup/config/jetson_profile.yaml).
+Activated by the `jetson_profile:=true` launch arg, or via wrapper
+script flag:
+
+| Wrapper | Default | Flag |
+|---|---|---|
+| [`start_rosbag_session.sh`](../../scripts/start_rosbag_session.sh) (replay) | `false` | `--jetson-profile` / `--no-jetson-profile` |
+| [`start_ros2_nodes.sh`](../../scripts/start_ros2_nodes.sh) (live mapping, x86) | `false` | `--jetson-profile` / `--no-jetson-profile` |
+| [`start_jetson_session.sh`](../../scripts/start_jetson_session.sh) (live mapping, Jetson) | **`true`** (auto-on) | `--no-jetson-profile` to disable |
+
+### What the profile changes
+
+| Param | Default | Jetson | Reasoning |
+|---|---|---|---|
+| `Vis/MaxFeatures` | 1500 | **800** | half the per-frame descriptor pool → ~2× faster matching |
+| `Kp/MaxFeatures` | 1500 | **800** | smaller BoW dictionary → faster Bayesian recognition |
+| `Vis/Iterations` | 300 | **200** | fewer RANSAC samples — minor accuracy hit on borderline pairs |
+| `Vis/MinInliers` | 6 (hard floor) | **12** | safer acceptance — fewer false-positive closures from ambiguous BoW matches |
+| `Rtabmap/DetectionRate` | 0 (every frame) | **1.0 Hz** | only check loops once per sec; misses fast revisits but caps Bayesian filter cost |
+| `RGBD/LinearUpdate` | 0.2 m | **0.3 m** | sparser graph → fewer nodes to match against |
+| `RGBD/AngularUpdate` | 0.2 rad | **0.3 rad** | same logic for rotation |
+| `Mem/ImagePostDecimation` | 1 | **2** | half-res stored images → 4× less storage + matching cost |
+
+### Validated on x86 host (apples-to-apples replay comparison)
+
+5 bags spanning day (brightness 86-192) and night (63-67), same hardware, only
+`jetson_profile:=true` differs:
+
+| Bag | Default closures | Jetson closures | Default p95 ms | Jetson p95 ms | Default max ms | Jetson max ms |
+|---|---|---|---|---|---|---|
+| `1538_seg1` (DAY 182) | 66 | **26** | 214 | **146** | 1515 | **404** |
+| `1340_seg2` (DAY 192) | 145 | **34** | 236 | **148** | 3495 | **843** |
+| `1342_seg2` (DAY 86) | 86 | **23** | 191 | **121** | 1590 | **403** |
+| `2219_seg1` (NIGHT 63) | 68 | **20** | 225 | **139** | 1646 | **422** |
+| `2219_seg5` (NIGHT 67) | 86 | **20** | 212 | **130** | 1588 | **436** |
+| **avg** | **90** | **25 (28%)** | **216** | **137 (63%)** | **1967** | **502 (26%)** |
+
+**Trade-off summary:** Jetson preset gives **~28% of the closures** but
+**~63% of the latency** with **3-5× tighter worst-case spikes**. The big
+win is the max-ms column — default config has 1.5-3.5 second spikes
+when many BoW candidates land in one cycle, which on Xavier would miss
+several /scan + /odometry/filtered cycles. Jetson preset caps worst case
+under 850 ms.
+
+Closure count drops are still comfortably double-digit on every bag —
+sufficient to correct multi-meter T265 drift on a typical 60-100 m
+mapping run.
+
+### When to deviate from the preset
+
+- **Long mapping runs (>5 min, >100 m)**: closures-per-meter is what matters
+  for drift correction, not absolute count. The Jetson preset's ~25 closures
+  on a 60 m bag = 0.4/m, which scales linearly with traversal — fine.
+- **Aggressive driving (>1 m/s)**: bump `RGBD/LinearUpdate` further to 0.4 m
+  and `Rtabmap/DetectionRate` to 0.5 Hz to keep node count proportional.
+- **Suspected false-positive closures** (cyan trajectory snapping to wrong
+  geometry): raise `Vis/MinInliers` further (to 15-20) — already at 12 in
+  this profile, but feature-rich indoor scenes can fool BoW.
+- **Re-mapping a known environment with a saved DB**: features re-extract
+  from stored frames, so the `Mem/ImagePostDecimation=2` setting affects
+  the *new* frames only. If working with bags recorded at full res, this
+  won't visibly change closure quality.
+
 ### Database viewer for ground-truth inspection
 
 `rtabmap-databaseViewer` lets you click any edge in the graph and see
