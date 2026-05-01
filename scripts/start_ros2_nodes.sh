@@ -179,6 +179,7 @@ RTABMAP_VIS_MAX_DEPTH="4.0"
 RTABMAP_VIS_MIN_INLIERS="10"
 RTABMAP_KP_DETECTOR_STRATEGY="6"
 JETSON_PROFILE="false"
+USE_EGPU="false"
 BRIDGE="false"
 BRIDGE_MODE="manual"
 VO_BRIDGE="false"
@@ -213,6 +214,7 @@ for arg in "$@"; do
         --rtabmap-kp-detector-strategy=*) RTABMAP_KP_DETECTOR_STRATEGY="${arg#--rtabmap-kp-detector-strategy=}" ;;
         --jetson-profile)    JETSON_PROFILE="true" ;;
         --no-jetson-profile) JETSON_PROFILE="false" ;;
+        --use-egpu)          USE_EGPU="true" ;;
         --bridge)       BRIDGE="true" ;;
         --bridge=*)     BRIDGE="true"; BRIDGE_MODE="${arg#--bridge=}" ;;
         --vo-bridge)         VO_BRIDGE="true" ;;
@@ -343,8 +345,16 @@ if [[ "${VO_BRIDGE}" == "true" ]]; then
 fi
 echo ""
 
-# Build the launch command
+# Build the launch command. When --use-egpu is set, route NVIDIA PRIME to the
+# eGPU provider (NVIDIA-G1) so OpenGL apps (Gazebo, RViz) render on it. This
+# only takes effect if Xorg has the eGPU registered as a PRIME provider — i.e.
+# the eGPU was attached BEFORE the X server started (reboot or `systemctl
+# restart gdm`). Otherwise the env vars are inert and rendering falls back to
+# the default GPU.
 LAUNCH_CMD="source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && "
+if [[ "${USE_EGPU}" == "true" ]]; then
+    LAUNCH_CMD+="export __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia __NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G1 && "
+fi
 LAUNCH_CMD+="ros2 launch robot_bringup robot_bringup.launch.py"
 LAUNCH_CMD+=" depth_camera:=${DEPTH_CAMERA}"
 if [[ "${HW}" == "true" ]]; then
