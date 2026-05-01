@@ -484,6 +484,227 @@ The screening confirmed:
   into actual closures once translation between revisits is naturally
   non-zero.
 
+## RTAB-Map principles: mapping vs. localization
+
+A short conceptual primer for what each mode actually does, since the rest of
+this doc assumes it. If you've read the [RTAB-Map paper / wiki](https://github.com/introlab/rtabmap/wiki),
+skim ahead.
+
+### The persistent database (`.rtabmap/rover.db`)
+
+A SQLite file. Nine tables matter:
+
+| Table | What it stores |
+|---|---|
+| `Node` | one row per saved keyframe (id, pose, sensor data link). Node IDs grow monotonically. |
+| `Link` | one row per graph edge with `type`: `0`=Neighbor (sequential odom edges), `1`=GlobalClosure (Bayesian recognition), `2`=LocalSpaceClosure (proximity-by-space), `5`=VirtualClosure, `9`=PosePrior. |
+| `Word` | one row per visual word (BoW dictionary entry). |
+| `Feature` | per-keypoint features attached to nodes. |
+| `Data` | RGB + depth + scan blobs for each node. |
+| `GlobalDescriptor` | per-node global image descriptors (NetVLAD-style if enabled). |
+| `Statistics` | per-frame internal statistics — **grows in both modes**. |
+| `Info` | per-session info (parameters used, DB version). |
+| `Admin` | session-end pose + optimized graph cache. |
+
+### Mapping mode (`Mem/IncrementalMemory=true`, the default)
+
+Per-frame loop:
+
+1. **Frame arrives** (RGB + depth + odom) →
+2. **Feature extraction** at `Kp/MaxFeatures` keypoints →
+3. **BoW quantization** — each descriptor mapped to a visual word; **new words can be added** to the dictionary →
+4. **Decide if a new node is needed**: `RGBD/LinearUpdate` or `RGBD/AngularUpdate` exceeded since last node? Yes →
+5. **Add Node + Neighbor link** to the graph →
+6. **Bayesian recognition** — score similarity against past nodes; if `value > Rtabmap/LoopThr` (default 0.11), propose loop hypothesis →
+7. **Geometric verification** — `RegistrationVis::computeTransformation` runs PnP/epipolar; if `inliers ≥ Vis/MinInliers` (floor 6), accept GlobalClosure →
+8. **Proximity-by-space** — for any node within `RGBD/LocalRadius` of the new node, try registration; on success add LocalSpaceClosure →
+9. **Graph optimization** (TORO / g2o / GTSAM) over all nodes + links →
+10. **Updated map cloud + occupancy grid published**.
+
+DB grows continuously — `Node`, `Link`, `Word`, `Feature`, `Data` all add rows.
+At shutdown, `Admin.opt_last_localization` is written so the next session
+knows where to start.
+
+### Localization mode (`Mem/IncrementalMemory=false`)
+
+Same per-frame loop, **with these modifications**:
+
+- Step 3 (BoW): **dictionary frozen**. New descriptors are quantized against
+  the existing words but no new words are added. `Kp/IncrementalDictionary` is
+  effectively false.
+- Step 4 (new node decision): **never adds new nodes**. The graph is fixed.
+- Steps 6-7 (recognition + verification): unchanged — same algorithms,
+  but now match the current frame against the loaded map nodes.
+- Step 8 (proximity-by-space): also runs against map nodes only.
+- **Extra: graph-error gate** (`RGBD/OptimizeMaxError`, default 3.0 σ). Even
+  if step 7 succeeds, RTAB-Map runs a graph optimization with the proposed
+  loop link added; if the resulting graph error ratio exceeds the gate, the
+  match is rejected as likely-false-positive. This is more conservative than
+  in mapping mode.
+- **Confirmation pattern** (`RGBD/MaxOdomCacheSize`, default 10): a single
+  successful localization is logged as `"Localization was good, but waiting
+  for another one to be more accurate"` until `MaxOdomCacheSize` matches in
+  a row agree on the pose. Then `map → odom` TF is published.
+- **`Mem/InitWMWithAllNodes=true`**: at startup, all nodes loaded into
+  Working Memory (vs. paged-on-demand). Faster relocalization at the cost
+  of memory footprint.
+
+### What gets written in localization mode
+
+| Table | Mapping mode | Localization mode |
+|---|---|---|
+| `Node`, `Link`, `Word`, `Feature`, `Data` | grow | **unchanged** |
+| `Statistics` | grows (per frame) | grows (per frame) |
+| `Admin.opt_last_localization` | updated at shutdown | updated at each successful localization |
+
+So the persistent map is read-only. The `Mem/LocalizationDataSaved=true`
+flag adds Statistics blobs and a final pose snapshot — useful for offline
+debugging — but doesn't add new graph nodes.
+
+### When mapping and localization disagree
+
+The same algorithm runs in both modes, but failure modes differ:
+
+| Symptom | Mapping mode | Localization mode |
+|---|---|---|
+| BoW words not matching past nodes | low closure rate; map drifts | "value=0.0" hypothesis; no relocalization |
+| Visual verifier returns 0 inliers from N matches | rejected closure (fewer corrections, more drift) | rejected localization candidate |
+| Graph optimization error spike | only triggers `RGBD/MaxOptimizationError` global rejection | triggers per-loop graph-error gate (much stricter) |
+
+For cross-condition robustness (different lighting/day), see
+[Cross-condition robustness](#cross-condition-robustness) below.
+
+## Cross-condition robustness
+
+The hardest case in real deployment: built the map on a sunny morning,
+localizing on a cloudy afternoon. Same physical room, slightly different
+lighting → BoW words from the localization pass don't hash to the same
+dictionary entries that mapping built. Symptom: `value=0.0` Bayesian
+hypotheses, or 0/N inliers from BoW-matched candidates.
+
+Empirically validated on `1209_seg1` map → `1340_seg3` localization:
+51 Vis rejections with 0 inliers from 10–73 raw matches. Same physical area
+(70% bbox overlap), 1 day apart, slightly different exposure.
+
+### Lever 1 — Camera consistency (cheapest win)
+
+Mapping and localization should use the **same camera tuning**. The 2026-04-29
+defaults are `d435i_rgb_exposure=80, gain=32` — keep both runs at the same
+values, OR enable auto-exposure on both:
+
+```bash
+# Mapping run — fix exposure to a known-good value:
+ros2 param set /d435i rgb_camera.enable_auto_exposure false
+ros2 param set /d435i rgb_camera.exposure 80
+ros2 param set /d435i rgb_camera.gain     32
+
+# Localization run — same values, OR switch to auto:
+ros2 param set /d435i rgb_camera.enable_auto_exposure true
+```
+
+Auto-exposure usually wins because it adapts to ambient lighting changes that
+manual settings can't compensate for. Cost: ~50 ms latency on exposure
+changes (transient).
+
+### Lever 2 — Multi-session mapping
+
+Build the map across **multiple drive-throughs** in different lighting, all
+into the same DB. The BoW dictionary then covers a richer set of word
+variations.
+
+```bash
+# Session 1: morning
+./scripts/start_jetson_session.sh --t265-odom
+# (drive)
+
+# Session 2: afternoon — extends the same DB (no --wipe-rtabmap-db):
+./scripts/start_jetson_session.sh --t265-odom --keep-rtabmap-db
+# (drive again)
+
+# Session 3: cloudy day — same:
+./scripts/start_jetson_session.sh --t265-odom --keep-rtabmap-db
+```
+
+Each session adds its own session-id range to the `Node` table, all under
+the same map (since loop closures across sessions get found). Resulting
+dictionary is robust to multi-day variation. **Highest practical-value lever**
+once your environment is stable.
+
+### Lever 3 — Switch the feature detector
+
+Default is `Kp/DetectorStrategy=6` (GFTT + BRIEF). BRIEF descriptors are
+binary and sensitive to gradient sign — that's why small lighting changes
+cause word collisions to drift. Alternatives ranked by lighting invariance:
+
+| Strategy | Detector / Descriptor | Pros / Cons |
+|---|---|---|
+| `2` | ORB / ORB | binary, FAST corners. Slightly more lighting-invariant than GFTT/BRIEF. CPU-friendly. |
+| `0` | SURF / SURF | float descriptor, gradient-magnitude based. Much more lighting-robust but **patented + much slower**. |
+| `1` | SIFT / SIFT | similar trade-off to SURF, free as of 2020. |
+| `11` | SuperPoint | learned descriptor, very robust to lighting/seasonal change. **Needs the PyTorch model** + ideally GPU. Best quality-per-frame. |
+
+Try first: `--rtabmap-kp-detector-strategy=2` (ORB). Two-line change, no new deps.
+
+### Lever 4 — Pre-trained BoW vocabulary
+
+Instead of growing the dictionary from your own footage, load a vocabulary
+trained on a large diverse corpus (e.g. ORB-SLAM2's vocabulary). The
+mapping run then quantizes its features against the same fixed dictionary
+the localization run uses → much higher word-match rate.
+
+```bash
+--rtabmap-param=Kp/IncrementalDictionary:=false
+--rtabmap-param=Kp/DictionaryPath:=/workspace/vocab/orb_voc.dbow3
+```
+
+Cost: shipping the vocabulary file (typically 30–100 MB) and ensuring
+features come from the same descriptor type the vocabulary was trained on.
+
+### Lever 5 — Loosen the localization-mode acceptance gates
+
+When mapping is good but localization keeps rejecting candidates:
+
+| Param | Default | Loosen to | Effect |
+|---|---|---|---|
+| `RGBD/OptimizeMaxError` | 3.0 σ | **5.0 σ** | accept candidates whose graph-error is up to 5× std-dev (saw 3.6–8.4 in our run, so this would accept the borderline ones) |
+| `Rtabmap/LoopThr` | 0.11 | **0.05** | more permissive Bayesian recognition (we use this in non-default tuning) |
+| `RGBD/MaxOdomCacheSize` | 10 | **3** | publish the `map→odom` TF after fewer confirming matches (faster relocalization, slightly more risk) |
+| `RGBD/AggressiveLoopThr` | 0.05 | keep | already permissive for first-lock scenarios |
+
+Try in order; raising `RGBD/OptimizeMaxError=5` is the single biggest
+unlock in our cross-bag run (would have accepted the 11 graph-rejected
+candidates).
+
+### Lever 6 — Deep matchers (highest ceiling, highest cost)
+
+Replace the descriptor-matching path with **SuperGlue** (`Vis/CorNNType=5`)
+or **GMS** (`Vis/CorNNType=6 + pyMatcher`). These are *the* state-of-the-art
+for cross-condition matching in 2026. RTAB-Map supports them via Python
+bindings (`PyMatcher/Path`).
+
+Cost: 50–200 ms per loop verification on Xavier (vs. ~10 ms for BFMatcher),
+plus the model files (~50 MB).
+
+Probably overkill for indoor rover deployment unless you're hitting a real
+wall — try Levers 1–5 first.
+
+### Recommended robustness recipe
+
+For our rover (D435i + T265 + Jetson Xavier), in priority order:
+
+1. **Auto-exposure on both mapping and localization** (Lever 1, free)
+2. **Multi-session mapping** — record 3–5 drives across different times of
+   day, all into the same DB (Lever 2, requires effort but transformative)
+3. **`RGBD/OptimizeMaxError=5`** for localization (Lever 5, +5 closures
+   in our test bag based on the rejection ratios we saw)
+4. **Switch to ORB detector** (`Kp/DetectorStrategy=2`) if the BoW dictionary
+   in our default `GFTT/BRIEF` is the bottleneck (Lever 3, easy A/B test)
+
+We don't recommend SuperPoint/SuperGlue (Lever 6) until / unless 1-4 prove
+insufficient for the actual deployment scenario. The Jetson preset's
+constrained-CPU choices already strain compute; deep matchers would push
+the verifier latency past real-time budget.
+
 ## Structural fix: `subscribe_scan`
 
 **Updated 2026-04-29.** After 13+ parameter-tuning iterations on
