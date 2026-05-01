@@ -30,8 +30,6 @@ Hardware — D435i + cuVSLAM:
 """
 
 import os
-import platform
-import subprocess
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -40,34 +38,6 @@ from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PythonExpression, TextSubstitution
 from launch_ros.actions import Node
-
-
-def _render_gpu_env():
-    """Pick the GPU index for OpenGL apps (RViz here). Mirrors the helper in
-    description_robot/launch/gazebo_bringup.launch.py:
-
-    - x86 with TITAN X eGPU attached -> GPU 1
-    - x86 single dGPU                -> GPU 0 (A2000)
-    - Jetson aarch64                 -> GPU 0 (Tegra)
-
-    Returned as a dict suitable for `Node(additional_env=...)`.
-    """
-    cuda_idx = '0'
-    if platform.machine() == 'x86_64':
-        try:
-            out = subprocess.check_output(
-                ['nvidia-smi', '-L'], stderr=subprocess.DEVNULL, timeout=2
-            ).decode()
-            if 'TITAN X' in out:
-                cuda_idx = '1'
-        except Exception:
-            pass
-    return {
-        'CUDA_VISIBLE_DEVICES': cuda_idx,
-        '__NV_PRIME_RENDER_OFFLOAD': '1',
-        '__GLX_VENDOR_LIBRARY_NAME': 'nvidia',
-    }
-
 
 ARGUMENTS = [
     DeclareLaunchArgument(
@@ -619,10 +589,6 @@ def generate_launch_description() -> LaunchDescription:
         )
     )
 
-    # additional_env routes RViz's OpenGL + CUDA to the eGPU when attached
-    # (TITAN X on GPU 1) and falls back to the local GPU otherwise (A2000 on
-    # x86, Tegra on Jetson). Scoped to this Node only — other ROS 2 nodes
-    # remain unaffected.
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
@@ -630,7 +596,6 @@ def generate_launch_description() -> LaunchDescription:
         output='screen',
         arguments=['-d', rviz_config],
         parameters=[{'use_sim_time': use_sim_time}],
-        additional_env=_render_gpu_env(),
         condition=IfCondition(rviz_enable),
     )
 
