@@ -483,6 +483,16 @@ The screening confirmed:
   the small-baseline + Reg/Strategy + MaxDepth fixes should compound
   into actual closures once translation between revisits is naturally
   non-zero.
+- **Auto-exposure A/B once rover closed-loop control is reliable** —
+  enabling RGB and depth auto-exposure should improve cross-day
+  robustness (Lever 1 in the cross-condition section), but doing a
+  clean A/B requires reproducible motion: run the same trajectory
+  under (manual, auto-rgb, auto-rgb+auto-depth) and compare BoW match
+  counts + closure success rates. Deferred until Nav2 controller
+  tuning lets us replay the same path under different camera modes.
+  Until then, the launch defaults stay at the manual values
+  (`d435i_rgb_exposure=80, gain=32, depth_exposure=7500`) so that
+  recorded bags are reproducible.
 
 ## RTAB-Map principles: mapping vs. localization
 
