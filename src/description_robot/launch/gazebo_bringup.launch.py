@@ -2,12 +2,15 @@
 """Gazebo bring-up launch file for the Ackermann rover."""
 
 import os
+import platform
+import subprocess
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     ExecuteProcess,
+    GroupAction,
     IncludeLaunchDescription,
     SetEnvironmentVariable,
     RegisterEventHandler,
@@ -18,6 +21,33 @@ from launch.substitutions import Command, LaunchConfiguration, PythonExpression,
 from launch_ros.actions import Node
 
 from launch.event_handlers import OnProcessExit
+
+
+def _render_gpu_env_actions():
+    """Return SetEnvironmentVariable actions to route Gazebo's OpenGL + CUDA
+    to the right GPU. Wrap the gazebo include in a scoped GroupAction so
+    these env vars don't leak to other ROS 2 nodes (e.g. cuVSLAM that needs
+    the A2000).
+
+    - x86 host with TITAN X eGPU attached  -> GPU 1 (eGPU)
+    - x86 host without eGPU                -> GPU 0 (A2000 / dGPU)
+    - Jetson (aarch64)                     -> GPU 0 (Tegra iGPU)
+    """
+    cuda_idx = '0'
+    if platform.machine() == 'x86_64':
+        try:
+            out = subprocess.check_output(
+                ['nvidia-smi', '-L'], stderr=subprocess.DEVNULL, timeout=2
+            ).decode()
+            if 'TITAN X' in out:
+                cuda_idx = '1'
+        except Exception:
+            pass
+    return [
+        SetEnvironmentVariable(name='CUDA_VISIBLE_DEVICES', value=cuda_idx),
+        SetEnvironmentVariable(name='__NV_PRIME_RENDER_OFFLOAD', value='1'),
+        SetEnvironmentVariable(name='__GLX_VENDOR_LIBRARY_NAME', value='nvidia'),
+    ]
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -160,9 +190,19 @@ def generate_launch_description() -> LaunchDescription:
         condition=IfCondition(enable_t265),
     )
 
-    gazebo = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(gz_share, 'launch', 'gz_sim.launch.py')),
-        launch_arguments={'gz_args': gz_args}.items(),
+    # Scope GPU env vars to JUST the gazebo subprocess so they don't affect
+    # downstream CUDA-using ROS 2 nodes (cuVSLAM, RTAB-Map GPU paths). The
+    # GroupAction with scoped=True confines the SetEnvironmentVariable
+    # actions to this group's children only.
+    gazebo = GroupAction(
+        actions=[
+            *_render_gpu_env_actions(),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(os.path.join(gz_share, 'launch', 'gz_sim.launch.py')),
+                launch_arguments={'gz_args': gz_args}.items(),
+            ),
+        ],
+        scoped=True,
     )
 
     spawn_entity = Node(
