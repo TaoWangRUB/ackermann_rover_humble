@@ -695,15 +695,37 @@ For our rover (D435i + T265 + Jetson Xavier), in priority order:
 1. **Auto-exposure on both mapping and localization** (Lever 1, free)
 2. **Multi-session mapping** — record 3–5 drives across different times of
    day, all into the same DB (Lever 2, requires effort but transformative)
-3. **`RGBD/OptimizeMaxError=5`** for localization (Lever 5, +5 closures
-   in our test bag based on the rejection ratios we saw)
-4. **Switch to ORB detector** (`Kp/DetectorStrategy=2`) if the BoW dictionary
-   in our default `GFTT/BRIEF` is the bottleneck (Lever 3, easy A/B test)
+3. **`RGBD/OptimizeMaxError=5`** for localization (Lever 5, **measured: 8
+   successful localizations vs 0 with the default 3.0 σ gate** on the
+   2026-04-30 1209→1340 cross-bag test).
 
-We don't recommend SuperPoint/SuperGlue (Lever 6) until / unless 1-4 prove
-insufficient for the actual deployment scenario. The Jetson preset's
+**Skip ORB (Lever 3) for cross-session localization** — measured outcome
+contradicted the theoretical expectation. On the same cross-bag test,
+ORB dropped the mean BoW match count from 62 (GFTT/BRIEF default) to 3, a
+~20× reduction. Even combined with Lever 5 (`OptimizeMaxError=5`), ORB
+still produced 0 successful localizations. Use ORB **only when CPU is the
+binding constraint** — it's ~11× faster per frame (median 9 ms vs 104 ms)
+but at a real cost in cross-session recall.
+
+We don't recommend SuperPoint/SuperGlue (Lever 6) until / unless 1, 2, 5
+prove insufficient for the actual deployment scenario. The Jetson preset's
 constrained-CPU choices already strain compute; deep matchers would push
 the verifier latency past real-time budget.
+
+### Validation matrix (2026-04-30, base map = `run_20260427_1209_seg1`, target = `run_20260428_1340_seg3`)
+
+| Variant | Detector | OptimizeMaxError | Successes | Mean matches | p95 ms |
+|---|---|---|---|---|---|
+| **A** default | GFTT/BRIEF | 3.0 σ | 0 | 62.6 | 141 |
+| **B** Lever 5 | GFTT/BRIEF | **5.0 σ** | **8** | 46.7 | 248 |
+| **C** Lever 3 | **ORB** | 3.0 σ | 0 | 3.2 | 35 |
+| **D** Lever 3+5 | **ORB** | **5.0 σ** | 0 | 3.4 | 31 |
+
+`Successes` = "Localization was good" events. `Mean matches` = pre-RANSAC
+descriptor matches per loop candidate. The cross-condition robustness story
+on this dataset is entirely about Lever 5; Lever 3 was a regression at the
+matching stage (BoW vocabulary of one detector on day-1 didn't quantize
+the same detector's day-2 features as densely as we'd hoped).
 
 ## Structural fix: `subscribe_scan`
 
