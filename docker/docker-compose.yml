@@ -29,6 +29,12 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       # 'all' covers compute + graphics on both x86 NVIDIA and Jetson L4T.
       - NVIDIA_DRIVER_CAPABILITIES=all
+      # PRIME render offload — required on x86 hybrid laptops (Intel iGPU +
+      # NVIDIA dGPU) so OpenGL/GLX apps (Gazebo, RViz) actually use the
+      # NVIDIA card instead of falling back to the iGPU. Harmless on
+      # desktop-class GPUs and on Jetson, so safe to leave on always.
+      - __NV_PRIME_RENDER_OFFLOAD=1
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
       - UBUNTU_VERSION=${UBUNTU_VERSION-24.04}
       - ROS_DISTRO=${ROS_DISTRO-jazzy}
       - GZ_DISTRO=${GZ_DISTRO-harmonic}
