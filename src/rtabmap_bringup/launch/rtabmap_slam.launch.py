@@ -294,6 +294,15 @@ def generate_launch_description() -> LaunchDescription:
         #'Grid/RangeMax': '20',
         'Grid/3D': 'false',
         'Grid/RayTracing': 'true',
+        # Pin Grid/Sensor to 1 (camera/cloud) so rtabmap_ros's CoreWrapper does
+        # NOT auto-flip it to 0 (laser scan) when subscribe_scan=True. The
+        # auto-flip would produce a flat-top triangle from /scan's perpendicular-Z
+        # values; pinning to 1 keeps the camera/cloud sector geometry.
+        # Grid/RangeMax's auto-override is itself gated on Grid/Sensor==0, so it
+        # keeps its default 5.0 m once Grid/Sensor=1 is pinned — no need to set
+        # it explicitly. See CoreWrapper.cpp:459-479 and ADR-009.
+        'Grid/Sensor': '1',
+        # 'Grid/RangeMax': '5.0',  # default 5.0 — auto-override skipped because Grid/Sensor=1
         'Reg/Force3DoF': 'true',
         'Kp/MaxFeatures': '1500',
         'Vis/CorGuessWinSize': '40',

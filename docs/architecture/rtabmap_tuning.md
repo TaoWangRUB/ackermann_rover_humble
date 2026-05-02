@@ -32,6 +32,15 @@ Standard invocations for the bag-replay and live-mapping paths, plus
 diagnostic and live-tuning commands. All flags are documented in the
 respective scripts (`-h` / `--help`).
 
+> **Gotcha — occupancy grid sensor source.** When `subscribe_scan=true` (our
+> default since commit `7eb283c`), the rtabmap_ros wrapper silently auto-flips
+> `Grid/Sensor` from `1` (camera/cloud, sector shape) to `0` (laser scan,
+> perpendicular-Z triangle), and `Grid/RangeMax` from 5 m to 0 (no limit). To
+> keep the sector shape, both must be set **explicitly** in the launch params
+> dict so the auto-override condition is bypassed. See
+> [ADR-009](../decisions/ADR-009-rtabmap-grid-sensor.md) for the root cause
+> trace through `CoreWrapper.cpp:459-479`.
+
 ### Live mapping
 
 ```bash
