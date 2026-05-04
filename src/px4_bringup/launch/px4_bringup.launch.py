@@ -31,8 +31,13 @@ def generate_launch_description():
 
     mode_type_arg = DeclareLaunchArgument(
         'mode_type',
-        default_value='manual',
-        description='PX4 mode type: trajectory, speed_steering, speed_attitude, or manual'
+        default_value='all',
+        description=(
+            "Legacy single-mode selector. Default 'all' starts the three "
+            'rover modes (speed_steering, speed_attitude, manual) so they '
+            'all register with PX4 and the CC can switch between them. Set '
+            "to 'trajectory' to enable the offboard-trajectory node instead."
+        ),
     )
 
     # ── VO bridge ─────────────────────────────────────────────────────────
@@ -160,16 +165,21 @@ def generate_launch_description():
         ])),
     )
 
+    # Rover modes are launched together so each registers with PX4 and gets
+    # its own runtime nav_state ID. The CC switches between them by
+    # publishing VEHICLE_CMD_SET_NAV_STATE with the looked-up ID.
+    rover_modes_enabled = PythonExpression([
+        "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
+        " and '", LaunchConfiguration('mode_type'), "' != 'trajectory'",
+    ])
+
     speed_steering_node = Node(
         package='px4_bringup',
         executable='rover_speed_steering_mode',
         name='rover_speed_steering_mode',
         output='screen',
         parameters=[config_file],
-        condition=IfCondition(PythonExpression([
-            "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
-            " and '", LaunchConfiguration('mode_type'), "' == 'speed_steering'",
-        ])),
+        condition=IfCondition(rover_modes_enabled),
     )
 
     speed_attitude_node = Node(
@@ -178,10 +188,7 @@ def generate_launch_description():
         name='rover_speed_attitude_mode',
         output='screen',
         parameters=[config_file],
-        condition=IfCondition(PythonExpression([
-            "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
-            " and '", LaunchConfiguration('mode_type'), "' == 'speed_attitude'",
-        ])),
+        condition=IfCondition(rover_modes_enabled),
     )
 
     manual_node = Node(
@@ -194,10 +201,7 @@ def generate_launch_description():
             {'bidirectional_esc': ParameterValue(
                 LaunchConfiguration('reversible_drive'), value_type=bool)},
         ],
-        condition=IfCondition(PythonExpression([
-            "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
-            " and '", LaunchConfiguration('mode_type'), "' == 'manual'",
-        ])),
+        condition=IfCondition(rover_modes_enabled),
     )
 
     return LaunchDescription([

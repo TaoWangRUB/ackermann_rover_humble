@@ -80,6 +80,41 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   vehicle_cmd_pub_ = this->create_publisher<px4_msgs::msg::VehicleCommand>(
     versioned_px4_topic<px4_msgs::msg::VehicleCommand>("/fmu/in/vehicle_command"), 10);
 
+  // PX4 ext-component-registration snoop. The QoS matches the px4_ros2 lib's
+  // own subscription so we co-exist with the rover_*_mode nodes.
+  // Match PX4's publisher QoS: BEST_EFFORT + TRANSIENT_LOCAL with a deeper
+  // history so we (a) catch concurrent registration replies even if there's
+  // a brief DDS handshake gap and (b) inherit the last cached reply per
+  // mode on subscription match (late-joiner safety). Depth 16 = 8 ext-mode
+  // slots × 2 retries.
+  //
+  // Note: this is a best-effort fallback. The reliable path is the
+  // /px4_modes/announce subscription below, populated by rover_*_mode_main
+  // after their own registration succeeds.
+  rclcpp::QoS register_reply_qos(rclcpp::KeepLast(16));
+  register_reply_qos.best_effort().transient_local();
+  register_reply_sub_ =
+    this->create_subscription<px4_msgs::msg::RegisterExtComponentReply>(
+      versioned_px4_topic<px4_msgs::msg::RegisterExtComponentReply>(
+        "/fmu/out/register_ext_component_reply"),
+      register_reply_qos,
+      std::bind(&TelemetryPublisher::on_register_ext_component_reply, this,
+        std::placeholders::_1),
+      sub_opts);
+
+  // Reliable secondary path. RELIABLE + TRANSIENT_LOCAL with depth 16 means
+  // (a) every announcement is delivered (no best-effort drops), and
+  // (b) a late-joining telemetry_publisher (e.g. monitor pane restart) sees
+  // every cached announcement on subscription match. This is the path that
+  // makes the snooper robust to PX4-reply timing edge cases.
+  rclcpp::QoS announce_qos(rclcpp::KeepLast(16));
+  announce_qos.reliable().transient_local();
+  mode_announce_sub_ = this->create_subscription<std_msgs::msg::String>(
+    "/px4_modes/announce", announce_qos,
+    std::bind(&TelemetryPublisher::on_mode_announce, this,
+      std::placeholders::_1),
+    sub_opts);
+
   // E-stop twist publisher (zero velocity)
   twist_pub_ = this->create_publisher<geometry_msgs::msg::TwistStamped>(
     "/cmd_vel", 10);
@@ -577,6 +612,63 @@ void TelemetryPublisher::handle_nav_goal(const std::string & cmd_id,
   nav2_client_->async_send_goal(nav_goal, send_goal_options);
 }
 
+void TelemetryPublisher::on_mode_announce(
+  std_msgs::msg::String::ConstSharedPtr msg)
+{
+  // Format: "<mode name>:<nav_state>". Splits on the LAST colon so mode names
+  // containing a colon (none today, but future-proof) still parse correctly.
+  const auto & data = msg->data;
+  auto sep = data.rfind(':');
+  if (sep == std::string::npos || sep == 0 || sep + 1 >= data.size()) {
+    RCLCPP_WARN(this->get_logger(),
+      "Malformed /px4_modes/announce message: '%s'", data.c_str());
+    return;
+  }
+  const std::string name = data.substr(0, sep);
+  int nav_state = -1;
+  try {
+    nav_state = std::stoi(data.substr(sep + 1));
+  } catch (const std::exception &) {
+    RCLCPP_WARN(this->get_logger(),
+      "Non-numeric nav_state in /px4_modes/announce: '%s'", data.c_str());
+    return;
+  }
+  if (nav_state < 0 || nav_state > 255) {
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(mode_id_mutex_);
+    mode_id_by_name_[name] = static_cast<int8_t>(nav_state);
+  }
+  RCLCPP_INFO(this->get_logger(),
+    "PX4 mode announced: name='%s' nav_state=%d", name.c_str(), nav_state);
+}
+
+void TelemetryPublisher::on_register_ext_component_reply(
+  px4_msgs::msg::RegisterExtComponentReply::ConstSharedPtr msg)
+{
+  if (!msg->success || msg->mode_id < 0) {
+    return;  // failed registration or non-mode component (arming-check only)
+  }
+
+  // The name field is a fixed-size char array; the registering side null-
+  // terminates the last byte. Build a std::string up to the first NUL.
+  const char * raw = reinterpret_cast<const char *>(msg->name.data());
+  const size_t max_len = msg->name.size();
+  size_t len = 0;
+  while (len < max_len && raw[len] != '\0') { ++len; }
+  std::string name(raw, len);
+
+  {
+    std::lock_guard<std::mutex> lock(mode_id_mutex_);
+    mode_id_by_name_[name] = msg->mode_id;
+  }
+  RCLCPP_INFO(this->get_logger(),
+    "PX4 mode registered: name='%s' nav_state=%d",
+    name.c_str(), static_cast<int>(msg->mode_id));
+}
+
 void TelemetryPublisher::handle_set_mode(const std::string & cmd_id,
   const std::string & payload)
 {
@@ -593,14 +685,32 @@ void TelemetryPublisher::handle_set_mode(const std::string & cmd_id,
   RCLCPP_INFO(this->get_logger(), "SET_MODE command: cmd_id=%s mode=%s",
     cmd_id.c_str(), mode.c_str());
 
-  // Use PX4 DO_SET_MODE command
+  int8_t nav_state = -1;
+  {
+    std::lock_guard<std::mutex> lock(mode_id_mutex_);
+    auto it = mode_id_by_name_.find(mode);
+    if (it != mode_id_by_name_.end()) {
+      nav_state = it->second;
+    }
+  }
+
+  if (nav_state < 0) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_SET_MODE,
+      rover_monitor_proto::ACK_REJECTED,
+      "Mode '" + mode + "' not registered with PX4 (no nav_state cached)");
+    return;
+  }
+
+  // VEHICLE_CMD_SET_NAV_STATE is the canonical path the px4_ros2 lib uses
+  // to switch into a registered custom mode. param1 = nav_state ID.
   publish_vehicle_command(
-    px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE,
-    1.0f,   // param1: MAV_MODE custom
-    6.0f);  // param2: PX4 custom main mode (offboard=6)
+    px4_msgs::msg::VehicleCommand::VEHICLE_CMD_SET_NAV_STATE,
+    static_cast<float>(nav_state));
 
   send_ack(cmd_id, rover_monitor_proto::CMD_SET_MODE,
-    rover_monitor_proto::ACK_ACCEPTED, "Mode change sent to PX4: " + mode);
+    rover_monitor_proto::ACK_ACCEPTED,
+    "Mode change sent to PX4: " + mode + " (nav_state=" +
+      std::to_string(static_cast<int>(nav_state)) + ")");
 }
 
 void TelemetryPublisher::handle_cancel_goal(const std::string & cmd_id)

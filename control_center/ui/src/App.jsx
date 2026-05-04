@@ -258,7 +258,14 @@ async function sendDashboardCommand(cmdType, params = {}) {
   }
 }
 
+const PX4_MODES = [
+  { label: 'Speed/Steering', name: 'Rover Speed Steering' },
+  { label: 'Speed/Attitude', name: 'Rover Speed Attitude' },
+  { label: 'RoverManual', name: 'RoverManual' },
+];
+
 function Px4CommandsPanel() {
+  const modeButtonStyle = { background: '#1f2937', color: 'white', fontSize: 12 };
   return (
     <Panel title="PX4 Commands">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -267,6 +274,19 @@ function Px4CommandsPanel() {
         <button onClick={() => sendDashboardCommand('estop')} style={{ background: '#ef4444', color: 'white' }}>
           E-STOP
         </button>
+      </div>
+      <div style={{ fontSize: 11, color: '#6b7280', margin: '10px 0 4px' }}>Modes</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {PX4_MODES.map(({ label, name }) => (
+          <button
+            key={name}
+            onClick={() => sendDashboardCommand('set_mode', { mode_name: name })}
+            style={modeButtonStyle}
+            title={name}
+          >
+            {label}
+          </button>
+        ))}
       </div>
     </Panel>
   );

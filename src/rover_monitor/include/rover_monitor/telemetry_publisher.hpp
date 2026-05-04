@@ -9,6 +9,8 @@
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <action_msgs/msg/goal_status_array.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
+#include <px4_msgs/msg/register_ext_component_reply.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <array>
 
 #include <mqtt/async_client.h>
@@ -70,6 +72,21 @@ private:
   void publish_vehicle_command(uint32_t command, float param1 = 0.0f,
     float param2 = 0.0f);
 
+  // Snoop PX4 mode registration replies to learn name → nav_state ID.
+  // Each rover mode (rover_speed_steering, rover_speed_attitude, rover_manual)
+  // registers itself with PX4 at startup; the FMU assigns a runtime nav_state
+  // and replies on /fmu/out/register_ext_component_reply. We cache that map
+  // so handle_set_mode can switch into a registered mode by name.
+  void on_register_ext_component_reply(
+    px4_msgs::msg::RegisterExtComponentReply::ConstSharedPtr msg);
+
+  // Reliable secondary path: rover_*_mode nodes also announce (name, mode_id)
+  // on /px4_modes/announce with RELIABLE + TRANSIENT_LOCAL after their own
+  // registration succeeds. This is the source of truth for the cache because
+  // the PX4 reply path (above) is fire-once + best_effort + shallow uORB
+  // queue, so messages can be missed if multiple modes register together.
+  void on_mode_announce(std_msgs::msg::String::ConstSharedPtr msg);
+
   // ROS subscriber
   rclcpp::Subscription<rover_monitor::msg::RoverHealth>::SharedPtr health_sub_;
 
@@ -87,6 +104,13 @@ private:
 
   // PX4 command publisher
   rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr vehicle_cmd_pub_;
+
+  // PX4 ext-component-registration snoop: name → nav_state ID
+  rclcpp::Subscription<px4_msgs::msg::RegisterExtComponentReply>::SharedPtr
+    register_reply_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr mode_announce_sub_;
+  std::mutex mode_id_mutex_;
+  std::unordered_map<std::string, int8_t> mode_id_by_name_;
 
   // E-stop twist publisher
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_pub_;
