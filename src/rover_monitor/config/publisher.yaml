@@ -3,13 +3,18 @@
     publisher:
       broker_host: "192.168.0.225" # 192.168.0.248
       broker_port: 1883
-      reconnect_delay_s: 5
+      # MQTT timing tuned for flaky WiFi (DFS-channel drops can silently kill
+      # the TCP socket). With 5 s keep-alive Paho declares a dead connection
+      # within ~7-10 s instead of the 45-90 s with the previous default, so
+      # heartbeats stop being published into the void and CC's safety gate
+      # recovers from "telemetry stale" as soon as MQTT reconnects.
+      reconnect_delay_s: 2
       telemetry_qos: 0
       alert_qos: 1
       cmd_qos: 2
       client_id: "xavier_rover_01"
       dedup_eviction_s: 30
-      keep_alive_s: 45
-      connect_timeout_s: 5
+      keep_alive_s: 5
+      connect_timeout_s: 2
       heartbeat_interval_s: 1.0
       serialization: "protobuf"
