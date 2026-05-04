@@ -357,18 +357,20 @@ def generate_launch_description() -> LaunchDescription:
     # RSP publishes the TF tree (camera mounts, wheel kinematics) from the URDF.
     # In Gazebo mode this is started inside gazebo_bringup; here it runs standalone.
     #
+    # In HW mode there are no wheel encoders connected to ROS.
     # cmd_vel_joint_relay derives /joint_states from /cmd_vel using inverse
-    # Ackermann kinematics. Gated to sim mode by user direction; in HW mode
-    # the relay is now skipped (URDF wheels stay static in RViz, but no CPU
-    # is consumed by a 50 Hz Python publisher with no consumer on the Jetson).
+    # Ackermann kinematics so robot_state_publisher can compute wheel TFs and
+    # RViz can animate the URDF. C++ executable (was Python at 50 Hz costing
+    # ~50% CPU on Jetson; rewritten in C++ + dropped to 10 Hz cuts ~95% off).
     hw_joint_state_publisher = Node(
         package='robot_bringup',
-        executable='cmd_vel_joint_relay.py',
+        executable='cmd_vel_joint_relay',
         output='screen',
-        condition=IfCondition(use_gazebo),
+        condition=UnlessCondition(use_gazebo),
         parameters=[{
             'use_sim_time': use_sim_time,
             'robot_ns': robot_name,
+            'publish_rate': 10.0,
         }],
     )
 
