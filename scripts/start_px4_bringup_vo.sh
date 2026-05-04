@@ -22,7 +22,7 @@
 #   ./scripts/start_px4_bringup_vo.sh --bridge --reversible-drive
 set -euo pipefail
 
-MODE_TYPE="manual"
+MODE_TYPE="all"
 BRIDGE="false"
 VO_BRIDGE="false"
 ODOM_TOPIC="/odometry/filtered"
@@ -43,12 +43,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "${MODE_TYPE}" in
-  manual|trajectory|speed_steering|speed_attitude)
-    # Valid mode
+  all|manual|trajectory|speed_steering|speed_attitude)
+    # Valid mode. 'all' (default) launches all three rover modes so they
+    # all register with PX4 and the CC can switch between them.
     ;;
   *)
     echo "ERROR: Invalid mode-type '${MODE_TYPE}'" >&2
-    echo "Valid options: manual, trajectory, speed_steering, speed_attitude" >&2
+    echo "Valid options: all, manual, trajectory, speed_steering, speed_attitude" >&2
     exit 1
     ;;
 esac

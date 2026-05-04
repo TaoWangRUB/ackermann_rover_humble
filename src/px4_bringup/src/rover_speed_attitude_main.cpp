@@ -1,6 +1,7 @@
 // Copyright 2026, Tao Wang. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <px4_bringup/mode_announce.hpp>
 #include <px4_bringup/rover_speed_attitude_mode.hpp>
 #include <px4_ros2/common/exception.hpp>
 #include <px4_ros2/components/node_with_mode.hpp>
@@ -19,9 +20,12 @@ int main(int argc, char * argv[])
   while (true) {
     rclcpp::init(argc, argv);
     try {
-      rclcpp::spin(
+      auto node =
         std::make_shared<px4_ros2::NodeWithMode<RoverSpeedAttitudeMode>>(
-          "rover_speed_attitude_mode", true));
+          "rover_speed_attitude_mode", true);
+      auto announce_pub = px4_bringup::announce_mode(
+        node, "Rover Speed Attitude", node->getMode());
+      rclcpp::spin(node);
       // Normal shutdown (SIGINT / rclcpp::shutdown from elsewhere)
       rclcpp::shutdown();
       break;

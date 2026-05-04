@@ -14,6 +14,7 @@ find_package(ament_cmake REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -39,7 +40,7 @@ add_executable(rover_speed_steering_mode
   src/rover_speed_steering_main.cpp
 )
 ament_target_dependencies(rover_speed_steering_mode
-  rclcpp geometry_msgs px4_ros2_cpp px4_msgs
+  rclcpp geometry_msgs std_msgs px4_ros2_cpp px4_msgs
 )
 
 # 3. Rover Speed Attitude Mode
@@ -47,7 +48,7 @@ add_executable(rover_speed_attitude_mode
   src/rover_speed_attitude_main.cpp
 )
 ament_target_dependencies(rover_speed_attitude_mode
-  rclcpp geometry_msgs px4_ros2_cpp px4_msgs
+  rclcpp geometry_msgs std_msgs px4_ros2_cpp px4_msgs
 )
 
 # 4. Rover Manual Mode (open-loop throttle + steering)
@@ -55,7 +56,7 @@ add_executable(rover_manual_mode
   src/rover_manual_main.cpp
 )
 ament_target_dependencies(rover_manual_mode
-  rclcpp geometry_msgs px4_ros2_cpp px4_msgs
+  rclcpp geometry_msgs std_msgs px4_ros2_cpp px4_msgs
 )
 
 # --- C++ odometry bridge nodes ---

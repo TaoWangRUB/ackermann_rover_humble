@@ -1,0 +1,49 @@
+diff --git a/px4_ros2_cpp/src/components/health_and_arming_checks.cpp b/px4_ros2_cpp/src/components/health_and_arming_checks.cpp
+index 743cefb..3c9f538 100644
+--- a/px4_ros2_cpp/src/components/health_and_arming_checks.cpp
++++ b/px4_ros2_cpp/src/components/health_and_arming_checks.cpp
+@@ -26,10 +26,14 @@ HealthAndArmingChecks::HealthAndArmingChecks(rclcpp::Node& node, CheckCallback c
+           px4_ros2::getMessageNameVersion<px4_msgs::msg::ArmingCheckReply>(),
+       1);
+ 
++  // QoS depth bumped 1 -> 8 (matches PX4's MAX_NUM_REGISTRATIONS) so a
++  // burst of arming_check_requests over the XRCE-DDS bridge isn't dropped
++  // under load — the previous depth=1 caused dropped requests to flip the
++  // mode "unresponsive" on PX4, triggering failsafe-Land on arm.
+   _arming_check_request_sub = _node.create_subscription<px4_msgs::msg::ArmingCheckRequest>(
+       topic_namespace_prefix + "fmu/out/arming_check_request" +
+           px4_ros2::getMessageNameVersion<px4_msgs::msg::ArmingCheckRequest>(),
+-      rclcpp::QoS(1).best_effort(), [this](px4_msgs::msg::ArmingCheckRequest::UniquePtr msg) {
++      rclcpp::QoS(8).best_effort(), [this](px4_msgs::msg::ArmingCheckRequest::UniquePtr msg) {
+         RCLCPP_DEBUG_ONCE(_node.get_logger(), "Arming check request (id=%i, only printed once)",
+                           msg->request_id);
+ 
+@@ -47,15 +51,19 @@ HealthAndArmingChecks::HealthAndArmingChecks(rclcpp::Node& node, CheckCallback c
+           reply.timestamp = 0;  // Let PX4 set the timestamp
+           _arming_check_reply_pub->publish(reply);
+ 
+-          // Check if our registration id is still valid. If not, we still send the reply,
+-          // as it might be flagged as unresponsive, but we don't update the timer check.
+-          // The first request might not have the bit set yet.
+-          if (_first_request || (msg->valid_registrations_mask & (1U << reply.registration_id))) {
+-            _check_triggered = true;
+-          } else {
+-            RCLCPP_ERROR_ONCE(_node.get_logger(),
+-                              "Registration id %i is flagged as invalid (only printed once)",
+-                              reply.registration_id);
++          // Always advance the watchdog if we got a request and we're
++          // registered — even if PX4 has temporarily flipped our bit out of
++          // the valid_registrations_mask (because we were briefly flagged
++          // unresponsive). PX4 re-includes us once it sees fresh replies
++          // (externalChecks.cpp:246), so killing the node here on a
++          // recoverable hiccup just causes pointless re-registration churn
++          // and a multi-second window where arm triggers failsafe-Land.
++          _check_triggered = true;
++          if (!_first_request &&
++              !(msg->valid_registrations_mask & (1U << reply.registration_id))) {
++            RCLCPP_WARN_ONCE(_node.get_logger(),
++                             "Registration id %i flagged unresponsive — keeping reply loop alive",
++                             reply.registration_id);
+           }
+           _first_request = false;
+ 
