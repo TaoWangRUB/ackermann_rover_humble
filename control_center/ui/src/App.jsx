@@ -261,6 +261,7 @@ async function sendDashboardCommand(cmdType, params = {}) {
 const PX4_MODES = [
   { label: 'Speed/Steering', name: 'Rover Speed Steering' },
   { label: 'Speed/Attitude', name: 'Rover Speed Attitude' },
+  { label: 'Speed/Rate', name: 'Rover Speed Rate' },
   { label: 'RoverManual', name: 'RoverManual' },
 ];
 
