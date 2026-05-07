@@ -51,6 +51,14 @@ ament_target_dependencies(rover_speed_attitude_mode
   rclcpp geometry_msgs std_msgs px4_ros2_cpp px4_msgs
 )
 
+# 3b. Rover Speed Rate Mode (linear.x → speed, angular.z → yaw rate)
+add_executable(rover_speed_rate_mode
+  src/rover_speed_rate_main.cpp
+)
+ament_target_dependencies(rover_speed_rate_mode
+  rclcpp geometry_msgs std_msgs px4_ros2_cpp px4_msgs
+)
+
 # 4. Rover Manual Mode (open-loop throttle + steering)
 add_executable(rover_manual_mode
   src/rover_manual_main.cpp
@@ -85,6 +93,7 @@ install(TARGETS
   offboard_trajectory_mode
   rover_speed_steering_mode
   rover_speed_attitude_mode
+  rover_speed_rate_mode
   rover_manual_mode
   px4_vision_odom_node
   px4_vehicle_odometry_node

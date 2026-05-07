@@ -191,6 +191,15 @@ def generate_launch_description():
         condition=IfCondition(rover_modes_enabled),
     )
 
+    speed_rate_node = Node(
+        package='px4_bringup',
+        executable='rover_speed_rate_mode',
+        name='rover_speed_rate_mode',
+        output='screen',
+        parameters=[config_file],
+        condition=IfCondition(rover_modes_enabled),
+    )
+
     manual_node = Node(
         package='px4_bringup',
         executable='rover_manual_mode',
@@ -226,5 +235,6 @@ def generate_launch_description():
         trajectory_node,
         speed_steering_node,
         speed_attitude_node,
+        speed_rate_node,
         manual_node,
     ])
