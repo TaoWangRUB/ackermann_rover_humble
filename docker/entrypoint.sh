@@ -87,8 +87,13 @@ else
   echo "ROS DDS mode: ${ROS_DDS_MODE} (Fast DDS builtin transports)"
 fi
 
-# Update apt index and install ROS package dependencies via rosdep
-sudo apt-get update -qq
+# Update apt index and install ROS package dependencies via rosdep.
+# apt-get update can fail with "Release file is not valid yet" when the
+# upstream mirror serves future-dated Release files (intermittent on
+# ports.ubuntu.com); don't kill the container for that — rosdep can still
+# resolve against the existing apt cache.
+sudo apt-get update -qq || \
+  echo "WARNING: apt-get update encountered errors; continuing startup."
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 rosdep install --from-paths src --ignore-src -r -y || \
   echo "WARNING: rosdep install encountered errors; continuing startup."
