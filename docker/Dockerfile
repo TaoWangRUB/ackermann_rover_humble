@@ -164,7 +164,17 @@ RUN python3 -m pip install --break-system-packages -r /tmp/px4_requirements.txt 
 # Compatible with PX4's built-in uxrce_dds_client v2.4.x.
 RUN cd /tmp && \
     git clone --depth 1 --branch v2.4.3 https://github.com/eProsima/Micro-XRCE-DDS-Agent.git && \
-    cd Micro-XRCE-DDS-Agent && mkdir build && cd build && \
+    cd Micro-XRCE-DDS-Agent && \
+    # Enable CRTSCTS hardware flow control on the serial transport. The v2.4.3
+    # default explicitly disables it, which causes byte loss at 921600 baud
+    # when PX4 bursts arming-check replies to multiple registered modes (see
+    # Auterion/px4-ros2-interface-lib#165). The grep is a build-time guard so
+    # an upstream rewrite of this line fails the image build loudly.
+    sed -i 's#attr\.c_cflag &= unsigned(~CRTSCTS);.*#attr.c_cflag |= unsigned(CRTSCTS);  // Enable hardware flow control (CRTSCTS).#' \
+        include/uxr/agent/utils/ArgumentParser.hpp && \
+    grep -q 'attr.c_cflag |= unsigned(CRTSCTS);  // Enable hardware flow control' \
+        include/uxr/agent/utils/ArgumentParser.hpp && \
+    mkdir build && cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/microxrce \
     -DUAGENT_SUPERBUILD=ON -DUAGENT_FAST_PROFILE=ON -DUAGENT_CED_PROFILE=OFF \
     -DUAGENT_USE_SYSTEM_LOGGER=OFF -DUAGENT_BUILD_TESTS=OFF && \
