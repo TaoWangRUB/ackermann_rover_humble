@@ -23,7 +23,7 @@ private:
   void on_stream_sample(const rclcpp::Time & now);
   void on_color_image(sensor_msgs::msg::Image::ConstSharedPtr msg);
   void on_depth_image(sensor_msgs::msg::Image::ConstSharedPtr msg);
-  void on_imu(sensor_msgs::msg::Imu::ConstSharedPtr msg);
+  void on_imu_check();
   void on_odom(nav_msgs::msg::Odometry::ConstSharedPtr msg);
   void publish_status();
 
@@ -32,11 +32,14 @@ private:
 
   // Timers
   rclcpp::TimerBase::SharedPtr status_timer_;
+  // 1 Hz liveness poll for the IMU topic — replaces the prior per-message
+  // subscription (which dispatched callbacks at 200 Hz × N cameras even though
+  // the body only updated a timestamp).
+  rclcpp::TimerBase::SharedPtr imu_check_timer_;
 
   // Subscribers
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr color_sub_;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depth_sub_;
-  rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
 
   // Callback group
@@ -59,10 +62,13 @@ private:
   int depth_quality_sample_interval_{10};
   float depth_quality_sampled_{1.0f};
 
-  // IMU liveness
+  // IMU liveness — tracked by polling count_publishers(imu_topic_) at 1 Hz
+  std::string imu_topic_;
   rclcpp::Time last_imu_stamp_;
   bool imu_active_{false};
-  int imu_timeout_ms_{500};
+  // imu_timeout_ms_ is no longer used for the liveness decision (imu_active_
+  // is set directly by the 1 Hz poll); kept for backward-compatible param.
+  int imu_timeout_ms_{2000};
 
   // Device state
   bool connected_{false};
