@@ -61,9 +61,13 @@ CamProbe::CamProbe(const rclcpp::NodeOptions & options)
       std::bind(&CamProbe::on_depth_image, this, std::placeholders::_1), sub_opts);
   }
 
-  imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
-    imu_topic, rclcpp::SensorDataQoS(),
-    std::bind(&CamProbe::on_imu, this, std::placeholders::_1), sub_opts);
+  // IMU at 200 Hz × N cameras dispatched too many no-op callbacks. We only
+  // need to know "is something publishing IMU?", which a 1 Hz poll of
+  // count_publishers() answers without consuming any of the 200 messages/s.
+  imu_topic_ = imu_topic;
+  imu_check_timer_ = this->create_wall_timer(
+    std::chrono::seconds(1),
+    std::bind(&CamProbe::on_imu_check, this), cb_group_);
 
   if (!odom_topic.empty()) {
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
@@ -154,10 +158,15 @@ void CamProbe::on_depth_image(sensor_msgs::msg::Image::ConstSharedPtr msg)
   }
 }
 
-void CamProbe::on_imu(sensor_msgs::msg::Imu::ConstSharedPtr /*msg*/)
+void CamProbe::on_imu_check()
 {
-  last_imu_stamp_ = this->now();
-  imu_active_ = true;
+  // Liveness check: a publisher counts as "IMU active". This avoids
+  // dispatching a callback per 200 Hz IMU message just to update a timestamp.
+  const bool alive = this->count_publishers(imu_topic_) > 0;
+  if (alive) {
+    last_imu_stamp_ = this->now();
+  }
+  imu_active_ = alive;
 }
 
 void CamProbe::publish_status()
@@ -179,7 +188,7 @@ void CamProbe::publish_status()
     stream_required_ && is_recent(last_color_stamp_, stream_fallback_timeout_ms_);
   bool depth_available =
     depth_sub_ && is_recent(last_depth_stamp_, stream_fallback_timeout_ms_);
-  imu_active_ = is_recent(last_imu_stamp_, imu_timeout_ms_);
+  // imu_active_ is maintained by the 1 Hz on_imu_check() poll; don't overwrite here.
   odom_active_ = odom_sub_ && is_recent(last_odom_stamp_, odom_timeout_ms_);
   connected_ = stream_available || depth_available || imu_active_ || odom_active_;
 
@@ -209,7 +218,7 @@ void CamProbe::publish_status()
   } else if (depth_sub_ && depth_available && depth_quality_sampled_ < 0.5f) {
     status->error_code = 3;
     status->error_msg = "Depth fill ratio below 50% (sampled)";
-  } else if (imu_sub_ && !imu_active_) {
+  } else if (imu_check_timer_ && !imu_active_) {
     status->error_code = 4;
     status->error_msg = "IMU stream lost";
   } else {
