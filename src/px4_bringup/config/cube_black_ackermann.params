@@ -100,6 +100,14 @@
 # TELEM2 baud rate: 921600 for DDS throughput
 1	1	SER_TEL2_BAUD	921600	6
 
+# UXRCE_DDS_FLCTRL: enable CRTSCTS hardware flow control on the XRCE UART.
+# Without this, 4 simultaneous arming_check_reply bursts overflow CH340G's
+# small RX FIFO at 921600 baud → ~8% reply loss → PX4 flags slots invalid
+# and modes age out of QGC. Requires RTS/CTS to be physically wired on
+# TELEM2 (pins 4=CTS, 5=RTS) and the MicroXRCEAgent to also set CRTSCTS.
+# Reboot required to take effect. See Auterion/px4-ros2-interface-lib#165.
+1	1	UXRCE_DDS_FLCTRL	1	1
+
 # ── RAM Saving (Cube Black has only 231 KB) ─────────────────────────────────
 # Disable GPS serial port — module never starts, frees ~6 KB
 1	1	GPS_1_CONFIG	0	6
