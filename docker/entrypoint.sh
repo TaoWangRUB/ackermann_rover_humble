@@ -87,6 +87,14 @@ else
   echo "ROS DDS mode: ${ROS_DDS_MODE} (Fast DDS builtin transports)"
 fi
 
+# Aggressive TCP retransmit budget so wedged MQTT/TCP sockets fail fast (~12-25 s)
+# instead of sitting in the default ~15 min limbo when WiFi has loss bursts.
+# Paho C++ 1.2 doesn't expose per-socket TCP_USER_TIMEOUT — once we upgrade to
+# 1.4+ we can move this to a setsockopt() in telemetry_publisher and drop the
+# kernel-wide setting. Until then, sysctl is the cheapest correct-enough fix.
+sudo sysctl -w net.ipv4.tcp_retries2=5 >/dev/null 2>&1 || \
+  echo "WARNING: failed to set net.ipv4.tcp_retries2; continuing."
+
 # Update apt index and install ROS package dependencies via rosdep.
 # apt-get update can fail with "Release file is not valid yet" when the
 # upstream mirror serves future-dated Release files (intermittent on
