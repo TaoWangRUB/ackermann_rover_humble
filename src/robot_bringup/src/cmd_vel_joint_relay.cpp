@@ -12,8 +12,10 @@
 //
 // Kinematics (per publish cycle):
 //   R       = linear.x / angular.z          (signed turn radius)
-//   delta_L = atan2(L,  R - T/2)            (left  / inner kingpin)
-//   delta_R = atan2(L,  R + T/2)            (right / outer kingpin)
+//   delta_L = atan(L / (R - T/2))           (left  / inner kingpin)
+//   delta_R = atan(L / (R + T/2))           (right / outer kingpin)
+// Single-arg atan (not atan2) so the steering angle carries the sign of R
+// — atan2(L,x) lives in (0,π) and would wrap right turns to max-left.
 //   omega   = linear.x / wheel_radius       (single ESC channel; same all 4)
 //   theta_i += omega * dt                   (integrated for mesh spin)
 //
@@ -90,8 +92,13 @@ private:
       return;
     }
     const double R = v / w;
-    dl = std::atan2(L_, R - T_ / 2.0);
-    dr = std::atan2(L_, R + T_ / 2.0);
+    // Use std::atan (single-arg) not std::atan2 — atan2(L>0, x) lives in (0, π)
+    // and is always positive, which silently wraps right turns (w<0, x<0) onto
+    // huge positive angles that clamp to max-LEFT. atan(L/x) lives in (-π/2,
+    // π/2) and carries the sign of x, so right turns produce negative angles
+    // and left turns positive ones — matching URDF steering joint convention.
+    dl = std::atan(L_ / (R - T_ / 2.0));
+    dr = std::atan(L_ / (R + T_ / 2.0));
     dl = std::clamp(dl, -kSteeringLimit, kSteeringLimit);
     dr = std::clamp(dr, -kSteeringLimit, kSteeringLimit);
   }
