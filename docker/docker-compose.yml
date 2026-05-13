@@ -58,6 +58,11 @@ services:
     pid: host
     privileged: true
     shm_size: 2g
+    group_add:
+      # Jetson often exposes USB serial adapters as root:plugdev (gid 46).
+      # Add that supplemental gid so the non-root container user can open
+      # /dev/ttyUSB* without running the XRCE agent as root.
+      - "46"
 
     # Works on both x86 (nvidia-container-toolkit) and Jetson (nvidia-container-runtime).
     runtime: nvidia
