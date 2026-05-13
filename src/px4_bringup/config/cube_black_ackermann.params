@@ -118,6 +118,15 @@
 # Disable SD logger at boot — no SD card, saves RAM + CPU
 1	1	SDLOG_BACKEND	0	6
 
+# ── USB CDC MAVLink autostart ────────────────────────────────────────────────
+# Keep USB MAVLink available without requiring QGroundControl to first trigger
+# cdcacm_autostart's protocol detection.
+# SYS_USB_AUTO: 2 = always start MAVLink on /dev/ttyACM0 when USB is present.
+1	1	SYS_USB_AUTO	2	6
+
+# USB_MAV_MODE: 2 = onboard MAVLink mode for the USB CDC link.
+1	1	USB_MAV_MODE	2	6
+
 # ── Safety ───────────────────────────────────────────────────────────────────
 # RC + MAVLink joystick (companion computer + RC transmitter)
 1	1	COM_RC_IN_MODE	3	6
