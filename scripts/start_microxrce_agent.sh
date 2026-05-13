@@ -15,7 +15,9 @@
 #      (add "devices: ['/dev/ttyUSB0:/dev/ttyUSB0']" to docker-compose.yml)
 #
 # IMPORTANT: Start the agent BEFORE PX4 — PX4's uxrce_dds_client connects
-# on startup and does not reliably reconnect if the agent starts later.
+# on startup and does not reliably reconnect if the agent starts later. If PX4
+# is already booted, restart uxrce_dds_client or reboot PX4 after launching the
+# agent.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

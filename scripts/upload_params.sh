@@ -233,7 +233,7 @@ fi
 echo "=== Pass 1: Airframe (SYS_AUTOSTART) ==="
 
 read -r name value type <<< "${AIRFRAME_PARAM}"
-current_airframe=$(px4_param_show "${name}" 2>/dev/null | grep -oP 'is\s+\K[-0-9.e+]+' | tail -1) || true
+current_airframe=$(px4_param_show "${name}" 2>/dev/null | grep -oP ':\s+\K[-0-9.e+]+' | tail -1) || true
 
 if [[ "${current_airframe}" == "${value}" ]]; then
     echo "SYS_AUTOSTART already set to ${value}, skipping reboot."
