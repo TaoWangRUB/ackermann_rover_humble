@@ -44,6 +44,10 @@ public:
   : ModeBase(node, Settings{"Rover Speed Steering"}.preventArming(false)),
     node_(node)
   {
+    // See rover_manual_mode.hpp for rationale — disables the 4 s watchdog
+    // so a queue-overflow burst (PX4#27271) does not crash the mode.
+    disableWatchdogTimer();
+
     speed_steering_setpoint_ =
       std::make_shared<px4_ros2::RoverSpeedSteeringSetpointType>(*this);
 
