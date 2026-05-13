@@ -1414,6 +1414,69 @@ Without GPS, set the origin manually via MAVLink `SET_GPS_GLOBAL_ORIGIN` +
    `uxrce_dds_client` (same priority 100) and worsening stall duration.
    Mitigate by reducing MAVLink telemetry rates: `param set MAV_0_RATE 4800`.
 
+8. **USB MAVLink RX-wedge between script invocations.** On Cube Black firmware
+   the USB MAVLink instance is `mavlink_if1`, spawned by `cdcacm_autostart`
+   (controlled by `SYS_USB_AUTO` + `USB_MAV_MODE`, NOT by `MAV_0_CONFIG` — USB
+   is not a valid value in the `MAV_X_CONFIG` enum for FMUv3, see
+   `build/px4_fmu-v3_rover/parameters.xml`). Symptom: `./scripts/px4_cmd.sh` /
+   `./scripts/upload_params.sh` work right after FC boot (or right after QGC
+   connects), then fail with `no heartbeat after retries` for every subsequent
+   invocation. Underlying cause: `mavlink_if1`'s RX path stops draining the
+   USB CDC ACM FIFO when no client has been heartbeating at ≥1 Hz for several
+   seconds; subsequent `pyserial.write()` from a fresh `pymavlink` session
+   queues bytes that PX4 never reads.
+
+   **Things that DO help, partially:**
+   - `param set USB_MAV_MODE 0` (Normal) — switches the stream profile from
+     `onboard` (21 KB/s demand) to `Normal` (~few KB/s), eliminating the
+     saturation thread freeze documented in PX4#26144. Required for stable
+     operation but does not fix the RX-wedge.
+   - `param set MAV_0_CONFIG 0` — disables the second `mavlink_if0` instance
+     that on the default airframe runs on TELEM1; recovers ~17 KB RAM, takes
+     the free pool from ~28 KB to ~46 KB and stays clear of the
+     "below 20 KB → MAVLink unresponsive" cliff. Required, not sufficient.
+
+   **Things that do NOT help (verified empirically):**
+   - Continuous 1 Hz heartbeats from the script (QGC-style)
+   - 10× wake-up heartbeat burst at startup
+   - Forced DTR/RTS assertion via pyserial
+   - Higher retry counts in `connect_mavlink`
+   In every case the very first `heartbeat_send` after a fresh
+   `mavlink_connection` succeeds at the kernel level (bytes queue into the
+   host TX buffer) but PX4's `mavlink_if1` does not drain them, so no reply
+   ever comes back.
+
+   **Things that DO clear the wedge:**
+   - **Physical FC USB unplug + replug** — resets the USB CDC ACM state on
+     the FMU side; `mavlink_if1` re-initializes its RX path. After replug,
+     the next `px4_cmd.sh` call works again. This is the practical workflow:
+     replug once at the start of any MAVLink-scripting session.
+   - Opening QGroundControl — QGC's multi-threaded heartbeat + stream-request
+     flow keeps `mavlink_if1`'s RX path active for as long as it's connected.
+     `px4_cmd.sh` can be run from another process while QGC is open *if* the
+     port is shared (not normally possible with a raw serial connection — QGC
+     holds `/dev/ttyACM0` exclusively).
+
+   **Community references (same root cause, no upstream fix):**
+   - [pymavlink#991](https://github.com/ArduPilot/pymavlink/issues/991) — "no
+     signal HEARTBEAT using serial connection on companion computer", open.
+   - [pymavlink#372](https://github.com/ArduPilot/pymavlink/issues/372) —
+     "Serial connection has HEARTBEAT but no other message".
+   - [discuss.px4.io/t/39261](https://discuss.px4.io/t/pymavlink-script-not-getting-heartbeat-from-pixhawk-6c-sometimes/39261) —
+     Pixhawk 6C; same intermittent symptom; "QGC coaxes the FC to respond".
+   - [PX4#26144](https://github.com/PX4/PX4-Autopilot/issues/26144) — "MAVLink
+     connection freezes with heartbeat timeout and `tx_buffer_overruns`",
+     closed-stale; root cause acknowledged but no fix planned.
+
+   **The proper software-only workaround** (heavier setup, not adopted here)
+   is to run `mavproxy.py --master=/dev/ttyACM0 --out=udp:127.0.0.1:14550` as
+   a persistent relay process. mavproxy's TX/RX threads maintain a continuous
+   1 Hz heartbeat to the FC, keeping `mavlink_if1`'s RX path alive
+   indefinitely. Scripts then connect to UDP rather than the raw serial. For
+   our rover, MAVLink is only needed occasionally for parameter pushes via
+   `upload_params.sh`; the unplug-replug procedure is acceptable and the
+   relay process has not been worth the added system complexity.
+
 ### Tools
 
 | Tool | Location | Purpose |
