@@ -7,13 +7,15 @@ Usage:
 
 Connects to PX4 via /dev/ttyACM0 using pymavlink SERIAL_CONTROL.
 """
+import os
 import sys
 import time
 import serial
 from pymavlink import mavutil
 
-DEVICE = '/dev/ttyACM0'
-BAUD = 57600
+DEVICE = os.environ.get('PX4_DEVICE', '/dev/ttyACM0')
+BAUD = int(os.environ.get('PX4_BAUD', '57600'))
+ASSERT_DTR = os.environ.get('PX4_ASSERT_DTR', '0') == '1'
 
 def _assert_dtr(device, baud):
     """Assert DTR to wake PX4's USB MAVLink instance."""
@@ -25,9 +27,10 @@ def _assert_dtr(device, baud):
     except Exception:
         pass  # best-effort; pymavlink may still work without it
 
-def connect_mavlink(retries=3):
+def connect_mavlink(retries=6):
     """Connect to PX4 with retry to handle USB CDC flakiness."""
-    _assert_dtr(DEVICE, BAUD)
+    if ASSERT_DTR:
+        _assert_dtr(DEVICE, BAUD)
     for attempt in range(retries):
         try:
             mav = mavutil.mavlink_connection(DEVICE, baud=BAUD, source_system=254)
@@ -45,7 +48,7 @@ def connect_mavlink(retries=3):
                 mav.close()
             except Exception:
                 pass
-        time.sleep(2)
+        time.sleep(3)
     return None
 
 def main():
@@ -59,6 +62,9 @@ def main():
     mav = connect_mavlink()
     if not mav:
         print("ERROR: No heartbeat from PX4 after retries", file=sys.stderr)
+        print("Hint: on this Cube Black setup, USB MAVLink on /dev/ttyACM0 may stay silent unless QGroundControl has spawned mavlink_if1.", file=sys.stderr)
+        print("Hint: verify the autopilot is connected directly to host USB, not through a flaky hub.", file=sys.stderr)
+        print("Hint: if necessary, set PX4_DEVICE=/dev/ttyACM0 or PX4_BAUD=57600 in the environment.", file=sys.stderr)
         sys.exit(1)
 
     # Send command via SERIAL_CONTROL
