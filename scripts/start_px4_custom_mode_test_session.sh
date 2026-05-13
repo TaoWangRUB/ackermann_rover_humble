@@ -15,9 +15,13 @@
 # After all panes are up, the script activates the custom mode and arms.
 #
 # Usage:
-#   ./scripts/start_px4_custom_mode_test_session.sh                  # defaults
-#   ./scripts/start_px4_custom_mode_test_session.sh --mode-id 24     # custom mode ID
-#   ./scripts/start_px4_custom_mode_test_session.sh --no-activate    # skip mode activation
+#   ./scripts/start_px4_custom_mode_test_session.sh                                # defaults (/dev/ttyUSB0 @ 921600)
+#   ./scripts/start_px4_custom_mode_test_session.sh --mode-id 24                   # custom mode ID
+#   ./scripts/start_px4_custom_mode_test_session.sh --no-activate                  # skip mode activation
+#   ./scripts/start_px4_custom_mode_test_session.sh --serial-dev=/dev/ttyTHS0      # Jetson 40-pin UART
+#   ./scripts/start_px4_custom_mode_test_session.sh --serial-baud=460800           # drop baud for Tegra
+#
+# Any other args are passed through to start_px4_bringup_vo.sh (e.g. --mode-type).
 #
 # To stop everything:
 #   ./scripts/stop_all.sh --session px4test
@@ -31,18 +35,22 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/dc.sh"
 SESSION="px4test"
 MODE_ID="23"
 ACTIVATE=true
+SERIAL_DEV="/dev/ttyUSB0"
+SERIAL_BAUD="921600"
 PASSTHROUGH=()
 
 # --- Parse arguments ---
 for arg in "$@"; do
     case "${arg}" in
-        --no-activate)   ACTIVATE=false ;;
-        --mode-id=*)     MODE_ID="${arg#--mode-id=}" ;;
-        --session=*)     SESSION="${arg#--session=}" ;;
+        --no-activate)    ACTIVATE=false ;;
+        --mode-id=*)      MODE_ID="${arg#--mode-id=}" ;;
+        --session=*)      SESSION="${arg#--session=}" ;;
+        --serial-dev=*)   SERIAL_DEV="${arg#--serial-dev=}" ;;
+        --serial-baud=*)  SERIAL_BAUD="${arg#--serial-baud=}" ;;
         -h|--help)
             sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
             exit 0 ;;
-        *)               PASSTHROUGH+=("${arg}") ;;
+        *)                PASSTHROUGH+=("${arg}") ;;
     esac
 done
 
@@ -68,7 +76,7 @@ tmux split-window -v -t "${SESSION}:px4test.0" -l 6
 
 # Now send commands to each pane (all panes exist, indices are stable)
 tmux send-keys -t "${SESSION}:px4test.1" \
-    "${SCRIPT_DIR}/start_microxrce_agent.sh --serial" Enter
+    "${SCRIPT_DIR}/start_microxrce_agent.sh --serial ${SERIAL_DEV} ${SERIAL_BAUD}" Enter
 
 tmux send-keys -t "${SESSION}:px4test.2" \
     "sleep 3 && ${SCRIPT_DIR}/pub_odom.sh" Enter
