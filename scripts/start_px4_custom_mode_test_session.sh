@@ -18,8 +18,17 @@
 #   ./scripts/start_px4_custom_mode_test_session.sh                                # defaults (/dev/ttyUSB0 @ 921600)
 #   ./scripts/start_px4_custom_mode_test_session.sh --mode-id 24                   # custom mode ID
 #   ./scripts/start_px4_custom_mode_test_session.sh --no-activate                  # skip mode activation
-#   ./scripts/start_px4_custom_mode_test_session.sh --serial-dev=/dev/ttyTHS0      # Jetson 40-pin UART
+#   ./scripts/start_px4_custom_mode_test_session.sh --serial-dev=/dev/ttyTHS0      # only if Jetson 40-pin UART is actually wired
 #   ./scripts/start_px4_custom_mode_test_session.sh --serial-baud=460800           # drop baud for Tegra
+#
+# Standard rover wiring in this repo uses /dev/ttyUSB0 for DDS. Override
+# --serial-dev only when you have intentionally moved the XRCE link to a
+# different device such as Jetson's 40-pin UART.
+#
+# IMPORTANT (hardware): pane 1 only starts the host-side MicroXRCEAgent. PX4's
+# uxrce_dds_client must connect after that. If the flight controller is already
+# booted, the DDS pane can stay idle until you reboot PX4 or manually restart
+# uxrce_dds_client on the FMU.
 #
 # Any other args are passed through to start_px4_bringup_vo.sh (e.g. --mode-type).
 #
@@ -35,6 +44,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/dc.sh"
 SESSION="px4test"
 MODE_ID="23"
 ACTIVATE=true
+ATTACH=true
 SERIAL_DEV="/dev/ttyUSB0"
 SERIAL_BAUD="921600"
 PASSTHROUGH=()
@@ -43,6 +53,7 @@ PASSTHROUGH=()
 for arg in "$@"; do
     case "${arg}" in
         --no-activate)    ACTIVATE=false ;;
+        --no-attach)      ATTACH=false ;;
         --mode-id=*)      MODE_ID="${arg#--mode-id=}" ;;
         --session=*)      SESSION="${arg#--session=}" ;;
         --serial-dev=*)   SERIAL_DEV="${arg#--serial-dev=}" ;;
@@ -56,6 +67,16 @@ done
 
 # Kill existing session if present
 tmux kill-session -t "${SESSION}" 2>/dev/null || true
+
+cat <<EOF
+Starting tmux session '${SESSION}'...
+XRCE serial device: ${SERIAL_DEV} @ ${SERIAL_BAUD}
+
+Standard repo default for hardware DDS is /dev/ttyUSB0.
+Note: for real hardware, the MicroXRCEAgent must be up before PX4 boots.
+If PX4 is already running, reboot PX4 or restart uxrce_dds_client after pane 1 starts,
+otherwise the DDS pane may appear healthy but no XRCE traffic will arrive.
+EOF
 
 # --- Pane 0 (left-top): PX4 bringup (bridge + VO) ---
 tmux new-session -d -s "${SESSION}" -n "px4test"
@@ -95,6 +116,8 @@ else
         "source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
 fi
 
-# Select the PX4 bringup pane and attach
+# Select the PX4 bringup pane and attach when interactive
 tmux select-pane -t "${SESSION}:px4test.0"
-tmux attach-session -t "${SESSION}"
+if [[ "${ATTACH}" == true && -t 1 ]]; then
+    tmux attach-session -t "${SESSION}"
+fi
