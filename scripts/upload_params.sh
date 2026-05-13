@@ -103,6 +103,29 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m'  # No Color
 
+print_connectivity_help() {
+        cat <<EOF
+ERROR: Cannot reach PX4 over MAVLink shell on /dev/ttyACM0.
+
+What this usually means:
+    1. PX4 USB CDC is present, but MAVLink is not responding yet.
+    2. On a fresh/factory-reset Cube Black, free RAM is often too low for reliable USB MAVLink.
+    3. After a reboot, the USB CDC endpoint may need a physical USB replug to recover.
+
+Recommended recovery:
+    1. Replug the Cube Black USB cable and wait for /dev/ttyACM0 to reappear.
+    2. If this is a fresh board or recent factory reset, use QGC for the first two-pass load of:
+         src/px4_bringup/config/cube_black_ackermann.params
+      Make sure SYS_USB_AUTO=2 and USB_MAV_MODE=2 are loaded as well.
+    3. Reboot, replug USB, then rerun:
+         ./scripts/upload_params.sh --verify-only
+
+Expected once bootstrapped:
+    ./scripts/px4_cmd.sh 'free' 8
+    # expect at least ~28 KB free RAM
+EOF
+}
+
 px4_param_set() {
     local name="$1" value="$2"
     "${PX4_CMD}" "param set ${name} ${value}" 8 2>/dev/null
@@ -175,7 +198,7 @@ echo ""
 # Connectivity check
 echo "Checking PX4 connectivity..."
 if ! "${PX4_CMD}" "ver hwcmp" 5 >/dev/null 2>&1; then
-    echo "ERROR: Cannot reach PX4. Check USB connection and Docker container."
+    print_connectivity_help
     exit 1
 fi
 echo "PX4 connected."
