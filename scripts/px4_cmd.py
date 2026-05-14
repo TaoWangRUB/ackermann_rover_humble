@@ -4,8 +4,10 @@
 Usage:
     python3 scripts/px4_cmd.py "listener cpuload -n 1"
     python3 scripts/px4_cmd.py "commander status" 8
+    PX4_DEVICE='udpin:127.0.0.1:14550' python3 scripts/px4_cmd.py "ver all" 20
 
-Connects to PX4 via /dev/ttyACM0 using pymavlink SERIAL_CONTROL.
+Connects to PX4 using pymavlink SERIAL_CONTROL over any supported mavutil link,
+for example /dev/ttyACM0 or udpin:127.0.0.1:14550.
 """
 import os
 import sys
@@ -124,9 +126,9 @@ def main():
         time.sleep(2)
 
     print(f"ERROR: {last_error or 'No heartbeat from PX4 after retries'}", file=sys.stderr)
-    print("Hint: on this Cube Black setup, USB MAVLink/NSH on /dev/ttyACM0 may need a few seconds to stabilize after reboot or replug.", file=sys.stderr)
+    print("Hint: on this Cube Black setup, direct USB MAVLink/NSH may need a few seconds to stabilize after reboot or replug.", file=sys.stderr)
     print("Hint: verify the autopilot is connected directly to host USB, not through a flaky hub.", file=sys.stderr)
-    print("Hint: if necessary, set PX4_DEVICE=/dev/ttyACM0 or PX4_BAUD=57600 in the environment.", file=sys.stderr)
+    print("Hint: if necessary, set PX4_DEVICE=/dev/ttyACM0, PX4_DEVICE=udpin:127.0.0.1:14550, or PX4_BAUD=57600 in the environment.", file=sys.stderr)
     sys.exit(1)
 
 if __name__ == '__main__':

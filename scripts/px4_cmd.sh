@@ -5,6 +5,7 @@
 #   ./scripts/px4_cmd.sh "ver all"
 #   ./scripts/px4_cmd.sh "commander status" 10
 #   ./scripts/px4_cmd.sh "free"
+#   PX4_USE_MAVPROXY=0 ./scripts/px4_cmd.sh "ver all" 20   # force direct USB mode
 #
 # Args:
 #   $1 — PX4 NSH command (required)
@@ -14,6 +15,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/dc.sh"
 PX4_DEVICE="${PX4_DEVICE:-/dev/ttyACM0}"
+PX4_BAUD="${PX4_BAUD:-57600}"
+PX4_ASSERT_DTR="${PX4_ASSERT_DTR:-1}"
+PX4_USE_MAVPROXY="${PX4_USE_MAVPROXY:-1}"
+PX4_MAVPROXY_DEVICE="${PX4_MAVPROXY_DEVICE:-udpin:127.0.0.1:14550}"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
@@ -23,7 +28,13 @@ fi
 CMD="${1:?Usage: $0 <nsh_command> [timeout]}"
 TIMEOUT="${2:-8}"
 
-if command -v lsof >/dev/null 2>&1; then
+if [[ "${PX4_USE_MAVPROXY}" == "1" ]]; then
+  "${SCRIPT_DIR}/start_px4_mavproxy_bridge.sh" >/dev/null
+  PX4_DEVICE="${PX4_MAVPROXY_DEVICE}"
+  PX4_ASSERT_DTR=0
+fi
+
+if [[ "${PX4_DEVICE}" == /dev/* ]] && command -v lsof >/dev/null 2>&1; then
   serial_owners="$(lsof "${PX4_DEVICE}" 2>/dev/null | sed '1d' || true)"
   if [[ -n "${serial_owners}" ]]; then
     echo "ERROR: ${PX4_DEVICE} is already open by another host process." >&2
@@ -36,4 +47,5 @@ if command -v lsof >/dev/null 2>&1; then
 fi
 
 xdcomp exec ackermann_slam \
-  python3 /workspace/scripts/px4_cmd.py "${CMD}" "${TIMEOUT}"
+  bash -lc 'PX4_DEVICE="$1" PX4_BAUD="$2" PX4_ASSERT_DTR="$3" python3 /workspace/scripts/px4_cmd.py "$4" "$5"' \
+  _ "${PX4_DEVICE}" "${PX4_BAUD}" "${PX4_ASSERT_DTR}" "${CMD}" "${TIMEOUT}"
