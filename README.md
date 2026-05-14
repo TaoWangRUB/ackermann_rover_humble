@@ -167,6 +167,36 @@ ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering enable_v
 
 `px4_vision_odom.py` converts `nav_msgs/Odometry` (ENU/FLU) to PX4 `VehicleOdometry` (NED/FRD). `px4_vehicle_odometry.py` does the inverse — PX4 EKF2 output back to ROS 2 frames for diagnostics. See [Architecture Overview](docs/architecture/overview.md) for the full coordinate conversion reference.
 
+### PX4 Shell And Parameter Workflow
+
+The default hardware workflow for `px4_cmd.sh` and `upload_params.sh` now uses a host-side MAVProxy bridge on USB and talks to PX4 over `udpin:127.0.0.1:14550`. This avoids reopening the flaky USB CDC endpoint from Python on every command.
+
+Run the bridge once and reuse it for later commands:
+
+```bash
+cd /home/taowang/workspace/ackermann_rover_humble
+./scripts/start_px4_mavproxy_bridge.sh
+```
+
+If PX4 is in the dead USB state, reconnect the Cube Black USB cable once while MAVProxy is already running. After that, reuse the same bridge for repeated commands and uploads:
+
+```bash
+./scripts/px4_cmd.sh 'ver all' 20
+./scripts/upload_params.sh --reversible-drive
+./scripts/upload_params.sh --verify-only --reversible-drive
+./scripts/start_px4_mavproxy_bridge.sh --status
+./scripts/start_px4_mavproxy_bridge.sh --stop
+```
+
+To bypass the bridge for a single run and go back to direct USB:
+
+```bash
+PX4_USE_MAVPROXY=0 ./scripts/px4_cmd.sh 'ver all' 20
+./scripts/upload_params.sh --direct-usb --reversible-drive
+```
+
+See [PX4 Overview](docs/architecture/px4_overview.md) for the rationale and operator notes.
+
 ## System Monitor & Control Center
 
 Real-time health monitoring and remote command interface for the rover. The `rover_monitor` ROS 2 package runs on the Jetson, aggregating camera/PX4/platform metrics. The Control Center runs on a host machine providing a web dashboard, InfluxDB storage, and bidirectional MQTT command gateway.
