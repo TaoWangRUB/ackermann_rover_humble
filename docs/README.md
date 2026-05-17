@@ -9,6 +9,12 @@ Purpose: establish how Markdown files in `docs/` are created, maintained, and li
 - **Requirements:** system, performance, safety requirements.
 - **Prompts:** AI assistant prompts used by scripts.
 
+## Architecture Docs
+- [docs/architecture/overview.md](architecture/overview.md)
+- [docs/architecture/interfaces.md](architecture/interfaces.md)
+- [docs/architecture/px4_overview.md](architecture/px4_overview.md)
+- [docs/architecture/px4_ros2_interface_lib.md](architecture/px4_ros2_interface_lib.md)
+
 ## Frontmatter (required)
 Add a YAML frontmatter block at the top of every `.md` file to standardize metadata and enable tooling.
 

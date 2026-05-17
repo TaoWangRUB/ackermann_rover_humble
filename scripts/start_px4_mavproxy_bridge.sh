@@ -82,6 +82,35 @@ resolve_usb_device() {
     printf '%s\n' "${requested}"
 }
 
+prime_usb_device() {
+    local device="$1"
+
+    if [[ "${device}" != /dev/* ]]; then
+        return 0
+    fi
+
+    python3 - "${device}" "${USB_BAUD}" <<'PY' >/dev/null 2>&1 || true
+import sys
+
+import serial
+
+
+device = sys.argv[1]
+baud = int(sys.argv[2])
+
+try:
+    ser = serial.Serial(device, baudrate=baud, timeout=0.5, dsrdtr=True)
+    try:
+        ser.setDTR(True)
+    except Exception:
+        pass
+    ser.read(128)
+    ser.close()
+except Exception:
+    pass
+PY
+}
+
 is_running() {
     local pid
     pid="$(find_running_bridge_pid)"
@@ -306,9 +335,12 @@ start_bridge() {
     fi
 
     if [[ "${FOREGROUND}" == true ]]; then
+        prime_usb_device "${resolved_device}"
         echo "Starting MAVProxy bridge in foreground: ${resolved_device} -> 127.0.0.1:${UDP_PORT}"
         exec python3 "${MAVPROXY_LAUNCHER}" --master="${resolved_device},${USB_BAUD}" --out="127.0.0.1:${UDP_PORT}"
     fi
+
+    prime_usb_device "${resolved_device}"
 
     nohup bash -lc '
         exec tail -f /dev/null | "$@"
