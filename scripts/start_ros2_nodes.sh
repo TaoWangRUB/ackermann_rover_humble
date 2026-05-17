@@ -29,7 +29,9 @@
 #   --wipe-rtabmap-db Wipe the RTAB-Map DB before launch
 #   --keep-rtabmap-db Keep the existing RTAB-Map DB when mapping
 #   --nav2             Launch Nav2 navigation stack
-#   --bridge[=MODE]    Launch PX4 mode node (default: manual; options: speed_steering, trajectory, speed_attitude)
+#   --bridge[=MODE]    Launch PX4 mode node (default: manual; modes: all, trajectory,
+#                          a single rover mode, or a comma-separated rover subset
+#                          like manual,speed_rate)
 #   --vo-bridge        Launch VO bridge: px4_vision_odom + px4_vehicle_odometry
 #   --odom-topic=TOPIC Odometry topic for PX4 VO bridge and readiness gate.
 #                          Auto-resolved from odom-source flags when not set explicitly:
@@ -117,8 +119,11 @@
 #   ── Gazebo + RTAB-Map + Nav2 + VO bridge (ros2_control active) ──
 #   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --vo-bridge
 #
-#   ── Gazebo + RTAB-Map + Nav2 + PX4 mode + VO bridge (ros2_control active) ──
+#   ── Gazebo + RTAB-Map + Nav2 + PX4 manual mode + VO bridge (ros2_control active) ──
 #   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --bridge=manual --vo-bridge
+#
+#   ── Gazebo + RTAB-Map + Nav2 + all 4 PX4 rover modes + VO bridge ──
+#   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --bridge=all --vo-bridge
 #
 #   ── PX4 SITL (no ros2_control, auto mode + VO) ──
 #   ./scripts/start_ros2_nodes.sh --px4
@@ -233,6 +238,41 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+is_valid_rover_mode() {
+    case "$1" in
+        manual|speed_steering|speed_attitude|speed_rate)
+            return 0 ;;
+        *)
+            return 1 ;;
+    esac
+}
+
+is_valid_bridge_mode() {
+    local mode_type="$1"
+    local part
+    local parts=()
+
+    case "${mode_type}" in
+        all|trajectory)
+            return 0 ;;
+    esac
+
+    IFS=',' read -r -a parts <<< "${mode_type}"
+    [[ ${#parts[@]} -gt 0 ]] || return 1
+
+    for part in "${parts[@]}"; do
+        part="${part// /}"
+        [[ -n "${part}" ]] || return 1
+        is_valid_rover_mode "${part}" || return 1
+    done
+}
+
+if ! is_valid_bridge_mode "${BRIDGE_MODE}"; then
+    echo "ERROR: Invalid bridge mode '${BRIDGE_MODE}'" >&2
+    echo "Valid bridge modes: all, trajectory, or rover modes manual,speed_steering,speed_attitude,speed_rate" >&2
+    exit 1
+fi
 
 # Default DB policy:
 # - localization always keeps the existing DB

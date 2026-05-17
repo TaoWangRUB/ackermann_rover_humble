@@ -36,7 +36,9 @@ def generate_launch_description():
             "Which rover mode node(s) to launch. 'all' starts all four "
             '(speed_steering, speed_attitude, speed_rate, manual). Naming a '
             'specific mode (speed_steering, speed_attitude, speed_rate, '
-            "manual) launches just that one — useful when the UART link "
+            "manual) launches just that one. A comma-separated subset like "
+            '"manual,speed_rate" launches only those rover modes — useful '
+            "when the UART link "
             'cannot sustain the 4-way arming-check burst (see '
             'Auterion/px4-ros2-interface-lib#165). Set to "trajectory" to '
             'enable the offboard-trajectory node instead of rover modes.'
@@ -168,14 +170,16 @@ def generate_launch_description():
         ])),
     )
 
-    # Each rover mode runs only when mode_type matches its name or is 'all'.
-    # Launching one at a time avoids the simultaneous arming-check-reply burst
+    # Each rover mode runs only when mode_type is 'all' or contains its name in
+    # a comma-separated subset. Launching fewer modes avoids the simultaneous
+    # arming-check-reply burst
     # that overflows narrow UART links (see issue #165 referenced above).
     def rover_mode_condition(mode_name):
         return IfCondition(PythonExpression([
-            "'", LaunchConfiguration('enable_mode_node'), "' == 'true' and ",
-            "'", LaunchConfiguration('mode_type'),
-            "' in ('all', '", mode_name, "')",
+            "'", LaunchConfiguration('enable_mode_node'), "' == 'true' and (",
+            "'", LaunchConfiguration('mode_type'), "' == 'all' or '",
+            mode_name, "' in '", LaunchConfiguration('mode_type'),
+            "'.replace(' ', '').split(','))",
         ]))
 
     speed_steering_node = Node(
