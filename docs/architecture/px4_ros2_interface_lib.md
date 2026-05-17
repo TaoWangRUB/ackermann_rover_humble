@@ -32,6 +32,24 @@ The main runtime path is:
 
 The rover mode nodes in [src/px4_bringup/launch/px4_bringup.launch.py](../../src/px4_bringup/launch/px4_bringup.launch.py) depend on this mechanism to stay selectable and armed.
 
+## MAVProxy Role On Hardware
+
+`px4_ros2_interface_lib` itself talks to PX4 over Micro XRCE-DDS, not MAVLink. However, on real hardware this repository also relies on a host-side MAVProxy bridge for operator access and low-level debugging.
+
+That bridge is provided by [scripts/start_px4_mavproxy_bridge.sh](../../scripts/start_px4_mavproxy_bridge.sh) and serves a different purpose from the XRCE-DDS path:
+
+- it opens the PX4 USB CDC serial link on the host,
+- exposes MAVLink on `udpin:127.0.0.1:14550`,
+- lets [scripts/px4_cmd.sh](../../scripts/px4_cmd.sh) run NSH shell commands reliably,
+- lets [scripts/upload_params.sh](../../scripts/upload_params.sh) set and verify parameters without repeatedly reopening the flaky USB CDC device.
+
+So there are two parallel links on hardware:
+
+- XRCE-DDS over the PX4 serial client and Micro XRCE Agent for mode registration, arming checks, and ROS 2 bridge traffic,
+- MAVProxy over PX4 USB CDC for shell access, parameter work, and operator diagnostics.
+
+These links are related operationally but separate at protocol level. A healthy MAVProxy shell path does not prove the XRCE-DDS request/reply path is healthy, but it does help rule out broader board, USB, or cabling failures before blaming the custom-mode layer.
+
 ## Modes In This Project
 
 This repository uses four rover custom modes plus one offboard trajectory bridge.
@@ -129,15 +147,34 @@ If `mode_req_other` changes by exactly one external-mode bit while local positio
 Use:
 
 ```bash
-./scripts/px4_cmd.sh 'ver all'
 ./scripts/start_px4_mavproxy_bridge.sh --status
+./scripts/px4_cmd.sh 'ver all'
 ```
 
 This confirms that:
 
-- PX4 USB shell access is alive,
 - the host MAVProxy bridge is healthy,
+- PX4 USB shell access is alive,
+- the board is responding over MAVLink/NSH before you start debugging XRCE-DDS,
 - the hardware link is not failing before the ROS 2 layer even starts.
+
+If this step fails, fix the USB/MAVLink path first. Typical symptoms are:
+
+- ACM renumbering after reboot,
+- USB CDC re-enumeration during board restart,
+- a stale bridge still holding an old ACM device,
+- a dead USB CDC endpoint that needs a physical replug.
+
+Useful bridge commands:
+
+```bash
+./scripts/start_px4_mavproxy_bridge.sh
+./scripts/start_px4_mavproxy_bridge.sh --status
+./scripts/start_px4_mavproxy_bridge.sh --restart
+./scripts/start_px4_mavproxy_bridge.sh --stop
+```
+
+If MAVProxy is healthy but the external mode still times out, the problem is further downstream on the XRCE-DDS request/reply path, not on the MAVLink shell path.
 
 ### 4. Check the local patch state
 
