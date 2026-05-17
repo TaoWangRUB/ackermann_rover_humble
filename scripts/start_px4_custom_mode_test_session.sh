@@ -12,18 +12,25 @@
 #   │                  │  Mock TF         │
 #   └──────────────────┴──────────────────┘
 #
-# After all panes are up, the script activates the custom mode and arms.
+# After all panes are up, the script can activate the custom mode and arm.
 #
 # Usage:
 #   ./scripts/start_px4_custom_mode_test_session.sh                                # defaults (/dev/ttyUSB0 @ 921600)
 #   ./scripts/start_px4_custom_mode_test_session.sh --mode-id 24                   # custom mode ID
 #   ./scripts/start_px4_custom_mode_test_session.sh --no-activate                  # skip mode activation
-#   ./scripts/start_px4_custom_mode_test_session.sh --serial-dev=/dev/ttyTHS0      # only if Jetson 40-pin UART is actually wired
-#   ./scripts/start_px4_custom_mode_test_session.sh --serial-baud=460800           # drop baud for Tegra
+#   ./scripts/start_px4_custom_mode_test_session.sh --serial-dev=/dev/ttyTHS0      # opt-in, see caveat
+#   ./scripts/start_px4_custom_mode_test_session.sh --serial-baud=460800           # required if using ttyTHS*
 #
-# Standard rover wiring in this repo uses /dev/ttyUSB0 for DDS. Override
-# --serial-dev only when you have intentionally moved the XRCE link to a
-# different device such as Jetson's 40-pin UART.
+# Standard rover wiring uses /dev/ttyUSB0 (USB-UART adapter such as FT232) for
+# DDS. The default here matches that.
+#
+# Override --serial-dev to /dev/ttyTHS* (Jetson 40-pin UART) is supported but
+# NOT recommended at 921600 baud — Tegra's UART clock divisor produces a
+# ~0.79 % rate error at 921600 which corrupts XRCE frames on the TX side, so
+# PX4 never establishes a session (see docs/architecture/overview.md and
+# https://forums.developer.nvidia.com/t/ttyths2-921600-baud-rate-error/223943).
+# If you must use the 40-pin UART, also pass --serial-baud=460800 (clean
+# Tegra divisor) and lower FC's SER_TEL2_BAUD to match.
 #
 # IMPORTANT (hardware): pane 1 only starts the host-side MicroXRCEAgent. PX4's
 # uxrce_dds_client must connect after that. If the flight controller is already
@@ -92,8 +99,12 @@ tmux split-window -v -t "${SESSION}:px4test.1"
 # --- Pane 3 (right-bottom): Mock TF publisher ---
 tmux split-window -v -t "${SESSION}:px4test.2" -l 8
 
-# --- Pane 4 (left-bottom): Activation ---
+# --- Pane 4 (left-middle): Activation ---
 tmux split-window -v -t "${SESSION}:px4test.0" -l 6
+
+# --- Pane 5 (left-bottom): cmd_vel publisher (zero twist, keeps PX4 land detector
+#     from auto-disarming when the rover is intentionally stationary during tests) ---
+tmux split-window -v -t "${SESSION}:px4test.4" -l 5
 
 # Now send commands to each pane (all panes exist, indices are stable)
 tmux send-keys -t "${SESSION}:px4test.1" \
@@ -108,9 +119,14 @@ tmux send-keys -t "${SESSION}:px4test.3" \
 tmux send-keys -t "${SESSION}:px4test.0" \
     "sleep 5 && ${SCRIPT_DIR}/start_px4_bringup_vo.sh --bridge --vo-bridge ${PASSTHROUGH[*]:-}" Enter
 
+# Hold cmd_vel at zero so the PX4 land-detector doesn't kick the rover out of
+# armed (disarm_reason=6 LANDING) during stationary monitoring tests.
+tmux send-keys -t "${SESSION}:px4test.5" \
+    "sleep 8 && ${SCRIPT_DIR}/pub_cmd_vel.sh 0 0" Enter
+
 if [[ "$ACTIVATE" == true ]]; then
     tmux send-keys -t "${SESSION}:px4test.4" \
-        "echo 'Waiting 20s for PX4 mode registration...' && sleep 20 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
+        "${SCRIPT_DIR}/wait_px4_modes_ready.sh 4 120 && ${SCRIPT_DIR}/activate_rover_manual.sh ${MODE_ID}; source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
 else
     tmux send-keys -t "${SESSION}:px4test.4" \
         "source ${SCRIPT_DIR}/lib/dc.sh && xdcomp exec ackermann_slam bash" Enter
