@@ -23,7 +23,7 @@ int main(int argc, char * argv[])
       auto node =
         std::make_shared<px4_ros2::NodeWithMode<RoverSpeedRateMode>>(
           "rover_speed_rate_mode", true);
-      auto announce_pub = px4_bringup::announce_mode(
+      auto announce_handle = px4_bringup::announce_mode(
         node, "Rover Speed Rate", node->getMode());
       rclcpp::spin(node);
       // Normal shutdown (SIGINT / rclcpp::shutdown from elsewhere)
