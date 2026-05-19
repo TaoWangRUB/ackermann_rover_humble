@@ -78,6 +78,18 @@ else
         ' 2>/dev/null || true
     }
 
+    # Graceful shutdown: SIGTERM PX4 mode nodes first so the library's
+    # pre-shutdown callback can publish UnregisterExtComponent through the
+    # still-running XRCE agent before we tear everything down.
+    ${DC} exec -T ackermann_slam bash -c "
+        ps aux --no-headers \
+          | grep -E 'rover_(manual|speed_steering|speed_attitude|speed_rate)_mode|offboard_trajectory_mode' \
+          | grep -v 'docker\|grep' \
+          | awk '{print \$2}' \
+          | xargs -r kill -15 2>/dev/null || true
+    " 2>/dev/null || true
+    sleep 2
+
     sweep
     sweep_python_helpers
     sweep_gazebo
