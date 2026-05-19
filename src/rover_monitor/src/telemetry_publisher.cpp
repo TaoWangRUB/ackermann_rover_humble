@@ -710,13 +710,24 @@ void TelemetryPublisher::handle_set_mode(const std::string & cmd_id,
   RCLCPP_INFO(this->get_logger(), "SET_MODE command: cmd_id=%s mode=%s",
     cmd_id.c_str(), mode.c_str());
 
+  // Poll briefly for nav_state — the mode process may still be registering
+  // with PX4 after a recent (re)spawn. Up to 4 s (8 × 500 ms), staying
+  // under the CC ACK timeout of 5 s.
   int8_t nav_state = -1;
-  {
-    std::lock_guard<std::mutex> lock(mode_id_mutex_);
-    auto it = mode_id_by_name_.find(mode);
-    if (it != mode_id_by_name_.end()) {
-      nav_state = it->second;
+  for (int attempt = 0; attempt < 8; ++attempt) {
+    {
+      std::lock_guard<std::mutex> lock(mode_id_mutex_);
+      auto it = mode_id_by_name_.find(mode);
+      if (it != mode_id_by_name_.end()) {
+        nav_state = it->second;
+        break;
+      }
     }
+    if (attempt == 0) {
+      RCLCPP_INFO(this->get_logger(),
+        "nav_state not yet cached for '%s', waiting...", mode.c_str());
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
 
   if (nav_state < 0) {
@@ -797,27 +808,15 @@ void TelemetryPublisher::handle_register_mode(const std::string & cmd_id,
           std::lock_guard<std::mutex> lock(mode_proc_mutex_);
           mode_procs_[mode] = existing_pid;
         }
-        // Wait for nav_state to appear in cache (the mode may have just
-        // re-registered with PX4 after a respawn). Poll up to 10 s.
-        bool nav_cached = false;
-        for (int i = 0; i < 20; ++i) {
-          {
-            std::lock_guard<std::mutex> lock(mode_id_mutex_);
-            if (mode_id_by_name_.count(mode)) {
-              nav_cached = true;
-              break;
-            }
-          }
-          std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        }
-        std::string detail = "Mode '" + mode + "' adopted externally (pid=" +
+        std::string detail = "Mode '" + mode + "' adopted (pid=" +
           std::to_string(existing_pid) + ")";
-        if (nav_cached) {
+        {
           std::lock_guard<std::mutex> lock(mode_id_mutex_);
-          detail += ", nav_state=" +
-            std::to_string(static_cast<int>(mode_id_by_name_[mode]));
-        } else {
-          detail += ", nav_state pending (activate may need retry)";
+          auto nit = mode_id_by_name_.find(mode);
+          if (nit != mode_id_by_name_.end()) {
+            detail += ", nav_state=" +
+              std::to_string(static_cast<int>(nit->second));
+          }
         }
         send_ack(cmd_id, rover_monitor_proto::CMD_REGISTER_MODE,
           rover_monitor_proto::ACK_ACCEPTED, detail);
