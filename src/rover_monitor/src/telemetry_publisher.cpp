@@ -761,25 +761,45 @@ void TelemetryPublisher::handle_register_mode(const std::string & cmd_id,
     return;
   }
 
-  // Check if already running
+  // Check if already running (tracked PID or discoverable by exe name)
+  const std::string & exe_name = exe_it->second;
   {
     std::lock_guard<std::mutex> lock(mode_proc_mutex_);
     auto it = mode_procs_.find(mode);
-    if (it != mode_procs_.end()) {
-      // Verify process is still alive
-      if (::kill(it->second, 0) == 0) {
-        send_ack(cmd_id, rover_monitor_proto::CMD_REGISTER_MODE,
-          rover_monitor_proto::ACK_REJECTED,
-          "Mode '" + mode + "' already registered (pid=" +
-            std::to_string(it->second) + ")");
-        return;
-      }
-      // Process is dead, clean up stale entry
-      mode_procs_.erase(it);
+    if (it != mode_procs_.end() && ::kill(it->second, 0) == 0) {
+      send_ack(cmd_id, rover_monitor_proto::CMD_REGISTER_MODE,
+        rover_monitor_proto::ACK_REJECTED,
+        "Mode '" + mode + "' already registered (pid=" +
+          std::to_string(it->second) + ")");
+      return;
     }
+    // Clean stale entry
+    mode_procs_.erase(mode);
   }
 
-  const std::string & exe_name = exe_it->second;
+  // Also check if a process with this exe name is already running (launched externally)
+  {
+    std::string pgrep_cmd = "pgrep -f 'px4_bringup.*" + exe_name + "' 2>/dev/null";
+    FILE * fp = ::popen(pgrep_cmd.c_str(), "r");
+    if (fp) {
+      char buf[32];
+      pid_t existing_pid = 0;
+      if (::fgets(buf, sizeof(buf), fp) != nullptr) {
+        existing_pid = std::atoi(buf);
+      }
+      ::pclose(fp);
+      if (existing_pid > 0) {
+        // Track it so unregister works
+        std::lock_guard<std::mutex> lock(mode_proc_mutex_);
+        mode_procs_[mode] = existing_pid;
+        send_ack(cmd_id, rover_monitor_proto::CMD_REGISTER_MODE,
+          rover_monitor_proto::ACK_REJECTED,
+          "Mode '" + mode + "' already running externally (pid=" +
+            std::to_string(existing_pid) + ")");
+        return;
+      }
+    }
+  }
 
   // Fork and exec: ros2 run px4_bringup <executable>
   pid_t pid = ::fork();
@@ -834,14 +854,33 @@ void TelemetryPublisher::handle_unregister_mode(const std::string & cmd_id,
   {
     std::lock_guard<std::mutex> lock(mode_proc_mutex_);
     auto it = mode_procs_.find(mode);
-    if (it == mode_procs_.end()) {
-      send_ack(cmd_id, rover_monitor_proto::CMD_UNREGISTER_MODE,
-        rover_monitor_proto::ACK_REJECTED,
-        "Mode '" + mode + "' is not registered (no tracked process)");
-      return;
+    if (it != mode_procs_.end()) {
+      pid = it->second;
+      mode_procs_.erase(it);
     }
-    pid = it->second;
-    mode_procs_.erase(it);
+  }
+
+  // If no tracked PID, try to discover by executable name
+  if (pid <= 0) {
+    auto exe_it = kModeExecutableMap.find(mode);
+    if (exe_it != kModeExecutableMap.end()) {
+      std::string pgrep_cmd = "pgrep -f 'px4_bringup.*" + exe_it->second + "' 2>/dev/null";
+      FILE * fp = ::popen(pgrep_cmd.c_str(), "r");
+      if (fp) {
+        char buf[32];
+        if (::fgets(buf, sizeof(buf), fp) != nullptr) {
+          pid = std::atoi(buf);
+        }
+        ::pclose(fp);
+      }
+    }
+  }
+
+  if (pid <= 0) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_UNREGISTER_MODE,
+      rover_monitor_proto::ACK_REJECTED,
+      "Mode '" + mode + "' is not running (no process found)");
+    return;
   }
 
   // Remove cached nav_state

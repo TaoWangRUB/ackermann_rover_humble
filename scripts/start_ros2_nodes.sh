@@ -96,7 +96,7 @@
 #   ./scripts/start_ros2_nodes.sh --cuvslam-odom --rtabmap
 #
 #   ── Hardware mode + VO bridge to real PX4 ──
-#   ./scripts/start_ros2_nodes.sh --hw --rtabmap --vo-bridge --bridge=speed_steering
+#   ./scripts/start_ros2_nodes.sh --hw --rtabmap --vo-bridge --bridge=speed_rate
 #
 #   ── Gazebo only (ros2_control) ──
 #   ./scripts/start_ros2_nodes.sh

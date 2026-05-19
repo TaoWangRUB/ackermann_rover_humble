@@ -11,10 +11,18 @@ ros_distro: humble
 
 After validating the actuator path with `RoverManualMode` (open-loop throttle),
 the next control layer needed is one that closes the loop on forward speed while
-keeping steering as a direct normalized command. This is the primary mode for
-Nav2 integration: Nav2's `cmd_vel` output carries metric speed (`linear.x` in
-m/s) and a yaw-rate-derived steering signal (`angular.z` in rad/s), which maps
-naturally to PX4's `RoverSpeedSteeringSetpointType`.
+keeping steering as a direct normalized command. This mode was originally
+designed as the primary Nav2 interface, but **steering is open-loop** — the
+normalized steering value goes directly to PX4's actuator allocation without
+any yaw rate or heading feedback. This means terrain disturbances, mechanical
+backlash, and tire slip are not corrected.
+
+**For Nav2 integration, `RoverSpeedRateMode` is now recommended instead** — it
+uses PX4's closed-loop yaw rate controller (IMU gyro feedback) for reliable
+steering tracking. See ADR-008.
+
+`RoverSpeedSteeringMode` remains useful as a fallback or for scenarios where
+PX4's yaw rate PID is not yet tuned and geometric steering is acceptable.
 
 ## Decision
 
@@ -68,7 +76,7 @@ flexibility for mixed sim/hw launch configurations.
 ## Consequences
 
 **Positive:**
-- Direct Nav2 integration — no intermediate translation layer needed.
+- Simple mapping — no intermediate translation layer needed.
 - PX4 speed PID closes the loop; Nav2 does not need to know the motor curve.
 - `skip_message_compatibility_check` parameter avoids recompilation for
   sim-first workflows.
@@ -76,9 +84,11 @@ flexibility for mixed sim/hw launch configurations.
 **Negative / Trade-offs:**
 - Requires a tuned PX4 speed controller (`RO_SPEED_P`, etc.) before useful
   autonomous navigation is possible.
-- Steering is still open-loop (normalized, not angle-controlled) — lateral
+- **Steering is open-loop** (normalized, not angle-controlled) — lateral
   tracking quality depends on tuning `max_steering_rate` to match the physical
-  vehicle.
+  vehicle. No closed-loop correction for disturbances, backlash, or tire slip.
+  `RoverSpeedRateMode` is preferred for Nav2 because it uses PX4's yaw rate
+  PID with IMU gyro feedback.
 - ~~Does not implement the FMU reconnect retry loop (unlike `RoverManualMode`)
   — the `rover_speed_steering_main.cpp` entry point uses the single-spin
   pattern. A future ADR or task should align this with ADR-004.~~
@@ -97,8 +107,9 @@ flexibility for mixed sim/hw launch configurations.
 
 ### Setpoint type comparison
 
-| Mode | Setpoint type | Speed input | Steering input |
-|---|---|---|---|
-| RoverManualMode | `RoverThrottleSteeringSetpointType` | normalized [-1,1] | normalized [-1,1] |
-| **RoverSpeedSteeringMode** | `RoverSpeedSteeringSetpointType` | m/s (physical) | normalized [-1,1] |
-| RoverSpeedAttitudeMode | `RoverSpeedAttitudeSetpointType` | m/s (physical) | absolute yaw [rad] |
+| Mode | Setpoint type | Speed input | Steering input | Steering feedback |
+|---|---|---|---|---|
+| RoverManualMode | `RoverThrottleSteeringSetpointType` | normalized [-1,1] | normalized [-1,1] | None (open-loop) |
+| **RoverSpeedSteeringMode** | `RoverSpeedSteeringSetpointType` | m/s (physical) | normalized [-1,1] | None (open-loop) |
+| RoverSpeedRateMode | `RoverSpeedRateSetpointType` | m/s (physical) | yaw rate [rad/s] | IMU gyro (closed-loop) — **Nav2 recommended** |
+| RoverSpeedAttitudeMode | `RoverSpeedAttitudeSetpointType` | m/s (physical) | absolute yaw [rad] | IMU + heading (closed-loop) |
