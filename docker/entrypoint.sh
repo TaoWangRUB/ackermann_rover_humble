@@ -4,6 +4,8 @@ set -e
 # Base ROS 2 distro (default to jazzy if not set)
 : "${ROS_DISTRO:=jazzy}"
 : "${ROS_DDS_MODE:=eth+shm}"
+: "${CUDA_HOME:=/usr/local/cuda}"
+: "${CUDA_PATH:=/usr/local/cuda}"
 
 FASTDDS_SHELL_HOOK="${HOME}/.fastdds_eth_env.sh"
 
@@ -13,6 +15,8 @@ _eth_only_profile="/workspace/config/fastdds_eth_only.xml"
 _eth_shm_profile="/workspace/config/fastdds_eth_shm.xml"
 _fastdds_profile=""
 _ros_dds_mode="${ROS_DDS_MODE:-eth+shm}"
+_cuda_root="${CUDA_HOME:-/usr/local/cuda}"
+_cuda_arch="${ARCH:-$(uname -m)}"
 
 _detect_eth_ip() {
   hostname -I 2>/dev/null \
@@ -61,7 +65,14 @@ fi
 
 export ROS_DDS_MODE="${_ros_dds_mode}"
 
-unset _eth_only_profile _eth_shm_profile _fastdds_profile _ros_dds_mode _detect_eth_ip _detected_eth_ip
+if [[ -d "${_cuda_root}" ]]; then
+  export CUDA_HOME="${_cuda_root}"
+  export CUDA_PATH="${_cuda_root}"
+  export PATH="${_cuda_root}/bin:${PATH}"
+  export LD_LIBRARY_PATH="${_cuda_root}/lib64:${_cuda_root}/targets/${_cuda_arch}-linux/lib:${LD_LIBRARY_PATH:-}"
+fi
+
+unset _eth_only_profile _eth_shm_profile _fastdds_profile _ros_dds_mode _detect_eth_ip _detected_eth_ip _cuda_root _cuda_arch
 EOF
 chmod +x "${FASTDDS_SHELL_HOOK}"
 

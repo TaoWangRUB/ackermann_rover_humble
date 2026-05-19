@@ -163,6 +163,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/dc.sh"
 
+CONTAINER_RUNTIME_ENV="export CUDA_HOME=/usr/local/cuda CUDA_PATH=/usr/local/cuda; export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/targets/\${ARCH:-\$(uname -m)}-linux/lib:\${LD_LIBRARY_PATH:-}; export PATH=/usr/local/cuda/bin:\$PATH"
+
 # Defaults
 HW="false"
 DEPTH_CAMERA=""
@@ -325,9 +327,9 @@ fi
 if [[ "${BUILD}" == "true" ]]; then
     if [[ ("${CUVSLAM_ODOM}" == "true" || "${RGBD_ODOM}" == "true") && -z "${BUILD_PKGS}" ]]; then
         echo "Building cuVSLAM and related bringup packages..."
-        dcomp exec ackermann_slam bash -lc "source /opt/ros/\$ROS_DISTRO/setup.bash && if [ -f /workspace/install/setup.bash ]; then source /workspace/install/setup.bash; fi && bash /workspace/scripts/build_cuvslam.sh"
+        dcomp exec ackermann_slam bash -lc "${CONTAINER_RUNTIME_ENV} && source /opt/ros/\$ROS_DISTRO/setup.bash && if [ -f /workspace/install/setup.bash ]; then source /workspace/install/setup.bash; fi && bash /workspace/scripts/build_cuvslam.sh"
     else
-        BUILD_CMD="source /opt/ros/\$ROS_DISTRO/setup.bash && cd /workspace && colcon build --symlink-install"
+        BUILD_CMD="${CONTAINER_RUNTIME_ENV} && source /opt/ros/\$ROS_DISTRO/setup.bash && cd /workspace && colcon build --symlink-install"
         if [[ -n "${BUILD_PKGS}" ]]; then
         # Replace commas with spaces for --packages-select
             BUILD_CMD+=" --packages-select ${BUILD_PKGS//,/ }"
@@ -384,7 +386,7 @@ fi
 echo ""
 
 # Build the launch command
-LAUNCH_CMD="source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && "
+LAUNCH_CMD="${CONTAINER_RUNTIME_ENV} && source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && "
 LAUNCH_CMD+="ros2 launch robot_bringup robot_bringup.launch.py"
 LAUNCH_CMD+=" depth_camera:=${DEPTH_CAMERA}"
 if [[ "${HW}" == "true" ]]; then
@@ -419,6 +421,7 @@ if [[ "${BRIDGE}" == "true" || "${VO_BRIDGE}" == "true" ]]; then
     LAUNCH_CMD+=" PIDS=\$BRINGUP_PID;"
     LAUNCH_CMD+=" echo 'Waiting 5s for Gazebo to start before launching px4 nodes...';"
     LAUNCH_CMD+=" sleep 5;"
+    LAUNCH_CMD+=" ${CONTAINER_RUNTIME_ENV};"
     LAUNCH_CMD+=" source /opt/ros/\$ROS_DISTRO/setup.bash;"
     LAUNCH_CMD+=" source /workspace/install/setup.bash;"
     LAUNCH_CMD+=" ros2 launch px4_bringup px4_bringup.launch.py"

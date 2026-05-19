@@ -266,7 +266,11 @@ const PX4_MODES = [
 ];
 
 function Px4CommandsPanel() {
-  const modeButtonStyle = { background: '#1f2937', color: 'white', fontSize: 12 };
+  const actionBtn = (label, color, onClick) => (
+    <button onClick={onClick} style={{ background: color, color: 'white', fontSize: 10, padding: '2px 6px', borderRadius: 4 }}>
+      {label}
+    </button>
+  );
   return (
     <Panel title="PX4 Commands">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -277,16 +281,14 @@ function Px4CommandsPanel() {
         </button>
       </div>
       <div style={{ fontSize: 11, color: '#6b7280', margin: '10px 0 4px' }}>Modes</div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {PX4_MODES.map(({ label, name }) => (
-          <button
-            key={name}
-            onClick={() => sendDashboardCommand('set_mode', { mode_name: name })}
-            style={modeButtonStyle}
-            title={name}
-          >
-            {label}
-          </button>
+          <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, minWidth: 110 }} title={name}>{label}</span>
+            {actionBtn('Register', '#2563eb', () => sendDashboardCommand('register_mode', { mode_name: name }))}
+            {actionBtn('Activate', '#16a34a', () => sendDashboardCommand('set_mode', { mode_name: name }))}
+            {actionBtn('Unregister', '#dc2626', () => sendDashboardCommand('unregister_mode', { mode_name: name }))}
+          </div>
         ))}
       </div>
     </Panel>

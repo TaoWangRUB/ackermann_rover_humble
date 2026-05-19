@@ -39,6 +39,8 @@ class SafetyGate:
             return True, "Cancel goal always allowed"
         elif cmd_type == "drive":
             return await self._check_drive(health_data, health_stale)
+        elif cmd_type in ("register_mode", "unregister_mode"):
+            return await self._check_set_mode(health_data, health_stale)
 
         return False, f"Unknown command type: {cmd_type}"
 
