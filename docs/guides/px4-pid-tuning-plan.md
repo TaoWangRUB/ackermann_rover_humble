@@ -26,10 +26,11 @@ Based on [PX4 official Ackermann tuning guide](https://docs.px4.io/v1.16/en/conf
 
 Automated tuning scripts live in `scripts/tuning/`. They connect to PX4 via MAVLink
 (auto-detecting `/dev/ttyACM*`), sweep parameters, command the rover via `cmd_vel`,
-measure telemetry, and print results. Requires `pymavlink` on the host.
+measure telemetry, and print results. Requires `pymavlink` on the Jetson (where PX4
+is connected via USB serial).
 
 ```bash
-pip install pymavlink   # one-time setup
+pip install pymavlink   # one-time setup on Jetson
 ```
 
 | Script | Stage | What it tunes |
@@ -261,7 +262,7 @@ All params verified against Cube Black firmware (PX4 main branch, 2026-05-19).
 
 ## Auto-Tune Workflow (complete example)
 
-Run from the host machine with the PX4 test session already active.
+Run on the Jetson with the PX4 test session already active.
 
 ```bash
 # Stage 1: identify physical limits (RoverManual mode)

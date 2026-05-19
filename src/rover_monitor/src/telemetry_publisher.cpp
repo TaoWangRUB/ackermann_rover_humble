@@ -791,7 +791,7 @@ void TelemetryPublisher::handle_register_mode(const std::string & cmd_id,
   }
 
   // Check if a process with this exe name is already running (launched externally).
-  // If found, adopt it: track the PID and wait for the nav_state announce.
+  // If found AND alive, adopt it. Otherwise fall through to fork/exec.
   {
     std::string pgrep_cmd = "pgrep -f 'px4_bringup.*" + exe_name + "' 2>/dev/null";
     FILE * fp = ::popen(pgrep_cmd.c_str(), "r");
@@ -802,8 +802,8 @@ void TelemetryPublisher::handle_register_mode(const std::string & cmd_id,
         existing_pid = std::atoi(buf);
       }
       ::pclose(fp);
-      if (existing_pid > 0) {
-        // Adopt: track it so unregister/activate work
+      if (existing_pid > 0 && ::kill(existing_pid, 0) == 0) {
+        // Process alive — adopt it
         {
           std::lock_guard<std::mutex> lock(mode_proc_mutex_);
           mode_procs_[mode] = existing_pid;
