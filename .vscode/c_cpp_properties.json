@@ -1,0 +1,38 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/opt/ros/jazzy/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/VINS-Fusion/camera_models/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/modes/executor_with_multiple_modes/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/modes/fw_attitude/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/modes/goto/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/modes/goto_global/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/modes/manual/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/modes/mission/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/modes/mode_with_executor/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/modes/rover_velocity/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/modes/rtl_replacement/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/modes/vtol/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/navigation/global_navigation/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/examples/cpp/navigation/local_navigation/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/px4_ros2_cpp/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4-ros2-interface-lib/px4_ros2_py/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/px4_bringup/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/realsense_camera_bringup/include/**",
+        "/home/taowang/workspace/ackermann_rover_humble/src/rover_monitor/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

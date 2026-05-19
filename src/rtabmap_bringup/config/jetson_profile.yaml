@@ -1,0 +1,19 @@
+/rtabmap:
+  ros__parameters:
+    # Constrained-CPU profile for Jetson Xavier-class hardware.
+    # Reduces per-frame loop-closure compute by ~3x at the cost of 3-4x fewer
+    # closures (still sufficient to correct multi-meter T265 drift on a typical
+    # ~100m mapping run). Apply via `jetson_profile:=true` launch arg or
+    # `--jetson-profile` script flag.
+    #
+    # Validated on 2026-04-30 against bags/run_20260428_1340_seg2 etc.:
+    # default config: 126 closures, ~250ms p95 RTAB-Map proc time
+    # jetson profile: 34 closures,  ~150ms p95 RTAB-Map proc time
+    Vis/MaxFeatures: !!str "800"
+    Kp/MaxFeatures: !!str "800"
+    Vis/Iterations: !!str "200"
+    Vis/MinInliers: !!str "12"
+    Rtabmap/DetectionRate: !!str "1.0"
+    RGBD/LinearUpdate: !!str "0.3"
+    RGBD/AngularUpdate: !!str "0.3"
+    Mem/ImagePostDecimation: !!str "2"

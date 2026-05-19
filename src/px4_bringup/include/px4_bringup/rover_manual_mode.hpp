@@ -53,6 +53,15 @@ public:
   : ModeBase(node, Settings{"RoverManual"}.preventArming(false)),
     node_(node)
   {
+    // Disable the 4-second arming-check watchdog. With 4 modes registered,
+    // PX4's ORB_QUEUE_LENGTH=4 on ArmingCheckReply can occasionally drop a
+    // request across all modes simultaneously (PX4/PX4-Autopilot#27271);
+    // the watchdog then throws and kills the node. The new lib behavior
+    // ("keeping reply loop alive" in health_and_arming_checks.cpp) plus
+    // disabling the watchdog lets modes survive the brief gap and PX4
+    // re-includes them once fresh replies arrive.
+    disableWatchdogTimer();
+
     throttle_steering_setpoint_ =
       std::make_shared<px4_ros2::RoverThrottleSteeringSetpointType>(*this);
 

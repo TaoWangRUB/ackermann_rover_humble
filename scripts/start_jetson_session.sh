@@ -42,6 +42,7 @@
 #   ./scripts/start_jetson_session.sh --localization
 #   ./scripts/start_jetson_session.sh --keep-rtabmap-db
 #   ./scripts/start_jetson_session.sh --mode-id=24
+#   ./scripts/start_jetson_session.sh --mode-type=all
 #   ./scripts/start_jetson_session.sh --mode-type=speed_steering
 #   ./scripts/start_jetson_session.sh --reversible-drive
 #   ./scripts/start_jetson_session.sh --no-activate
@@ -87,6 +88,7 @@ NAV2_CONTROLLER="mppi"
 ENABLE_RECORD=true
 RECORD_BAG_NAME=""
 RECORD_COMPRESS_FISHEYE=""   # "" | "true" | "false"
+JETSON_PROFILE=true          # auto-on for Jetson; pass --no-jetson-profile to disable
 
 for arg in "$@"; do
     case "${arg}" in
@@ -109,6 +111,8 @@ for arg in "$@"; do
         --broker-host=*)   BROKER_HOST="${arg#--broker-host=}" ;;
         --publisher-config=*) PUBLISHER_CONFIG_FILE="${arg#--publisher-config=}" ;;
         --no-record)       ENABLE_RECORD=false ;;
+        --jetson-profile)    JETSON_PROFILE=true ;;
+        --no-jetson-profile) JETSON_PROFILE=false ;;
         --bag-name=*)      RECORD_BAG_NAME="${arg#--bag-name=}" ;;
         --compress-fisheye)    RECORD_COMPRESS_FISHEYE="true" ;;
         --no-compress-fisheye) RECORD_COMPRESS_FISHEYE="false" ;;
@@ -119,6 +123,41 @@ for arg in "$@"; do
             exit 0 ;;
     esac
 done
+
+is_valid_rover_mode() {
+    case "$1" in
+        manual|speed_steering|speed_attitude|speed_rate)
+            return 0 ;;
+        *)
+            return 1 ;;
+    esac
+}
+
+is_valid_mode_type() {
+    local mode_type="$1"
+    local part
+    local parts=()
+
+    case "${mode_type}" in
+        all|trajectory)
+            return 0 ;;
+    esac
+
+    IFS=',' read -r -a parts <<< "${mode_type}"
+    [[ ${#parts[@]} -gt 0 ]] || return 1
+
+    for part in "${parts[@]}"; do
+        part="${part// /}"
+        [[ -n "${part}" ]] || return 1
+        is_valid_rover_mode "${part}" || return 1
+    done
+}
+
+if ! is_valid_mode_type "${PX4_MODE_TYPE}"; then
+    echo "ERROR: Invalid --mode-type '${PX4_MODE_TYPE}'" >&2
+    echo "Valid mode types: all, trajectory, or rover modes manual,speed_steering,speed_attitude,speed_rate" >&2
+    exit 1
+fi
 
 # ── Build sub-command arguments ───────────────────────────────────────
 ROS2_ARGS="--hw --no-rviz --depth-camera=${DEPTH_CAMERA}"
@@ -150,6 +189,9 @@ if [[ "${VINS_ODOM}" == true ]]; then
 fi
 if [[ "${ENABLE_NAV2}" == true ]]; then
     ROS2_ARGS+=" --nav2 --controller=${NAV2_CONTROLLER}"
+fi
+if [[ "${JETSON_PROFILE}" == true ]]; then
+    ROS2_ARGS+=" --jetson-profile"
 fi
 
 # Derive canonical odom topic for readiness (same priority as rtabmap_slam.launch.py).

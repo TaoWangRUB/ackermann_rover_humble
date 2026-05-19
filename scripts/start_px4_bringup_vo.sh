@@ -6,7 +6,9 @@
 #
 # Options:
 #   --bridge                Enable PX4 mode bridge (default: disabled)
-#   --mode-type TYPE        Mode type (default: manual)
+#   --mode-type TYPE        Mode type (default: manual). Supports: all, trajectory,
+#                           a single rover mode, or a comma-separated rover subset
+#                           like manual,speed_rate
 #   --vo-bridge             Enable VO bridge: launches px4_vehicle_odometry + px4_vision_odom (default: disabled)
 #   --odom-topic TOPIC      Odometry topic for vision odom node (default: /odometry/filtered).
 #                           When called from start_jetson_session.sh, this is auto-resolved
@@ -42,16 +44,45 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-case "${MODE_TYPE}" in
-  manual|trajectory|speed_steering|speed_attitude)
-    # Valid mode
-    ;;
-  *)
-    echo "ERROR: Invalid mode-type '${MODE_TYPE}'" >&2
-    echo "Valid options: manual, trajectory, speed_steering, speed_attitude" >&2
-    exit 1
-    ;;
-esac
+is_valid_rover_mode() {
+  case "$1" in
+    manual|speed_steering|speed_attitude|speed_rate)
+      return 0 ;;
+    *)
+      return 1 ;;
+  esac
+}
+
+is_valid_mode_type() {
+  local mode_type="$1"
+  local part
+  local parts=()
+
+  case "${mode_type}" in
+    all|trajectory)
+      return 0 ;;
+  esac
+
+  IFS=',' read -r -a parts <<< "${mode_type}"
+  [[ ${#parts[@]} -gt 0 ]] || return 1
+
+  for part in "${parts[@]}"; do
+    part="${part// /}"
+    [[ -n "${part}" ]] || return 1
+    is_valid_rover_mode "${part}" || return 1
+  done
+}
+
+if ! is_valid_mode_type "${MODE_TYPE}"; then
+  echo "ERROR: Invalid mode-type '${MODE_TYPE}'" >&2
+  echo "Valid options: all, trajectory, or rover modes manual,speed_steering,speed_attitude,speed_rate" >&2
+  exit 1
+fi
+
+# 'manual' (default) launches the single rover_manual mode.
+# 'all' launches all rover modes so the CC can switch between them.
+# A comma-separated subset launches only those rover modes — useful when the
+# UART link cannot sustain the 4-way arming-check burst.
 
 if [[ "${BRIDGE}" == "false" && "${VO_BRIDGE}" == "false" ]]; then
     echo "Nothing to launch! Both --bridge and --vo-bridge are disabled."

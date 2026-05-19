@@ -95,6 +95,8 @@ enum CommandType {
   CMD_SET_PARAM = 7;
   CMD_DRIVE = 8;
   CMD_RECORD = 9;
+  CMD_REGISTER_MODE = 10;
+  CMD_UNREGISTER_MODE = 11;
 }
 
 message DriveCmd {
@@ -126,6 +128,14 @@ message SetMode {
   string mode_name = 1;
 }
 
+message RegisterMode {
+  string mode_name = 1;
+}
+
+message UnregisterMode {
+  string mode_name = 1;
+}
+
 message SetParam {
   string param_name = 1;
   string param_value = 2;
@@ -141,6 +151,8 @@ message RoverCommand {
   SetParam set_param = 7;
   DriveCmd drive = 8;
   RecordCmd record = 9;
+  RegisterMode register_mode = 10;
+  UnregisterMode unregister_mode = 11;
 }
 
 message CommandAck {

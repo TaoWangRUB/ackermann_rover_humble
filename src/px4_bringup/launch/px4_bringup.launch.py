@@ -31,8 +31,18 @@ def generate_launch_description():
 
     mode_type_arg = DeclareLaunchArgument(
         'mode_type',
-        default_value='manual',
-        description='PX4 mode type: trajectory, speed_steering, speed_attitude, or manual'
+        default_value='all',
+        description=(
+            "Which rover mode node(s) to launch. 'all' starts all four "
+            '(speed_steering, speed_attitude, speed_rate, manual). Naming a '
+            'specific mode (speed_steering, speed_attitude, speed_rate, '
+            "manual) launches just that one. A comma-separated subset like "
+            '"manual,speed_rate" launches only those rover modes — useful '
+            "when the UART link "
+            'cannot sustain the 4-way arming-check burst (see '
+            'Auterion/px4-ros2-interface-lib#165). Set to "trajectory" to '
+            'enable the offboard-trajectory node instead of rover modes.'
+        ),
     )
 
     # ── VO bridge ─────────────────────────────────────────────────────────
@@ -160,16 +170,25 @@ def generate_launch_description():
         ])),
     )
 
+    # Each rover mode runs only when mode_type is 'all' or contains its name in
+    # a comma-separated subset. Launching fewer modes avoids the simultaneous
+    # arming-check-reply burst
+    # that overflows narrow UART links (see issue #165 referenced above).
+    def rover_mode_condition(mode_name):
+        return IfCondition(PythonExpression([
+            "'", LaunchConfiguration('enable_mode_node'), "' == 'true' and (",
+            "'", LaunchConfiguration('mode_type'), "' == 'all' or '",
+            mode_name, "' in '", LaunchConfiguration('mode_type'),
+            "'.replace(' ', '').split(','))",
+        ]))
+
     speed_steering_node = Node(
         package='px4_bringup',
         executable='rover_speed_steering_mode',
         name='rover_speed_steering_mode',
         output='screen',
         parameters=[config_file],
-        condition=IfCondition(PythonExpression([
-            "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
-            " and '", LaunchConfiguration('mode_type'), "' == 'speed_steering'",
-        ])),
+        condition=rover_mode_condition('speed_steering'),
     )
 
     speed_attitude_node = Node(
@@ -178,10 +197,16 @@ def generate_launch_description():
         name='rover_speed_attitude_mode',
         output='screen',
         parameters=[config_file],
-        condition=IfCondition(PythonExpression([
-            "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
-            " and '", LaunchConfiguration('mode_type'), "' == 'speed_attitude'",
-        ])),
+        condition=rover_mode_condition('speed_attitude'),
+    )
+
+    speed_rate_node = Node(
+        package='px4_bringup',
+        executable='rover_speed_rate_mode',
+        name='rover_speed_rate_mode',
+        output='screen',
+        parameters=[config_file],
+        condition=rover_mode_condition('speed_rate'),
     )
 
     manual_node = Node(
@@ -194,10 +219,7 @@ def generate_launch_description():
             {'bidirectional_esc': ParameterValue(
                 LaunchConfiguration('reversible_drive'), value_type=bool)},
         ],
-        condition=IfCondition(PythonExpression([
-            "'", LaunchConfiguration('enable_mode_node'), "' == 'true'",
-            " and '", LaunchConfiguration('mode_type'), "' == 'manual'",
-        ])),
+        condition=rover_mode_condition('manual'),
     )
 
     return LaunchDescription([
@@ -222,5 +244,6 @@ def generate_launch_description():
         trajectory_node,
         speed_steering_node,
         speed_attitude_node,
+        speed_rate_node,
         manual_node,
     ])

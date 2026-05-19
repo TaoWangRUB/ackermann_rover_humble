@@ -29,11 +29,18 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       # 'all' covers compute + graphics on both x86 NVIDIA and Jetson L4T.
       - NVIDIA_DRIVER_CAPABILITIES=all
+      # PRIME render offload — required on x86 hybrid laptops (Intel iGPU +
+      # NVIDIA dGPU) so OpenGL/GLX apps (Gazebo, RViz) actually use the
+      # NVIDIA card instead of falling back to the iGPU. Harmless on
+      # desktop-class GPUs and on Jetson, so safe to leave on always.
+      - __NV_PRIME_RENDER_OFFLOAD=1
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
       - UBUNTU_VERSION=${UBUNTU_VERSION-24.04}
       - ROS_DISTRO=${ROS_DISTRO-jazzy}
       - GZ_DISTRO=${GZ_DISTRO-harmonic}
       - CUDA_HOME=/usr/local/cuda
       - CUDA_PATH=/usr/local/cuda
+      - LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/targets/${ARCH-x86_64}-linux/lib
 
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -52,6 +59,11 @@ services:
     pid: host
     privileged: true
     shm_size: 2g
+    group_add:
+      # Jetson often exposes USB serial adapters as root:plugdev (gid 46).
+      # Add that supplemental gid so the non-root container user can open
+      # /dev/ttyUSB* without running the XRCE agent as root.
+      - "46"
 
     # Works on both x86 (nvidia-container-toolkit) and Jetson (nvidia-container-runtime).
     runtime: nvidia

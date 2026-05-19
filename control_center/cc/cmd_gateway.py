@@ -24,6 +24,8 @@ CMD_TYPE_MAP = {
     "set_param": 7,  # CMD_SET_PARAM
     "drive": 8,     # CMD_DRIVE
     "record": 9,    # CMD_RECORD
+    "register_mode": 10,    # CMD_REGISTER_MODE
+    "unregister_mode": 11,  # CMD_UNREGISTER_MODE
 }
 
 TOPIC_MAP = {
@@ -35,6 +37,8 @@ TOPIC_MAP = {
     "cancel_goal": "rover/cmd/cancel_goal",
     "drive": "rover/cmd/drive",
     "record": "rover/cmd/record",
+    "register_mode": "rover/cmd/register_mode",
+    "unregister_mode": "rover/cmd/unregister_mode",
 }
 
 
@@ -64,6 +68,8 @@ class CommandGateway:
             "cancel_goal": "cancel_goal",
             "drive": "drive",
             "record": "record",
+            "register_mode": "register_mode",
+            "unregister_mode": "unregister_mode",
         }
 
         for key, value in configured_topics.items():
@@ -111,6 +117,10 @@ class CommandGateway:
             if action not in ("start", "stop", "toggle"):
                 raise ValueError(f"record action must be start|stop|toggle, got {action!r}")
             cmd.record.action = action
+        elif cmd_type == "register_mode":
+            cmd.register_mode.mode_name = params.get("mode_name", "")
+        elif cmd_type == "unregister_mode":
+            cmd.unregister_mode.mode_name = params.get("mode_name", "")
 
         # Serialize and publish
         payload = cmd.SerializeToString()

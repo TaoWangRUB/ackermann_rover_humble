@@ -44,6 +44,9 @@
 #   ./scripts/start_rosbag_session.sh --name=run_20260420_2155     # specific bag
 #   ./scripts/start_rosbag_session.sh --cuvslam-odom               # match record flags
 #   ./scripts/start_rosbag_session.sh --rate=0.5 --loop
+#   ./scripts/start_rosbag_session.sh --name=run_20260428_1340_seg3 --rtabmap-vis-min-inliers=8
+#   ./scripts/start_rosbag_session.sh --name=run_20260428_1340_seg3 --depth-camera=d435i --t265-odom --rtabmap-detection-rate=3 --rtabmap-vis-min-inliers=10 --approx-sync-max-interval=0.03
+#   ./scripts/start_rosbag_session.sh --name=run_20260428_1340_seg3 --t265-odom --rtabmap-param=Vis/EstimationType:=0 --rtabmap-param=Vis/BundleAdjustment:=1
 #   ./scripts/start_rosbag_session.sh --keep-db                    # keep existing DB
 #   ./scripts/start_rosbag_session.sh --no-viz                     # headless
 #
@@ -81,21 +84,35 @@ RGBD_ODOM=false
 VINS_ODOM=false
 RTABMAP_VIZ=true
 DELETE_DB=true
+LOCALIZATION=false
+RTABMAP_VIS_MIN_INLIERS="6"
+RTABMAP_DETECTION_RATE="0"
+RTABMAP_VIS_ESTIMATION_TYPE="1"
+RTABMAP_VIS_MAX_DEPTH="4.0"
+RTABMAP_KP_DETECTOR_STRATEGY="6"
+RTABMAP_VIS_EPIPOLAR_VAR="0.02"
+RTABMAP_REG_STRATEGY="2"
+RTABMAP_LINEAR_UPDATE="0.2"
+RTABMAP_ANGULAR_UPDATE="0.2"
+APPROX_SYNC_MAX_INTERVAL="0.1"
 ATTACH=true
 WAIT_SECONDS="10"
 EXTRA_TOPICS=""
 COMPRESS_FISHEYE=""   # unset → let record_bag.sh default apply
+RTABMAP_PARAM_OVERRIDES=()
+RTABMAP_UDEBUG=false
+JETSON_PROFILE=false
 
-for arg in "$@"; do
-    case "${arg}" in
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --record)              MODE="record" ;;
         --replay)              MODE="replay" ;;
-        --name=*)              BAG_NAME="${arg#--name=}" ;;
-        --path=*)              BAG_PATH_OVERRIDE="${arg#--path=}" ;;
-        --rate=*)              RATE="${arg#--rate=}" ;;
+        --name=*)              BAG_NAME="${1#--name=}" ;;
+        --path=*)              BAG_PATH_OVERRIDE="${1#--path=}" ;;
+        --rate=*)              RATE="${1#--rate=}" ;;
         --loop)                LOOP=true ;;
-        --start=*)             START_OFFSET="${arg#--start=}" ;;
-        --depth-camera=*)      DEPTH_CAMERA="${arg#--depth-camera=}" ;;
+        --start=*)             START_OFFSET="${1#--start=}" ;;
+        --depth-camera=*)      DEPTH_CAMERA="${1#--depth-camera=}" ;;
         --t265-odom)           T265_ODOM=true ;;
         --cuvslam-odom)        CUVSLAM_ODOM=true ;;
         --rgbd-odom)           RGBD_ODOM=true ;;
@@ -103,17 +120,34 @@ for arg in "$@"; do
         --no-viz)              RTABMAP_VIZ=false ;;
         --keep-db)             DELETE_DB=false ;;
         --delete-db)           DELETE_DB=true ;;
-        --wait-seconds=*)      WAIT_SECONDS="${arg#--wait-seconds=}" ;;
-        --extra=*)             EXTRA_TOPICS="${arg#--extra=}" ;;
+        --localization)        LOCALIZATION=true; DELETE_DB=false ;;
+        --mapping)             LOCALIZATION=false ;;
+        --rtabmap-detection-rate=*) RTABMAP_DETECTION_RATE="${1#--rtabmap-detection-rate=}" ;;
+        --rtabmap-vis-min-inliers=*) RTABMAP_VIS_MIN_INLIERS="${1#--rtabmap-vis-min-inliers=}" ;;
+        --rtabmap-vis-estimation-type=*) RTABMAP_VIS_ESTIMATION_TYPE="${1#--rtabmap-vis-estimation-type=}" ;;
+        --rtabmap-vis-max-depth=*) RTABMAP_VIS_MAX_DEPTH="${1#--rtabmap-vis-max-depth=}" ;;
+        --rtabmap-kp-detector-strategy=*) RTABMAP_KP_DETECTOR_STRATEGY="${1#--rtabmap-kp-detector-strategy=}" ;;
+        --rtabmap-vis-epipolar-var=*) RTABMAP_VIS_EPIPOLAR_VAR="${1#--rtabmap-vis-epipolar-var=}" ;;
+        --rtabmap-reg-strategy=*) RTABMAP_REG_STRATEGY="${1#--rtabmap-reg-strategy=}" ;;
+        --rtabmap-linear-update=*) RTABMAP_LINEAR_UPDATE="${1#--rtabmap-linear-update=}" ;;
+        --rtabmap-angular-update=*) RTABMAP_ANGULAR_UPDATE="${1#--rtabmap-angular-update=}" ;;
+        --approx-sync-max-interval=*) APPROX_SYNC_MAX_INTERVAL="${1#--approx-sync-max-interval=}" ;;
+        --rtabmap-param=*)       RTABMAP_PARAM_OVERRIDES+=("${1#--rtabmap-param=}") ;;
+        --rtabmap-udebug)        RTABMAP_UDEBUG=true ;;
+        --jetson-profile)        JETSON_PROFILE=true ;;
+        --no-jetson-profile)     JETSON_PROFILE=false ;;
+        --wait-seconds=*)      WAIT_SECONDS="${1#--wait-seconds=}" ;;
+        --extra=*)             EXTRA_TOPICS="${1#--extra=}" ;;
         --compress-fisheye)    COMPRESS_FISHEYE=true ;;
         --no-compress-fisheye) COMPRESS_FISHEYE=false ;;
         --no-attach)           ATTACH=false ;;
-        --session=*)           SESSION="${arg#--session=}" ;;
+        --session=*)           SESSION="${1#--session=}" ;;
         -h|--help)
             sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
             exit 0 ;;
-        *) echo "Unknown arg: ${arg}" >&2; exit 2 ;;
+        *) echo "Unknown arg: $1" >&2; exit 2 ;;
     esac
+    shift
 done
 
 # Default odom: T265 (matches record_bag.sh default)
@@ -239,14 +273,25 @@ RTABMAP_ARGS=(
     "use_sim_time:=true"
     "rtabmap_viz:=${RTABMAP_VIZ}"
     "delete_db_on_start:=${DELETE_DB}"
-    "rtabmap_detection_rate:=0"
-    "rtabmap_vis_min_inliers:=12"
+    "localization:=${LOCALIZATION}"
+    "rtabmap_detection_rate:=${RTABMAP_DETECTION_RATE}"
+    "rtabmap_vis_min_inliers:=${RTABMAP_VIS_MIN_INLIERS}"
     "rtabmap_vis_max_features:=1500"
+    "rtabmap_vis_estimation_type:=${RTABMAP_VIS_ESTIMATION_TYPE}"
+    "rtabmap_vis_max_depth:=${RTABMAP_VIS_MAX_DEPTH}"
+    "rtabmap_kp_detector_strategy:=${RTABMAP_KP_DETECTOR_STRATEGY}"
+    "rtabmap_vis_epipolar_var:=${RTABMAP_VIS_EPIPOLAR_VAR}"
+    "rtabmap_reg_strategy:=${RTABMAP_REG_STRATEGY}"
+    "rtabmap_linear_update:=${RTABMAP_LINEAR_UPDATE}"
+    "rtabmap_angular_update:=${RTABMAP_ANGULAR_UPDATE}"
+    "approx_sync_max_interval:=${APPROX_SYNC_MAX_INTERVAL}"
     "rgb_image_topic:=/${DEPTH_CAMERA}/color/image_raw"
     "rgb_camera_info_topic:=/${DEPTH_CAMERA}/color/camera_info"
     "depth_image_topic:=/${DEPTH_CAMERA}/aligned_depth_to_color/image_raw"
     "depth_camera_info_topic:=/${DEPTH_CAMERA}/aligned_depth_to_color/camera_info"
     "imu_raw_topic:=/${DEPTH_CAMERA}/imu"
+    "rtabmap_udebug:=${RTABMAP_UDEBUG}"
+    "jetson_profile:=${JETSON_PROFILE}"
 )
 if [[ "${CUVSLAM_ODOM}" == true ]]; then
     RTABMAP_ARGS+=("use_cuvslam_odom:=true")
@@ -257,6 +302,40 @@ elif [[ "${VINS_ODOM}" == true ]]; then
 else
     RTABMAP_ARGS+=("use_t265_odom:=true")
 fi
+
+RTABMAP_PARAM_FILE_HOST=""
+RTABMAP_PARAM_FILE_CONTAINER=""
+if [[ ${#RTABMAP_PARAM_OVERRIDES[@]} -gt 0 ]]; then
+    mkdir -p "${PROJECT_DIR}/.tmp"
+    RTABMAP_PARAM_FILE_HOST="$(mktemp "${PROJECT_DIR}/.tmp/rtabmap_params_${SESSION}_XXXXXX.yaml")"
+    RTABMAP_PARAM_FILE_CONTAINER="${RTABMAP_PARAM_FILE_HOST/#${PROJECT_DIR}/\/workspace}"
+    {
+        printf "/rtabmap:\n"
+        printf "  ros__parameters:\n"
+        for override in "${RTABMAP_PARAM_OVERRIDES[@]}"; do
+            if [[ "${override}" != *:=* ]]; then
+                echo "Invalid --rtabmap-param value '${override}'. Expected NAME:=VALUE." >&2
+                exit 2
+            fi
+            param_name="${override%%:=*}"
+            param_value="${override#*:=}"
+            # !!str forces the YAML loader to keep the value as a string regardless
+            # of looking like a number/bool. RTAB-Map declares every tuning knob as
+            # a string, so we must hand it a string — earlier post-launch
+            # `ros2 param load` failed with type-coercion errors on bare 4/true.
+            param_value="${param_value//\\/\\\\}"
+            param_value="${param_value//\"/\\\"}"
+            printf "    %s: !!str \"%s\"\n" "${param_name}" "${param_value}"
+        done
+    } > "${RTABMAP_PARAM_FILE_HOST}"
+    RTABMAP_ARGS+=("extra_rtabmap_params_file:=${RTABMAP_PARAM_FILE_CONTAINER}")
+fi
+
+ROS_LAUNCH_CMD=(
+    ros2 launch rtabmap_bringup rtabmap_slam.launch.py
+    "${RTABMAP_ARGS[@]}"
+)
+printf -v ROS_LAUNCH_CMD_STR '%q ' "${ROS_LAUNCH_CMD[@]}"
 
 # ── Build bag play command ────────────────────────────────────────────
 PLAY_ARGS=("${BAG_PATH}" --clock --rate "${RATE}")
@@ -286,7 +365,14 @@ echo "  rate:         ${RATE}  loop=${LOOP}"
 [[ -n "${START_OFFSET}" ]] && echo "  start:        +${START_OFFSET}s"
 echo "  depth camera: ${DEPTH_CAMERA}"
 echo "  odom source:  ${ODOM_LABEL}"
+echo "  mode:         $( [[ "${LOCALIZATION}" == true ]] && echo 'localization (DB read-only)' || echo 'mapping' )"
 echo "  delete db:    ${DELETE_DB}"
+echo "  detection:    ${RTABMAP_DETECTION_RATE} Hz"
+echo "  min inliers:  ${RTABMAP_VIS_MIN_INLIERS}"
+echo "  sync window:  ${APPROX_SYNC_MAX_INTERVAL}s"
+if [[ ${#RTABMAP_PARAM_OVERRIDES[@]} -gt 0 ]]; then
+    echo "  extra params: ${RTABMAP_PARAM_OVERRIDES[*]}"
+fi
 echo "  rtabmap viz:  ${RTABMAP_VIZ}"
 echo "  fisheye:      $( [[ "${FISHEYE_DECOMPRESS}" == true ]] && echo 'compressed -> decompress' || echo 'raw (no decompress)' )"
 echo "─────────────────────────────────────────────────────────────"
@@ -303,7 +389,7 @@ PANE_BAG="$(tmux split-window -v -P -F "#{pane_id}" -t "${PANE_RTABMAP}")"
 
 # ── Pane: RTAB-Map (immediate) ───────────────────────────────────────
 tmux send-keys -t "${PANE_RTABMAP}" \
-    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ros2 launch rtabmap_bringup rtabmap_slam.launch.py ${RTABMAP_ARGS[*]}'" Enter
+    "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && ${ROS_LAUNCH_CMD_STR}'" Enter
 
 # ── Pane: Bag playback (after RTAB-Map is ready) ─────────────────────
 # Wait for the /rtabmap node itself — in this launch the map topics are at
@@ -316,6 +402,10 @@ DECOMPRESS_CMD=""
 if [[ "${FISHEYE_DECOMPRESS}" == true ]]; then
     DECOMPRESS_CMD="echo Starting fisheye decompressors... && ros2 run image_transport republish --ros-args -p in_transport:=compressed -p out_transport:=raw -r in/compressed:=/t265/fisheye1/image_raw/compressed -r out:=/t265/fisheye1/image_raw >/tmp/decompress_fisheye1.log 2>&1 & ros2 run image_transport republish --ros-args -p in_transport:=compressed -p out_transport:=raw -r in/compressed:=/t265/fisheye2/image_raw/compressed -r out:=/t265/fisheye2/image_raw >/tmp/decompress_fisheye2.log 2>&1 & sleep 3 &&"
 fi
+# Param overrides are now passed as a launch arg (extra_rtabmap_params_file) so
+# they apply at node construction; the post-launch `ros2 param load` path is gone
+# because RTAB-Map's params are declared as strings and ros2 param load coerced
+# YAML scalars to int/bool, which got rejected.
 tmux send-keys -t "${PANE_BAG}" \
     "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc '${ROS_SRC} && echo Waiting for RTAB-Map to be ready... && timeout 60 bash -lc \"until ros2 node list 2>/dev/null | grep -qx /rtabmap; do sleep 1; done\" && sleep 3 && ${DECOMPRESS_CMD} echo Starting bag playback... && ros2 bag play ${PLAY_ARGS[*]}'" Enter
 

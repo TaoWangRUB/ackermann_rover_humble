@@ -184,14 +184,14 @@ All modes subscribe to `/cmd_vel` (`geometry_msgs/Twist`) and are implemented as
 - **Parameters**: `base_frame` (default: `ackermann/base_link`), `odom_frame` (default: `odom`)
 - **Use case**: Generic offboard velocity control
 
-#### 2. Rover Speed Steering Mode (`rover_speed_steering_mode`) — Recommended
+#### 2. Rover Speed Steering Mode (`rover_speed_steering_mode`)
 
 - **Setpoint type**: `RoverSpeedSteeringSetpointType`
 - **Conversion**: `linear.x` → `speed_body_x` [m/s], `angular.z` → normalized steering [-1 (left), 1 (right)]
 - **Normalization**: `-angular.z / max_steering_rate`, clamped to [-1, 1]. Sign negated because ROS uses CCW+ while PX4 steering uses right-positive.
 - **Parameters**: `max_steering_rate` (default: `1.0` rad/s, should match PX4 `RA_MAX_STR_ANG`)
 - **PX4 controller chain**: Velocity → Control Allocation (bypasses attitude/rate controllers)
-- **Use case**: Most natural mapping for Ackermann rovers driven by Nav2 MPPI controller
+- **Use case**: Fallback when yaw rate PID is not tuned. **Steering is open-loop** — no yaw rate or heading feedback. Prefer `speed_rate` for Nav2.
 
 #### 3. Rover Speed Attitude Mode (`rover_speed_attitude_mode`)
 
@@ -202,7 +202,15 @@ All modes subscribe to `/cmd_vel` (`geometry_msgs/Twist`) and are implemented as
 - **PX4 controller chain**: Velocity → Attitude → Rate → Control Allocation
 - **Use case**: Heading-hold driving; PX4 handles heading → steering conversion
 
-#### 4. Rover Manual Mode (`rover_manual_mode`)
+#### 4. Rover Speed Rate Mode (`rover_speed_rate_mode`) — Recommended for Nav2
+
+- **Setpoint type**: `RoverSpeedRateSetpointType`
+- **Conversion**: `linear.x` → `speed_body_x` [m/s], `angular.z` → `yaw_rate` [rad/s] (sign-flipped: ROS CCW+ ENU → PX4 CW+ NED)
+- **Parameters**: `max_yaw_rate` (default: `1.5` rad/s, safety clamp)
+- **PX4 controller chain**: Velocity → Rate → Control Allocation
+- **Use case**: Nav2 primary mode. `cmd_vel.angular.z` is forwarded to PX4's inner-loop yaw rate controller with **closed-loop IMU gyro feedback**, giving reliable steering tracking under disturbances, backlash, and tire slip. Also suitable for teleop where the operator commands a turn rate.
+
+#### 5. Rover Manual Mode (`rover_manual_mode`)
 
 - **Setpoint type**: `RoverManualSetpointType`
 - **Behavior**: Pass-through open-loop throttle and steering commands from `/cmd_vel` directly to PX4 without higher-level heading integration. Useful for manual teleoperation or baseline hardware testing where the autopilot should not perform trajectory or heading control.
@@ -230,16 +238,17 @@ The `odom_topic` argument applies only to `px4_vision_odom.py` (the input source
 ros2 launch px4_bringup px4_bringup.launch.py                                                     # manual mode only (default)
 ros2 launch px4_bringup px4_bringup.launch.py mode_type:=trajectory                              # offboard trajectory
 ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_attitude                          # heading-hold
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering                          # speed + steering
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering                          # speed + steering (open-loop steering)
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_rate                              # speed + yaw rate (Nav2 recommended)
 ros2 launch px4_bringup px4_bringup.launch.py enable_mode_node:=false enable_vo_bridge:=true     # VO bridge only (no mode node)
 ros2 launch px4_bringup px4_bringup.launch.py enable_vo_bridge:=true odom_topic:=/odometry/filtered  # mode + VO bridge
 
 # From host (parameterized helper):
 ./scripts/start_px4_bringup_vo.sh --bridge                                                        # mode node only (manual)
-./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_steering                             # speed_steering mode only
+./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_rate                                # speed_rate mode (Nav2 recommended)
 ./scripts/start_px4_bringup_vo.sh --vo-bridge                                                     # VO bridge only (vision odom + vehicle odom)
 ./scripts/start_px4_bringup_vo.sh --bridge --vo-bridge                                            # mode + VO bridge (manual mode)
-./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_steering --vo-bridge                 # speed_steering mode + VO
+./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_rate --vo-bridge                    # speed_rate mode + VO (Nav2 recommended)
 ./scripts/start_px4_bringup_vo.sh --bridge --vo-bridge --odom-topic /rtabmap/odom                 # mode + VO, custom odom topic
 ```
 
@@ -341,7 +350,7 @@ type long commands.
 | `--cuvslam-odom`    | Use cuVSLAM as the RTAB-Map / EKF odom source                          |
 | `--rtabmap`         | Launch RTAB-Map SLAM                                                   |
 | `--nav2`            | Launch Nav2 navigation stack                                           |
-| `--bridge[=MODE]`   | Launch PX4 mode node only (default: `manual`; options: `speed_steering`, `trajectory`, `speed_attitude`) |
+| `--bridge[=MODE]`   | Launch PX4 mode node only (default: `manual`; options: `speed_rate`, `speed_steering`, `trajectory`, `speed_attitude`) |
 | `--vo-bridge`       | Launch VO bridge: `px4_vision_odom_node` (vision odom → PX4) + `px4_vehicle_odometry_node` (PX4 odom → ROS 2) |
 | `--odom-topic=TOPIC` | Odometry topic for PX4 VO bridge and readiness gate. Auto-resolved from `--cuvslam-odom`/`--rgbd-odom`/`--vins-odom`/`--t265-odom` flags; explicit value overrides. Default: `/odometry/filtered` |
 | `--build[=PKG]`     | Build the whole workspace or selected packages before launch           |
@@ -425,7 +434,7 @@ bash /workspace/scripts/start_px4_sitl.sh
 
 # In a fourth Docker shell: launch the ROS 2 ↔ PX4 bridge node
 source /opt/ros/$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_rate
 ```
 
 > **Startup order matters:** MicroXRCEAgent must be running **before** PX4 starts.
@@ -441,7 +450,7 @@ bash /workspace/scripts/start_microxrce_agent.sh
 # In a third shell:
 bash /workspace/scripts/start_px4_sitl.sh
 # In a fourth shell:
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_rate
 ```
 
 ### How It Works
@@ -603,7 +612,7 @@ ros2 topic pub -r 1 /ackermann/cmd_vel geometry_msgs/msg/TwistStamped \
 
 ```bash
 # Shell 4: Launch the ROS 2 ↔ PX4 bridge node (AFTER PX4 is running)
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_rate
 ```
 
 Then arm and activate the external mode:
@@ -1206,7 +1215,7 @@ Run each in a **separate terminal** from the host (project root):
 # 3. Publish static TF: odom → ackermann/base_link
 ./scripts/pub_tf.sh
 
-# 4. Launch px4_bringup with VO bridge (speed_steering mode)
+# 4. Launch px4_bringup with VO bridge (speed_rate mode)
 ./scripts/start_px4_bringup_vo.sh
 ```
 
@@ -1413,6 +1422,69 @@ Without GPS, set the origin manually via MAVLink `SET_GPS_GLOBAL_ORIGIN` +
    TX buffer causes `mavlink_if1` to spin at ~15% CPU, preempting
    `uxrce_dds_client` (same priority 100) and worsening stall duration.
    Mitigate by reducing MAVLink telemetry rates: `param set MAV_0_RATE 4800`.
+
+8. **USB MAVLink RX-wedge between script invocations.** On Cube Black firmware
+   the USB MAVLink instance is `mavlink_if1`, spawned by `cdcacm_autostart`
+   (controlled by `SYS_USB_AUTO` + `USB_MAV_MODE`, NOT by `MAV_0_CONFIG` — USB
+   is not a valid value in the `MAV_X_CONFIG` enum for FMUv3, see
+   `build/px4_fmu-v3_rover/parameters.xml`). Symptom: `./scripts/px4_cmd.sh` /
+   `./scripts/upload_params.sh` work right after FC boot (or right after QGC
+   connects), then fail with `no heartbeat after retries` for every subsequent
+   invocation. Underlying cause: `mavlink_if1`'s RX path stops draining the
+   USB CDC ACM FIFO when no client has been heartbeating at ≥1 Hz for several
+   seconds; subsequent `pyserial.write()` from a fresh `pymavlink` session
+   queues bytes that PX4 never reads.
+
+   **Things that DO help, partially:**
+   - `param set USB_MAV_MODE 0` (Normal) — switches the stream profile from
+     `onboard` (21 KB/s demand) to `Normal` (~few KB/s), eliminating the
+     saturation thread freeze documented in PX4#26144. Required for stable
+     operation but does not fix the RX-wedge.
+   - `param set MAV_0_CONFIG 0` — disables the second `mavlink_if0` instance
+     that on the default airframe runs on TELEM1; recovers ~17 KB RAM, takes
+     the free pool from ~28 KB to ~46 KB and stays clear of the
+     "below 20 KB → MAVLink unresponsive" cliff. Required, not sufficient.
+
+   **Things that do NOT help (verified empirically):**
+   - Continuous 1 Hz heartbeats from the script (QGC-style)
+   - 10× wake-up heartbeat burst at startup
+   - Forced DTR/RTS assertion via pyserial
+   - Higher retry counts in `connect_mavlink`
+   In every case the very first `heartbeat_send` after a fresh
+   `mavlink_connection` succeeds at the kernel level (bytes queue into the
+   host TX buffer) but PX4's `mavlink_if1` does not drain them, so no reply
+   ever comes back.
+
+   **Things that DO clear the wedge:**
+   - **Physical FC USB unplug + replug** — resets the USB CDC ACM state on
+     the FMU side; `mavlink_if1` re-initializes its RX path. After replug,
+     the next `px4_cmd.sh` call works again. This is the practical workflow:
+     replug once at the start of any MAVLink-scripting session.
+   - Opening QGroundControl — QGC's multi-threaded heartbeat + stream-request
+     flow keeps `mavlink_if1`'s RX path active for as long as it's connected.
+     `px4_cmd.sh` can be run from another process while QGC is open *if* the
+     port is shared (not normally possible with a raw serial connection — QGC
+     holds `/dev/ttyACM0` exclusively).
+
+   **Community references (same root cause, no upstream fix):**
+   - [pymavlink#991](https://github.com/ArduPilot/pymavlink/issues/991) — "no
+     signal HEARTBEAT using serial connection on companion computer", open.
+   - [pymavlink#372](https://github.com/ArduPilot/pymavlink/issues/372) —
+     "Serial connection has HEARTBEAT but no other message".
+   - [discuss.px4.io/t/39261](https://discuss.px4.io/t/pymavlink-script-not-getting-heartbeat-from-pixhawk-6c-sometimes/39261) —
+     Pixhawk 6C; same intermittent symptom; "QGC coaxes the FC to respond".
+   - [PX4#26144](https://github.com/PX4/PX4-Autopilot/issues/26144) — "MAVLink
+     connection freezes with heartbeat timeout and `tx_buffer_overruns`",
+     closed-stale; root cause acknowledged but no fix planned.
+
+   **The proper software-only workaround** (heavier setup, not adopted here)
+   is to run `mavproxy.py --master=/dev/ttyACM0 --out=udp:127.0.0.1:14550` as
+   a persistent relay process. mavproxy's TX/RX threads maintain a continuous
+   1 Hz heartbeat to the FC, keeping `mavlink_if1`'s RX path alive
+   indefinitely. Scripts then connect to UDP rather than the raw serial. For
+   our rover, MAVLink is only needed occasionally for parameter pushes via
+   `upload_params.sh`; the unplug-replug procedure is acceptable and the
+   relay process has not been worth the added system complexity.
 
 ### Tools
 

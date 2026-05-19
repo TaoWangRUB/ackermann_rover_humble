@@ -95,6 +95,44 @@ Each module has a `CMakeLists.txt` using `px4_add_module(...)`.
 - SITL simulation: `make px4_sitl_default` then run with a simulator
 - Test files live in `test/` and `src/**/tests/`
 
+## Hardware Command Workflow
+
+For Cube Black hardware, the default operator workflow in this repository is:
+
+1. Start a host-side MAVProxy bridge once.
+2. If the PX4 USB CDC link is dead, reconnect the USB cable once while MAVProxy is running.
+3. Reuse the same bridge for repeated shell commands and parameter uploads.
+
+### Bridge Lifecycle
+
+```bash
+cd /home/taowang/workspace/ackermann_rover_humble
+./scripts/start_px4_mavproxy_bridge.sh
+./scripts/start_px4_mavproxy_bridge.sh --status
+./scripts/start_px4_mavproxy_bridge.sh --stop
+```
+
+The bridge uses PX4 USB as the master link and exposes `udpin:127.0.0.1:14550` for all follow-up tooling.
+
+### Default Command And Upload Usage
+
+```bash
+./scripts/px4_cmd.sh 'ver all' 20
+./scripts/upload_params.sh --reversible-drive
+./scripts/upload_params.sh --verify-only --reversible-drive
+```
+
+`px4_cmd.sh` and `upload_params.sh` default to the MAVProxy bridge path. They should not start multiple independent MAVProxy instances; repeated runs reuse the existing bridge process.
+
+### Direct USB Escape Hatch
+
+If you need the previous behavior for a one-off debug session:
+
+```bash
+PX4_USE_MAVPROXY=0 ./scripts/px4_cmd.sh 'ver all' 20
+./scripts/upload_params.sh --direct-usb --reversible-drive
+```
+
 ---
 
 # Build System Deep Dive: `make px4_sitl gz_rover_ackermann`
