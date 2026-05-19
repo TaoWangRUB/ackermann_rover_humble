@@ -184,14 +184,14 @@ All modes subscribe to `/cmd_vel` (`geometry_msgs/Twist`) and are implemented as
 - **Parameters**: `base_frame` (default: `ackermann/base_link`), `odom_frame` (default: `odom`)
 - **Use case**: Generic offboard velocity control
 
-#### 2. Rover Speed Steering Mode (`rover_speed_steering_mode`) — Recommended
+#### 2. Rover Speed Steering Mode (`rover_speed_steering_mode`)
 
 - **Setpoint type**: `RoverSpeedSteeringSetpointType`
 - **Conversion**: `linear.x` → `speed_body_x` [m/s], `angular.z` → normalized steering [-1 (left), 1 (right)]
 - **Normalization**: `-angular.z / max_steering_rate`, clamped to [-1, 1]. Sign negated because ROS uses CCW+ while PX4 steering uses right-positive.
 - **Parameters**: `max_steering_rate` (default: `1.0` rad/s, should match PX4 `RA_MAX_STR_ANG`)
 - **PX4 controller chain**: Velocity → Control Allocation (bypasses attitude/rate controllers)
-- **Use case**: Most natural mapping for Ackermann rovers driven by Nav2 MPPI controller
+- **Use case**: Fallback when yaw rate PID is not tuned. **Steering is open-loop** — no yaw rate or heading feedback. Prefer `speed_rate` for Nav2.
 
 #### 3. Rover Speed Attitude Mode (`rover_speed_attitude_mode`)
 
@@ -202,7 +202,15 @@ All modes subscribe to `/cmd_vel` (`geometry_msgs/Twist`) and are implemented as
 - **PX4 controller chain**: Velocity → Attitude → Rate → Control Allocation
 - **Use case**: Heading-hold driving; PX4 handles heading → steering conversion
 
-#### 4. Rover Manual Mode (`rover_manual_mode`)
+#### 4. Rover Speed Rate Mode (`rover_speed_rate_mode`) — Recommended for Nav2
+
+- **Setpoint type**: `RoverSpeedRateSetpointType`
+- **Conversion**: `linear.x` → `speed_body_x` [m/s], `angular.z` → `yaw_rate` [rad/s] (sign-flipped: ROS CCW+ ENU → PX4 CW+ NED)
+- **Parameters**: `max_yaw_rate` (default: `1.5` rad/s, safety clamp)
+- **PX4 controller chain**: Velocity → Rate → Control Allocation
+- **Use case**: Nav2 primary mode. `cmd_vel.angular.z` is forwarded to PX4's inner-loop yaw rate controller with **closed-loop IMU gyro feedback**, giving reliable steering tracking under disturbances, backlash, and tire slip. Also suitable for teleop where the operator commands a turn rate.
+
+#### 5. Rover Manual Mode (`rover_manual_mode`)
 
 - **Setpoint type**: `RoverManualSetpointType`
 - **Behavior**: Pass-through open-loop throttle and steering commands from `/cmd_vel` directly to PX4 without higher-level heading integration. Useful for manual teleoperation or baseline hardware testing where the autopilot should not perform trajectory or heading control.
@@ -230,16 +238,17 @@ The `odom_topic` argument applies only to `px4_vision_odom.py` (the input source
 ros2 launch px4_bringup px4_bringup.launch.py                                                     # manual mode only (default)
 ros2 launch px4_bringup px4_bringup.launch.py mode_type:=trajectory                              # offboard trajectory
 ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_attitude                          # heading-hold
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering                          # speed + steering
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering                          # speed + steering (open-loop steering)
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_rate                              # speed + yaw rate (Nav2 recommended)
 ros2 launch px4_bringup px4_bringup.launch.py enable_mode_node:=false enable_vo_bridge:=true     # VO bridge only (no mode node)
 ros2 launch px4_bringup px4_bringup.launch.py enable_vo_bridge:=true odom_topic:=/odometry/filtered  # mode + VO bridge
 
 # From host (parameterized helper):
 ./scripts/start_px4_bringup_vo.sh --bridge                                                        # mode node only (manual)
-./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_steering                             # speed_steering mode only
+./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_rate                                # speed_rate mode (Nav2 recommended)
 ./scripts/start_px4_bringup_vo.sh --vo-bridge                                                     # VO bridge only (vision odom + vehicle odom)
 ./scripts/start_px4_bringup_vo.sh --bridge --vo-bridge                                            # mode + VO bridge (manual mode)
-./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_steering --vo-bridge                 # speed_steering mode + VO
+./scripts/start_px4_bringup_vo.sh --bridge --mode-type speed_rate --vo-bridge                    # speed_rate mode + VO (Nav2 recommended)
 ./scripts/start_px4_bringup_vo.sh --bridge --vo-bridge --odom-topic /rtabmap/odom                 # mode + VO, custom odom topic
 ```
 
@@ -341,7 +350,7 @@ type long commands.
 | `--cuvslam-odom`    | Use cuVSLAM as the RTAB-Map / EKF odom source                          |
 | `--rtabmap`         | Launch RTAB-Map SLAM                                                   |
 | `--nav2`            | Launch Nav2 navigation stack                                           |
-| `--bridge[=MODE]`   | Launch PX4 mode node only (default: `manual`; options: `speed_steering`, `trajectory`, `speed_attitude`) |
+| `--bridge[=MODE]`   | Launch PX4 mode node only (default: `manual`; options: `speed_rate`, `speed_steering`, `trajectory`, `speed_attitude`) |
 | `--vo-bridge`       | Launch VO bridge: `px4_vision_odom_node` (vision odom → PX4) + `px4_vehicle_odometry_node` (PX4 odom → ROS 2) |
 | `--odom-topic=TOPIC` | Odometry topic for PX4 VO bridge and readiness gate. Auto-resolved from `--cuvslam-odom`/`--rgbd-odom`/`--vins-odom`/`--t265-odom` flags; explicit value overrides. Default: `/odometry/filtered` |
 | `--build[=PKG]`     | Build the whole workspace or selected packages before launch           |
@@ -425,7 +434,7 @@ bash /workspace/scripts/start_px4_sitl.sh
 
 # In a fourth Docker shell: launch the ROS 2 ↔ PX4 bridge node
 source /opt/ros/$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_rate
 ```
 
 > **Startup order matters:** MicroXRCEAgent must be running **before** PX4 starts.
@@ -441,7 +450,7 @@ bash /workspace/scripts/start_microxrce_agent.sh
 # In a third shell:
 bash /workspace/scripts/start_px4_sitl.sh
 # In a fourth shell:
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_rate
 ```
 
 ### How It Works
@@ -603,7 +612,7 @@ ros2 topic pub -r 1 /ackermann/cmd_vel geometry_msgs/msg/TwistStamped \
 
 ```bash
 # Shell 4: Launch the ROS 2 ↔ PX4 bridge node (AFTER PX4 is running)
-ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_steering
+ros2 launch px4_bringup px4_bringup.launch.py mode_type:=speed_rate
 ```
 
 Then arm and activate the external mode:
@@ -1206,7 +1215,7 @@ Run each in a **separate terminal** from the host (project root):
 # 3. Publish static TF: odom → ackermann/base_link
 ./scripts/pub_tf.sh
 
-# 4. Launch px4_bringup with VO bridge (speed_steering mode)
+# 4. Launch px4_bringup with VO bridge (speed_rate mode)
 ./scripts/start_px4_bringup_vo.sh
 ```
 
