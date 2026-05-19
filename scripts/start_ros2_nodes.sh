@@ -29,7 +29,9 @@
 #   --wipe-rtabmap-db Wipe the RTAB-Map DB before launch
 #   --keep-rtabmap-db Keep the existing RTAB-Map DB when mapping
 #   --nav2             Launch Nav2 navigation stack
-#   --bridge[=MODE]    Launch PX4 mode node (default: manual; options: speed_steering, trajectory, speed_attitude)
+#   --bridge[=MODE]    Launch PX4 mode node (default: manual; modes: all, trajectory,
+#                          a single rover mode, or a comma-separated rover subset
+#                          like manual,speed_rate)
 #   --vo-bridge        Launch VO bridge: px4_vision_odom + px4_vehicle_odometry
 #   --odom-topic=TOPIC Odometry topic for PX4 VO bridge and readiness gate.
 #                          Auto-resolved from odom-source flags when not set explicitly:
@@ -42,6 +44,7 @@
 #   --controller=TYPE  Nav2 path controller: mppi (default) or rpp (lightweight)
 #   --reversible-drive Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
 #   --no-rviz          Disable RViz2
+#   --rtabmap-viz      Launch rtabmap_viz alongside RTAB-Map for graph/loop monitoring
 #   --build[=PKG]      Build workspace (or specific pkg) before launching
 #   --build-only[=PKG] Build only, do not launch
 #
@@ -93,7 +96,7 @@
 #   ./scripts/start_ros2_nodes.sh --cuvslam-odom --rtabmap
 #
 #   ── Hardware mode + VO bridge to real PX4 ──
-#   ./scripts/start_ros2_nodes.sh --hw --rtabmap --vo-bridge --bridge=speed_steering
+#   ./scripts/start_ros2_nodes.sh --hw --rtabmap --vo-bridge --bridge=speed_rate
 #
 #   ── Gazebo only (ros2_control) ──
 #   ./scripts/start_ros2_nodes.sh
@@ -116,8 +119,11 @@
 #   ── Gazebo + RTAB-Map + Nav2 + VO bridge (ros2_control active) ──
 #   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --vo-bridge
 #
-#   ── Gazebo + RTAB-Map + Nav2 + PX4 mode + VO bridge (ros2_control active) ──
+#   ── Gazebo + RTAB-Map + Nav2 + PX4 manual mode + VO bridge (ros2_control active) ──
 #   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --bridge=manual --vo-bridge
+#
+#   ── Gazebo + RTAB-Map + Nav2 + all 4 PX4 rover modes + VO bridge ──
+#   ./scripts/start_ros2_nodes.sh --rtabmap --nav2 --bridge=all --vo-bridge
 #
 #   ── PX4 SITL (no ros2_control, auto mode + VO) ──
 #   ./scripts/start_ros2_nodes.sh --px4
@@ -157,6 +163,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/dc.sh"
 
+CONTAINER_RUNTIME_ENV="export CUDA_HOME=/usr/local/cuda CUDA_PATH=/usr/local/cuda; export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/targets/\${ARCH:-\$(uname -m)}-linux/lib:\${LD_LIBRARY_PATH:-}; export PATH=/usr/local/cuda/bin:\$PATH"
+
 # Defaults
 HW="false"
 DEPTH_CAMERA=""
@@ -172,6 +180,12 @@ LOCALIZATION="false"
 DELETE_DB_ON_START=""
 NAV2="false"
 RVIZ="true"
+RTABMAP_VIZ="false"
+RTABMAP_VIS_ESTIMATION_TYPE="1"
+RTABMAP_VIS_MAX_DEPTH="4.0"
+RTABMAP_VIS_MIN_INLIERS="10"
+RTABMAP_KP_DETECTOR_STRATEGY="6"
+JETSON_PROFILE="false"
 BRIDGE="false"
 BRIDGE_MODE="manual"
 VO_BRIDGE="false"
@@ -199,6 +213,13 @@ for arg in "$@"; do
         --keep-rtabmap-db) DELETE_DB_ON_START="false" ;;
         --nav2)         NAV2="true" ;;
         --no-rviz)      RVIZ="false" ;;
+        --rtabmap-viz)  RTABMAP_VIZ="true" ;;
+        --rtabmap-vis-estimation-type=*) RTABMAP_VIS_ESTIMATION_TYPE="${arg#--rtabmap-vis-estimation-type=}" ;;
+        --rtabmap-vis-max-depth=*)       RTABMAP_VIS_MAX_DEPTH="${arg#--rtabmap-vis-max-depth=}" ;;
+        --rtabmap-vis-min-inliers=*)     RTABMAP_VIS_MIN_INLIERS="${arg#--rtabmap-vis-min-inliers=}" ;;
+        --rtabmap-kp-detector-strategy=*) RTABMAP_KP_DETECTOR_STRATEGY="${arg#--rtabmap-kp-detector-strategy=}" ;;
+        --jetson-profile)    JETSON_PROFILE="true" ;;
+        --no-jetson-profile) JETSON_PROFILE="false" ;;
         --bridge)       BRIDGE="true" ;;
         --bridge=*)     BRIDGE="true"; BRIDGE_MODE="${arg#--bridge=}" ;;
         --vo-bridge)         VO_BRIDGE="true" ;;
@@ -219,6 +240,41 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+is_valid_rover_mode() {
+    case "$1" in
+        manual|speed_steering|speed_attitude|speed_rate)
+            return 0 ;;
+        *)
+            return 1 ;;
+    esac
+}
+
+is_valid_bridge_mode() {
+    local mode_type="$1"
+    local part
+    local parts=()
+
+    case "${mode_type}" in
+        all|trajectory)
+            return 0 ;;
+    esac
+
+    IFS=',' read -r -a parts <<< "${mode_type}"
+    [[ ${#parts[@]} -gt 0 ]] || return 1
+
+    for part in "${parts[@]}"; do
+        part="${part// /}"
+        [[ -n "${part}" ]] || return 1
+        is_valid_rover_mode "${part}" || return 1
+    done
+}
+
+if ! is_valid_bridge_mode "${BRIDGE_MODE}"; then
+    echo "ERROR: Invalid bridge mode '${BRIDGE_MODE}'" >&2
+    echo "Valid bridge modes: all, trajectory, or rover modes manual,speed_steering,speed_attitude,speed_rate" >&2
+    exit 1
+fi
 
 # Default DB policy:
 # - localization always keeps the existing DB
@@ -271,9 +327,9 @@ fi
 if [[ "${BUILD}" == "true" ]]; then
     if [[ ("${CUVSLAM_ODOM}" == "true" || "${RGBD_ODOM}" == "true") && -z "${BUILD_PKGS}" ]]; then
         echo "Building cuVSLAM and related bringup packages..."
-        dcomp exec ackermann_slam bash -lc "source /opt/ros/\$ROS_DISTRO/setup.bash && if [ -f /workspace/install/setup.bash ]; then source /workspace/install/setup.bash; fi && bash /workspace/scripts/build_cuvslam.sh"
+        dcomp exec ackermann_slam bash -lc "${CONTAINER_RUNTIME_ENV} && source /opt/ros/\$ROS_DISTRO/setup.bash && if [ -f /workspace/install/setup.bash ]; then source /workspace/install/setup.bash; fi && bash /workspace/scripts/build_cuvslam.sh"
     else
-        BUILD_CMD="source /opt/ros/\$ROS_DISTRO/setup.bash && cd /workspace && colcon build --symlink-install"
+        BUILD_CMD="${CONTAINER_RUNTIME_ENV} && source /opt/ros/\$ROS_DISTRO/setup.bash && cd /workspace && colcon build --symlink-install"
         if [[ -n "${BUILD_PKGS}" ]]; then
         # Replace commas with spaces for --packages-select
             BUILD_CMD+=" --packages-select ${BUILD_PKGS//,/ }"
@@ -330,7 +386,7 @@ fi
 echo ""
 
 # Build the launch command
-LAUNCH_CMD="source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && "
+LAUNCH_CMD="${CONTAINER_RUNTIME_ENV} && source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && "
 LAUNCH_CMD+="ros2 launch robot_bringup robot_bringup.launch.py"
 LAUNCH_CMD+=" depth_camera:=${DEPTH_CAMERA}"
 if [[ "${HW}" == "true" ]]; then
@@ -350,6 +406,12 @@ LAUNCH_CMD+=" delete_db_on_start:=${DELETE_DB_ON_START}"
 LAUNCH_CMD+=" nav2:=${NAV2}"
 LAUNCH_CMD+=" nav2_controller:=${NAV2_CONTROLLER}"
 LAUNCH_CMD+=" rviz:=${RVIZ}"
+LAUNCH_CMD+=" rtabmap_viz:=${RTABMAP_VIZ}"
+LAUNCH_CMD+=" rtabmap_vis_estimation_type:=${RTABMAP_VIS_ESTIMATION_TYPE}"
+LAUNCH_CMD+=" rtabmap_vis_max_depth:=${RTABMAP_VIS_MAX_DEPTH}"
+LAUNCH_CMD+=" rtabmap_vis_min_inliers:=${RTABMAP_VIS_MIN_INLIERS}"
+LAUNCH_CMD+=" jetson_profile:=${JETSON_PROFILE}"
+LAUNCH_CMD+=" rtabmap_kp_detector_strategy:=${RTABMAP_KP_DETECTOR_STRATEGY}"
 LAUNCH_CMD+=" reversible_drive:=${REVERSIBLE_DRIVE}"
 
 # Chain px4_bringup after robot_bringup when --bridge and/or --vo-bridge
@@ -359,6 +421,7 @@ if [[ "${BRIDGE}" == "true" || "${VO_BRIDGE}" == "true" ]]; then
     LAUNCH_CMD+=" PIDS=\$BRINGUP_PID;"
     LAUNCH_CMD+=" echo 'Waiting 5s for Gazebo to start before launching px4 nodes...';"
     LAUNCH_CMD+=" sleep 5;"
+    LAUNCH_CMD+=" ${CONTAINER_RUNTIME_ENV};"
     LAUNCH_CMD+=" source /opt/ros/\$ROS_DISTRO/setup.bash;"
     LAUNCH_CMD+=" source /workspace/install/setup.bash;"
     LAUNCH_CMD+=" ros2 launch px4_bringup px4_bringup.launch.py"

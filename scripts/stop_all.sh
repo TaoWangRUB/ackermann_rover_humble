@@ -78,6 +78,26 @@ else
         ' 2>/dev/null || true
     }
 
+    # Graceful shutdown: SIGTERM PX4 mode nodes one at a time so each
+    # UnregisterExtComponent message can traverse the serial XRCE link
+    # to PX4 without contention. Sending all SIGTERMs at once causes
+    # only ~1 of N unregister messages to arrive before the process and
+    # DDS middleware exit.
+    ${DC} exec -T ackermann_slam bash -c '
+        PIDS=$(ps aux --no-headers \
+          | grep -E "rover_(manual|speed_steering|speed_attitude|speed_rate)_mode|offboard_trajectory_mode" \
+          | grep -v "docker\|grep" \
+          | awk "{print \$2}")
+        for p in $PIDS; do
+            kill -15 $p 2>/dev/null || continue
+            # Wait up to 3s for this one process to exit
+            for i in $(seq 1 6); do
+                kill -0 $p 2>/dev/null || break
+                sleep 0.5
+            done
+        done
+    ' 2>/dev/null || true
+
     sweep
     sweep_python_helpers
     sweep_gazebo

@@ -185,6 +185,7 @@ endif()
 set(REALSENSE_CAMERA_NODE_DEPS rclcpp)
 if(HAVE_LIBREALSENSE)
   list(APPEND REALSENSE_CAMERA_NODE_DEPS
+    rcl_interfaces
     sensor_msgs
     nav_msgs
     tf2_ros

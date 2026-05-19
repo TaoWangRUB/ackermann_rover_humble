@@ -3,9 +3,10 @@
 # Upload PX4 parameters via MAVLink shell — reliable alternative to QGC file load.
 #
 # Usage (from host, with Cube Black connected via USB):
-#   ./scripts/upload_params.sh                       # upload all params (unidirectional ESC)
-#   ./scripts/upload_params.sh --reversible-drive    # upload with bidirectional ESC PWM
-#   ./scripts/upload_params.sh --verify-only         # just verify current values
+#   ./scripts/upload_params.sh                       # upload all params via the default MAVProxy bridge (unidirectional ESC)
+#   ./scripts/upload_params.sh --reversible-drive    # upload with bidirectional ESC PWM via the default bridge
+#   ./scripts/upload_params.sh --verify-only         # just verify current values via the default bridge
+#   ./scripts/upload_params.sh --direct-usb          # bypass MAVProxy and use direct USB access
 #
 # Why use this instead of QGC "Load from file"?
 #   1. QGC's .params parser silently skips lines with wrong whitespace.
@@ -33,10 +34,13 @@ fi
 
 VERIFY_ONLY=false
 REVERSIBLE_DRIVE=false
+USE_MAVPROXY_BRIDGE=true
 for arg in "$@"; do
     case "${arg}" in
         --verify-only)      VERIFY_ONLY=true ;;
         --reversible-drive) REVERSIBLE_DRIVE=true ;;
+        --mavproxy-bridge)  USE_MAVPROXY_BRIDGE=true ;;
+        --direct-usb)       USE_MAVPROXY_BRIDGE=false ;;
     esac
 done
 
@@ -102,6 +106,45 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m'  # No Color
+
+print_connectivity_help() {
+    local mode_hint=""
+    if [[ "${USE_MAVPROXY_BRIDGE}" == true ]]; then
+        mode_hint="\n    4. Keep MAVProxy running and reconnect the Cube USB cable once if the link is dead.\n"
+    fi
+        cat <<EOF
+ERROR: Cannot reach PX4 over MAVLink shell.
+
+What this usually means:
+    1. PX4 USB CDC is present, but MAVLink is not responding yet.
+    2. On a fresh/factory-reset Cube Black, free RAM is often too low for reliable USB MAVLink.
+    3. After a reboot, the USB CDC endpoint may need a physical USB replug to recover.
+
+Recommended recovery:
+    1. Ensure the MAVProxy bridge is running, then reconnect the Cube Black USB cable once if the link is dead.
+    2. If this is a fresh board or recent factory reset, use QGC for the first two-pass load of:
+         src/px4_bringup/config/cube_black_ackermann.params
+      Make sure SYS_USB_AUTO=2 and USB_MAV_MODE=2 are loaded as well.
+    3. Reboot, reconnect if needed, then rerun:
+         ./scripts/upload_params.sh --verify-only
+${mode_hint}
+
+Expected once bootstrapped:
+    ./scripts/px4_cmd.sh 'free' 8
+    # expect at least ~28 KB free RAM
+EOF
+}
+
+prepare_mavproxy_bridge() {
+    echo "Ensuring MAVProxy USB->UDP bridge is running..."
+    "${SCRIPT_DIR}/start_px4_mavproxy_bridge.sh" >/dev/null
+    export PX4_USE_MAVPROXY=1
+    export PX4_DEVICE="${PX4_MAVPROXY_DEVICE:-udpin:127.0.0.1:14550}"
+    export PX4_ASSERT_DTR=0
+    echo "Using MAVProxy bridge at ${PX4_DEVICE}"
+    echo "If PX4 is currently in the dead USB state, reconnect the USB cable once while MAVProxy is running."
+    wait_for_heartbeat 90
+}
 
 px4_param_set() {
     local name="$1" value="$2"
@@ -172,10 +215,15 @@ echo "  PX4 Parameter Upload — Cube Black"
 echo "============================================"
 echo ""
 
+if [[ "${USE_MAVPROXY_BRIDGE}" == true ]]; then
+    prepare_mavproxy_bridge
+    echo ""
+fi
+
 # Connectivity check
 echo "Checking PX4 connectivity..."
 if ! "${PX4_CMD}" "ver hwcmp" 5 >/dev/null 2>&1; then
-    echo "ERROR: Cannot reach PX4. Check USB connection and Docker container."
+    print_connectivity_help
     exit 1
 fi
 echo "PX4 connected."
@@ -210,7 +258,7 @@ fi
 echo "=== Pass 1: Airframe (SYS_AUTOSTART) ==="
 
 read -r name value type <<< "${AIRFRAME_PARAM}"
-current_airframe=$(px4_param_show "${name}" 2>/dev/null | grep -oP 'is\s+\K[-0-9.e+]+' | tail -1) || true
+current_airframe=$(px4_param_show "${name}" 2>/dev/null | grep -oP ':\s+\K[-0-9.e+]+' | tail -1) || true
 
 if [[ "${current_airframe}" == "${value}" ]]; then
     echo "SYS_AUTOSTART already set to ${value}, skipping reboot."

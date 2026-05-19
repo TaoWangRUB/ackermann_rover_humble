@@ -83,8 +83,9 @@ The `px4_bringup` package provides four C++ custom flight modes (via `px4_ros2_i
 | `/fmu/in/vehicle_visual_odometry` | `px4_msgs/msg/VehicleOdometry` | `px4_vision_odom.py` | Odometry in NED/FRD for PX4 EKF fusion |
 | `/fmu/in/trajectory_setpoint` | `px4_msgs/msg/TrajectorySetpoint` | `offboard_trajectory_mode` | NED velocity setpoint (offboard mode only) |
 | `/fmu/in/offboard_control_mode` | `px4_msgs/msg/OffboardControlMode` | `offboard_trajectory_mode` (auto) | Offboard heartbeat — automatic for C++ modes |
-| `/fmu/in/rover_speed_setpoint` | `px4_msgs/msg/RoverSpeedSetpoint` | `rover_speed_steering_mode`, `rover_speed_attitude_mode` | Body-x speed [m/s] |
-| `/fmu/in/rover_steering_setpoint` | `px4_msgs/msg/RoverSteeringSetpoint` | `rover_speed_steering_mode` | Normalized steering [-1, 1] |
+| `/fmu/in/rover_speed_setpoint` | `px4_msgs/msg/RoverSpeedSetpoint` | `rover_speed_steering_mode`, `rover_speed_rate_mode`, `rover_speed_attitude_mode` | Body-x speed [m/s] |
+| `/fmu/in/rover_steering_setpoint` | `px4_msgs/msg/RoverSteeringSetpoint` | `rover_speed_steering_mode` | Normalized steering [-1, 1] (open-loop) |
+| `/fmu/in/rover_rate_setpoint` | `px4_msgs/msg/RoverRateSetpoint` | `rover_speed_rate_mode` | Yaw rate [rad/s] (closed-loop via IMU) — **Nav2 recommended** |
 | `/fmu/in/rover_attitude_setpoint` | `px4_msgs/msg/RoverAttitudeSetpoint` | `rover_speed_attitude_mode` | Yaw heading in NED [rad] |
 
 ### PX4 Telemetry Topics (PX4 → ROS 2)
@@ -109,6 +110,7 @@ The `px4_bringup` package provides four C++ custom flight modes (via `px4_ros2_i
 | `base_frame` | `ackermann/base_link` | `offboard_trajectory_mode` | TF body frame for velocity rotation |
 | `odom_frame` | `odom` | `offboard_trajectory_mode` | TF world frame for velocity rotation |
 | `max_steering_rate` | `1.0` | `rover_speed_steering_mode` | Max yaw rate [rad/s] for normalizing steering to [-1, 1] |
+| `max_yaw_rate` | `1.5` | `rover_speed_rate_mode` | Safety clamp on yaw rate [rad/s] |
 | `skip_message_compatibility_check` | `true` | All modes | Skip DDS message format check (required when PX4 firmware lacks `/fmu/out/message_format_response`) |
 
 Bridge parameters are in `config/px4_bridge.yaml`.

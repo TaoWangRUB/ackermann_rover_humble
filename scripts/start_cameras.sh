@@ -43,6 +43,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/dc.sh"
 
+CONTAINER_RUNTIME_ENV="export CUDA_HOME=/usr/local/cuda CUDA_PATH=/usr/local/cuda; export LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/targets/\${ARCH:-\$(uname -m)}-linux/lib:\${LD_LIBRARY_PATH:-}; export PATH=/usr/local/cuda/bin:\$PATH"
+
 # --- Defaults ---
 LAUNCH_D435I="false"
 LAUNCH_L515="false"
@@ -104,7 +106,7 @@ fi
 
 # --- Build step ---
 if [[ "${BUILD}" == "true" ]]; then
-    BUILD_CMD="source /opt/ros/\$ROS_DISTRO/setup.bash && cd /workspace && colcon build --symlink-install"
+    BUILD_CMD="${CONTAINER_RUNTIME_ENV} && source /opt/ros/\$ROS_DISTRO/setup.bash && cd /workspace && colcon build --symlink-install"
     if [[ -n "${BUILD_PKGS}" ]]; then
         BUILD_CMD+=" --packages-select ${BUILD_PKGS//,/ }"
         echo "Building packages: ${BUILD_PKGS}..."
@@ -145,7 +147,7 @@ _add_depth_overrides() {
     if [[ -n "${DEPTH_PROFILE}" ]]; then LAUNCH_ARGS+=" ${pfx}_depth_profile:=${DEPTH_PROFILE}"; fi
 }
 
-SOURCE="source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && _a='realsense'; _b='_camera_node'; pkill -f \"\${_a}\${_b}\" 2>/dev/null; sleep 1; ros2 daemon stop 2>/dev/null; ros2 daemon start 2>/dev/null"
+SOURCE="${CONTAINER_RUNTIME_ENV} && source /opt/ros/\$ROS_DISTRO/setup.bash && source /workspace/install/setup.bash && _a='realsense'; _b='_camera_node'; pkill -f \"\${_a}\${_b}\" 2>/dev/null; sleep 1; ros2 daemon stop 2>/dev/null; ros2 daemon start 2>/dev/null"
 
 LAUNCH_ARGS=""
 LAUNCH_ARGS+=" enable_d435i:=${LAUNCH_D435I}"

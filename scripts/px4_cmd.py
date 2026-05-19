@@ -4,16 +4,20 @@
 Usage:
     python3 scripts/px4_cmd.py "listener cpuload -n 1"
     python3 scripts/px4_cmd.py "commander status" 8
+    PX4_DEVICE='udpin:127.0.0.1:14550' python3 scripts/px4_cmd.py "ver all" 20
 
-Connects to PX4 via /dev/ttyACM0 using pymavlink SERIAL_CONTROL.
+Connects to PX4 using pymavlink SERIAL_CONTROL over any supported mavutil link,
+for example /dev/ttyACM0 or udpin:127.0.0.1:14550.
 """
+import os
 import sys
 import time
 import serial
 from pymavlink import mavutil
 
-DEVICE = '/dev/ttyACM0'
-BAUD = 57600
+DEVICE = os.environ.get('PX4_DEVICE', '/dev/ttyACM0')
+BAUD = int(os.environ.get('PX4_BAUD', '57600'))
+ASSERT_DTR = os.environ.get('PX4_ASSERT_DTR', '0') == '1'
 
 def _assert_dtr(device, baud):
     """Assert DTR to wake PX4's USB MAVLink instance."""
@@ -25,9 +29,10 @@ def _assert_dtr(device, baud):
     except Exception:
         pass  # best-effort; pymavlink may still work without it
 
-def connect_mavlink(retries=3):
+def connect_mavlink(retries=6):
     """Connect to PX4 with retry to handle USB CDC flakiness."""
-    _assert_dtr(DEVICE, BAUD)
+    if ASSERT_DTR:
+        _assert_dtr(DEVICE, BAUD)
     for attempt in range(retries):
         try:
             mav = mavutil.mavlink_connection(DEVICE, baud=BAUD, source_system=254)
@@ -45,24 +50,12 @@ def connect_mavlink(retries=3):
                 mav.close()
             except Exception:
                 pass
-        time.sleep(2)
+        time.sleep(3)
     return None
 
-def main():
-    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
-        print(__doc__.strip())
-        sys.exit(0 if len(sys.argv) >= 2 else 1)
 
-    cmd = sys.argv[1]
-    timeout = float(sys.argv[2]) if len(sys.argv) > 2 else 5.0
-
-    mav = connect_mavlink()
-    if not mav:
-        print("ERROR: No heartbeat from PX4 after retries", file=sys.stderr)
-        sys.exit(1)
-
-    # Send command via SERIAL_CONTROL
-    # device=10 is SERIAL_CONTROL_DEV_SHELL in PX4
+def run_serial_command(mav, cmd, timeout):
+    """Send a command via SERIAL_CONTROL and return decoded shell output."""
     cmd_bytes = (cmd + "\n").encode()
 
     for dev_id in [10, 0]:
@@ -75,7 +68,6 @@ def main():
                 mavutil.mavlink.SERIAL_CONTROL_FLAG_RESPOND,
                 0, 0, len(chunk), buf)
 
-        # Read output
         deadline = time.time() + timeout
         output = b""
         while time.time() < deadline:
@@ -88,16 +80,55 @@ def main():
 
         if output:
             mav.mav.serial_control_send(dev_id, 0, 0, 0, 0, [0] * 70)
-            mav.close()
             text = output.decode('utf-8', errors='replace')
+            lines = []
             for line in text.split('\n'):
-                s = line.strip()
-                if s and s != cmd.strip() and s != 'nsh>' and not s.endswith('nsh>'):
-                    print(line.rstrip())
-            return
+                stripped = line.strip()
+                if stripped and stripped != cmd.strip() and stripped != 'nsh>' and not stripped.endswith('nsh>'):
+                    lines.append(line.rstrip())
+            return '\n'.join(lines)
 
-    mav.close()
-    print("SERIAL_CONTROL not supported. Use QGC MAVLink Console.", file=sys.stderr)
+    return None
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
+        print(__doc__.strip())
+        sys.exit(0 if len(sys.argv) >= 2 else 1)
+
+    cmd = sys.argv[1]
+    timeout = float(sys.argv[2]) if len(sys.argv) > 2 else 5.0
+
+    last_error = None
+    for attempt in range(4):
+        mav = connect_mavlink(retries=3)
+        if not mav:
+            last_error = "No heartbeat from PX4 after retries"
+            continue
+
+        try:
+            output = run_serial_command(mav, cmd, timeout)
+            if output is not None:
+                if output:
+                    print(output)
+                mav.close()
+                return
+            last_error = "SERIAL_CONTROL not supported or shell not ready yet"
+            print(f"Command attempt {attempt+1}: {last_error}, retrying...", file=sys.stderr)
+        except Exception as exc:
+            last_error = str(exc)
+            print(f"Command attempt {attempt+1}: {exc}, retrying...", file=sys.stderr)
+        finally:
+            try:
+                mav.close()
+            except Exception:
+                pass
+
+        time.sleep(2)
+
+    print(f"ERROR: {last_error or 'No heartbeat from PX4 after retries'}", file=sys.stderr)
+    print("Hint: on this Cube Black setup, direct USB MAVLink/NSH may need a few seconds to stabilize after reboot or replug.", file=sys.stderr)
+    print("Hint: verify the autopilot is connected directly to host USB, not through a flaky hub.", file=sys.stderr)
+    print("Hint: if necessary, set PX4_DEVICE=/dev/ttyACM0, PX4_DEVICE=udpin:127.0.0.1:14550, or PX4_BAUD=57600 in the environment.", file=sys.stderr)
     sys.exit(1)
 
 if __name__ == '__main__':

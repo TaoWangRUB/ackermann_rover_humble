@@ -10,8 +10,10 @@
 
   <depend>launch</depend>
   <depend>launch_ros</depend>
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
   <exec_depend>rclpy</exec_depend>
-  <exec_depend>sensor_msgs</exec_depend>
 
   <exec_depend>description_robot</exec_depend>
   <exec_depend>rtabmap_bringup</exec_depend>

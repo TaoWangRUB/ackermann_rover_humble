@@ -3,12 +3,20 @@
 
 import os
 
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+
+EMPTY_PARAMS_FILE = os.path.join(
+    get_package_share_directory('rtabmap_bringup'), 'config', 'empty_overrides.yaml'
+)
+JETSON_PROFILE_FILE = os.path.join(
+    get_package_share_directory('rtabmap_bringup'), 'config', 'jetson_profile.yaml'
+)
 
 # DB lives under the workspace mount so it persists across container restarts.
 # Host equivalent: <repo>/.rtabmap/rover.db (repo is mounted at /workspace).
@@ -99,13 +107,65 @@ ARGUMENTS = [
     ),
     DeclareLaunchArgument(
         'rtabmap_vis_min_inliers',
-        default_value='20',
-        description='Minimum visual inliers required by RTAB-Map to accept loop closures.'
+        default_value='6',
+        description='Minimum visual inliers required by RTAB-Map to accept loop closures. '
+                    'RTAB-Map enforces an internal minimum of 6 — lower values are silently clamped. '
+                    'Default 6 is the most permissive legal value; raise to 10-20 if false-positive '
+                    'closures appear on a feature-rich scene.'
     ),
     DeclareLaunchArgument(
         'rtabmap_vis_max_features',
-        default_value='800',
+        default_value='1200',
         description='Maximum number of visual features extracted by RTAB-Map for loop closure.'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap_vis_estimation_type',
+        default_value='1',
+        description='RTAB-Map loop verification estimator: 0=3D-3D, 1=PnP (3D-2D, default, needs depth), 2=2D-2D epipolar (no depth required).'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap_vis_max_depth',
+        default_value='4.0',
+        description='Max depth [m] for features used in loop verification. '
+                    'D435i depth becomes unreliable beyond ~4-5m (noise >5% relative); '
+                    'clip features at 4m so PnP/3D-3D verification only uses well-conditioned '
+                    'keypoints. Set 0 to disable the limit.'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap_kp_detector_strategy',
+        default_value='6',
+        description='RTAB-Map BoW feature detector: 0=SURF, 2=ORB, 6=GFTT/BRIEF (default), 8=GFTT/BRISK, 9=KAZE.'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap_vis_epipolar_var',
+        default_value='0.02',
+        description='Max epipolar geometry variance for accepting a 2D-2D loop closure (Vis/EstimationType=2). Default 0.02; raise to 0.3-0.5 for rotation-dominant motion.'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap_reg_strategy',
+        default_value='2',
+        description='Registration strategy for loop verification: 0=Vis only, 1=ICP only, '
+                    '2=Vis+ICP cascade (default — needs /scan, which subscribe_scan=True now '
+                    'guarantees by consuming depthimage_to_laserscan output when vision=true).'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap_linear_update',
+        default_value='0.2',
+        description='Min linear motion (m) before adding a new node. Smaller = denser map but tiny baseline between '
+                    'adjacent nodes -> epipolar/PnP verification fails on near-zero translation. Default 0.2m '
+                    'guarantees enough parallax for visual loop verification. RTAB-Map default is 0.1m.'
+    ),
+    DeclareLaunchArgument(
+        'rtabmap_angular_update',
+        default_value='0.2',
+        description='Min angular motion (rad) before adding a new node. Default 0.2 (≈11.5°) filters '
+                    'small angular jitter — important for hand-held cameras and noisy IMU integration. '
+                    'RTAB-Map default is 0.1.'
+    ),
+    DeclareLaunchArgument(
+        'approx_sync_max_interval',
+        default_value='0.1',
+        description='Maximum interval allowed by the RGB-D approximate synchronizers.'
     ),
     DeclareLaunchArgument(
         'imu_raw_topic', default_value='/l515/imu/raw',
@@ -141,6 +201,31 @@ ARGUMENTS = [
     DeclareLaunchArgument(
         'relay_base_frame', default_value='ackermann/base_link',
         description='Target child_frame_id for odom_tf_relay output.'),
+
+    DeclareLaunchArgument(
+        'rtabmap_udebug', default_value='false',
+        choices=['true', 'false'],
+        description='Pass --udebug to the rtabmap binary so its internal UDEBUG '
+                    'logs appear (matcher counts, RANSAC inliers, etc.). Verbose; '
+                    'use for diagnostic runs only.'),
+
+    DeclareLaunchArgument(
+        'jetson_profile', default_value='false',
+        choices=['true', 'false'],
+        description='Apply the Jetson-Xavier constrained-CPU profile '
+                    '(config/jetson_profile.yaml): half the per-frame feature '
+                    'pool, 1Hz detection rate, larger node-update threshold, '
+                    'depth-image post-decimation. ~3x lower verifier latency '
+                    'at the cost of ~3-4x fewer closures. Auto-applied by '
+                    'start_jetson_session.sh.'),
+
+    DeclareLaunchArgument(
+        'extra_rtabmap_params_file', default_value=EMPTY_PARAMS_FILE,
+        description='Optional path to a YAML file with extra RTAB-Map parameters '
+                    '(merged after the in-launch defaults; later wins). Use this for '
+                    'tuning knobs that the launch file does not expose explicitly, '
+                    'e.g. Vis/CorNNType, RGBD/LoopClosureReextractFeatures. The default '
+                    'is an empty stub so the file path is always valid.'),
 ]
 
 
@@ -156,6 +241,14 @@ def generate_launch_description() -> LaunchDescription:
     rtabmap_detection_rate = LaunchConfiguration('rtabmap_detection_rate')
     rtabmap_vis_min_inliers = LaunchConfiguration('rtabmap_vis_min_inliers')
     rtabmap_vis_max_features = LaunchConfiguration('rtabmap_vis_max_features')
+    rtabmap_vis_estimation_type = LaunchConfiguration('rtabmap_vis_estimation_type')
+    rtabmap_vis_max_depth = LaunchConfiguration('rtabmap_vis_max_depth')
+    rtabmap_kp_detector_strategy = LaunchConfiguration('rtabmap_kp_detector_strategy')
+    rtabmap_vis_epipolar_var = LaunchConfiguration('rtabmap_vis_epipolar_var')
+    rtabmap_reg_strategy = LaunchConfiguration('rtabmap_reg_strategy')
+    rtabmap_linear_update = LaunchConfiguration('rtabmap_linear_update')
+    rtabmap_angular_update = LaunchConfiguration('rtabmap_angular_update')
+    approx_sync_max_interval = LaunchConfiguration('approx_sync_max_interval')
     t265_odom_topic = LaunchConfiguration('t265_odom_topic')
     vins_odom_topic = LaunchConfiguration('vins_odom_topic')
     cuvslam_odom_topic = LaunchConfiguration('cuvslam_odom_topic')
@@ -178,12 +271,12 @@ def generate_launch_description() -> LaunchDescription:
     launch_icp_odom = PythonExpression([
         '"true" if "', vision, '" == "false" else "false"'
     ])
-    subscribe_scan = PythonExpression([
-        'True if "', vision, '" == "false" else False'
-    ])
-    scan_topic = PythonExpression([
-        '"/scan" if "', vision, '" == "false" else "/scan"'
-    ])
+    # Subscribe to /scan whether the source is a real lidar (vision=false) or
+    # depthimage_to_laserscan (vision=true) — having the scan available lets
+    # Reg/Strategy=2 (Vis+ICP cascade) actually have ICP data, instead of
+    # silently nulling valid Vis transforms when ICP cannot find correspondences.
+    subscribe_scan = True
+    scan_topic = '/scan'
 
     rtabmap_parameters = {
         'subscribe_rgbd':True,
@@ -194,27 +287,49 @@ def generate_launch_description() -> LaunchDescription:
         'database_path': RTABMAP_DB_PATH,
         # RTAB-Map's parameters should be strings:
         'Mem/NotLinkedNodesKept':'false',
+        'Mem/RehearsalSimilarity': '0.3',
         'Grid/MaxGroundHeight': '0.1',
         'Grid/MaxObstacleHeight': '0.8',
         'Grid/NormalsSegmentation': 'false',
         #'Grid/RangeMax': '20',
         'Grid/3D': 'false',
         'Grid/RayTracing': 'true',
+        # Pin Grid/Sensor to 1 (camera/cloud) so rtabmap_ros's CoreWrapper does
+        # NOT auto-flip it to 0 (laser scan) when subscribe_scan=True. The
+        # auto-flip would produce a flat-top triangle from /scan's perpendicular-Z
+        # values; pinning to 1 keeps the camera/cloud sector geometry.
+        # Grid/RangeMax's auto-override is itself gated on Grid/Sensor==0, so it
+        # keeps its default 5.0 m once Grid/Sensor=1 is pinned — no need to set
+        # it explicitly. See CoreWrapper.cpp:459-479 and ADR-009.
+        'Grid/Sensor': '1',
+        # 'Grid/RangeMax': '5.0',  # default 5.0 — auto-override skipped because Grid/Sensor=1
         'Reg/Force3DoF': 'true',
-        'approx_sync_max_interval': 0.1,
+        'Kp/MaxFeatures': '1500',
+        'Vis/CorGuessWinSize': '40',
+        'RGBD/ProximityBySpace': 'true',
+        'RGBD/ProximityMaxGraphDepth': '50',
+        'RGBD/ProximityPathMaxNeighbors': '10',
+        'RGBD/OptimizeFromGraphEnd': 'false',
+        'approx_sync_max_interval': ParameterValue(
+            approx_sync_max_interval, value_type=float
+        ),
         'topic_queue_size': 30,
         'sync_queue_size': 30,
         'Rtabmap/DetectionRate': ParameterValue(rtabmap_detection_rate, value_type=str),
-        'RGBD/LinearUpdate': '0.05',     # Update map more often (smaller motion threshold)
-        'RGBD/AngularUpdate': '0.05',
+        'RGBD/LinearUpdate': ParameterValue(rtabmap_linear_update, value_type=str),
+        'RGBD/AngularUpdate': ParameterValue(rtabmap_angular_update, value_type=str),
         'Vis/MinInliers': ParameterValue(rtabmap_vis_min_inliers, value_type=str),
         'Vis/MaxFeatures': ParameterValue(rtabmap_vis_max_features, value_type=str),
+        'Vis/EstimationType': ParameterValue(rtabmap_vis_estimation_type, value_type=str),
+        'Vis/MaxDepth': ParameterValue(rtabmap_vis_max_depth, value_type=str),
+        'Kp/DetectorStrategy': ParameterValue(rtabmap_kp_detector_strategy, value_type=str),
+        'Vis/EpipolarGeometryVar': ParameterValue(rtabmap_vis_epipolar_var, value_type=str),
     }
 
     shared_parameters = {
         'frame_id': 'ackermann/base_link',
         'use_sim_time': use_sim_time,
-        'Reg/Strategy': '1',
+        'Reg/Strategy': ParameterValue(rtabmap_reg_strategy, value_type=str),
         'Reg/Force3DoF': 'true',
         'Mem/NotLinkedNodesKept': 'false',
         'Icp/PointToPlaneMinComplexity': '0.04'
@@ -249,7 +364,9 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[{
             'approx_sync': True,
             'queue_size': 30,
-            'approx_sync_max_interval': 0.1,
+            'approx_sync_max_interval': ParameterValue(
+                approx_sync_max_interval, value_type=float
+            ),
             'use_sim_time': use_sim_time
         }],
         remappings=sensor_remappings,
@@ -294,7 +411,9 @@ def generate_launch_description() -> LaunchDescription:
         'use_sim_time': use_sim_time,
         'approx_sync': True,
         'queue_size': 30,
-        'approx_sync_max_interval': 0.1,
+        'approx_sync_max_interval': ParameterValue(
+            approx_sync_max_interval, value_type=float
+        ),
         'Odom/Strategy': '0',
         'Odom/ImageDecimation': '2',
         'Vis/MinInliers': '20',
@@ -436,26 +555,62 @@ def generate_launch_description() -> LaunchDescription:
         LaunchConfiguration('delete_db_on_start'), '" == "true" else "false"'
     ])
 
+    extra_params_file = LaunchConfiguration('extra_rtabmap_params_file')
+
+    # When jetson_profile=true, load jetson_profile.yaml; otherwise use the
+    # empty stub. Both are valid file paths so launch_ros doesn't choke. Order
+    # in slam_common_params puts user `extra_rtabmap_params_file` last, so
+    # explicit per-run overrides still win over the Jetson defaults.
+    jetson_profile_file = PythonExpression([
+        "'", JETSON_PROFILE_FILE, "' if '",
+        LaunchConfiguration('jetson_profile'), "' == 'true' else '",
+        EMPTY_PARAMS_FILE, "'"
+    ])
+
     slam_common_params = [rtabmap_parameters, shared_parameters,
-                          {'Mem/IncrementalMemory': 'True'}]
+                          {'Mem/IncrementalMemory': 'True'},
+                          jetson_profile_file,
+                          extra_params_file]
 
-    slam_keep = Node(
-        condition=IfCondition(slam_mapping_keep),
-        package='rtabmap_slam',
-        executable='rtabmap',
-        output='screen',
-        parameters=slam_common_params,
-        remappings=consumer_remappings,
+    # rtabmap binary's --udebug enables UDEBUG output via utilite. Each variant
+    # below is gated by IfCondition so only one fires per run.
+    udebug_on = PythonExpression([
+        '"true" if "', LaunchConfiguration('rtabmap_udebug'), '" == "true" else "false"'
+    ])
+    udebug_off = PythonExpression([
+        '"true" if "', LaunchConfiguration('rtabmap_udebug'), '" == "false" else "false"'
+    ])
+
+    slam_keep_quiet = Node(
+        condition=IfCondition(PythonExpression([
+            '"true" if "', slam_mapping_keep, '" == "true" and "', udebug_off, '" == "true" else "false"'
+        ])),
+        package='rtabmap_slam', executable='rtabmap', output='screen',
+        parameters=slam_common_params, remappings=consumer_remappings,
     )
-
-    slam_wipe = Node(
-        condition=IfCondition(slam_mapping_wipe),
-        package='rtabmap_slam',
-        executable='rtabmap',
-        output='screen',
-        parameters=slam_common_params,
-        remappings=consumer_remappings,
+    slam_keep_debug = Node(
+        condition=IfCondition(PythonExpression([
+            '"true" if "', slam_mapping_keep, '" == "true" and "', udebug_on, '" == "true" else "false"'
+        ])),
+        package='rtabmap_slam', executable='rtabmap', output='screen',
+        parameters=slam_common_params, remappings=consumer_remappings,
+        arguments=['--udebug'],
+    )
+    slam_wipe_quiet = Node(
+        condition=IfCondition(PythonExpression([
+            '"true" if "', slam_mapping_wipe, '" == "true" and "', udebug_off, '" == "true" else "false"'
+        ])),
+        package='rtabmap_slam', executable='rtabmap', output='screen',
+        parameters=slam_common_params, remappings=consumer_remappings,
         arguments=['-d'],
+    )
+    slam_wipe_debug = Node(
+        condition=IfCondition(PythonExpression([
+            '"true" if "', slam_mapping_wipe, '" == "true" and "', udebug_on, '" == "true" else "false"'
+        ])),
+        package='rtabmap_slam', executable='rtabmap', output='screen',
+        parameters=slam_common_params, remappings=consumer_remappings,
+        arguments=['-d', '--udebug'],
     )
 
     localization_node = Node(
@@ -466,7 +621,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[rtabmap_parameters, shared_parameters, {
             'Mem/IncrementalMemory': 'False',
             'Mem/InitWMWithAllNodes': 'True'
-        }],
+        }, jetson_profile_file, extra_params_file],
         remappings=consumer_remappings,
     )
 
@@ -543,8 +698,10 @@ def generate_launch_description() -> LaunchDescription:
     #ld.add_action(visual_odom)
     #ld.add_action(icp_odom)
     #ld.add_action(ekf_filter_node)
-    ld.add_action(slam_keep)
-    ld.add_action(slam_wipe)
+    ld.add_action(slam_keep_quiet)
+    ld.add_action(slam_keep_debug)
+    ld.add_action(slam_wipe_quiet)
+    ld.add_action(slam_wipe_debug)
     ld.add_action(localization_node)
     ld.add_action(rgbd_to_points)
     ld.add_action(obstacle_detection)

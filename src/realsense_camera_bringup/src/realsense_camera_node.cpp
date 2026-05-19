@@ -4,6 +4,7 @@
 #include <thread>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 
 namespace realsense_camera_bringup
 {
@@ -13,6 +14,8 @@ RealsenseCameraNode::RealsenseCameraNode(const rclcpp::NodeOptions & options)
 {
   declare_parameters();
   create_publishers();
+  parameter_callback_handle_ = add_on_set_parameters_callback(
+    std::bind(&RealsenseCameraNode::handle_runtime_parameters, this, std::placeholders::_1));
 
   // Retry loop — handles two classes of transient USB/firmware errors:
   //   1. "failed to set power state" / "Unable to open device" — enumeration race
@@ -526,6 +529,8 @@ void RealsenseCameraNode::start_pipeline()
 void RealsenseCameraNode::apply_sensor_options(rs2::pipeline_profile & profile)
 {
   auto dev = profile.get_device();
+  std::lock_guard<std::mutex> lock(sensor_options_mutex_);
+  color_sensor_ = rs2::sensor();
   for (auto & sensor : dev.query_sensors()) {
     bool is_color = false, is_depth = false;
     for (auto & p : sensor.get_stream_profiles()) {
@@ -536,20 +541,8 @@ void RealsenseCameraNode::apply_sensor_options(rs2::pipeline_profile & profile)
     // --- RGB sensor ---
     if (is_color && enable_color_) {
       try {
-        if (sensor.supports(RS2_OPTION_ENABLE_AUTO_EXPOSURE)) {
-          sensor.set_option(RS2_OPTION_ENABLE_AUTO_EXPOSURE, rgb_auto_exposure_ ? 1.0f : 0.0f);
-          RCLCPP_INFO(get_logger(), "RGB auto_exposure=%s", rgb_auto_exposure_ ? "true" : "false");
-        }
-        if (!rgb_auto_exposure_) {
-          if (rgb_exposure_ > 0 && sensor.supports(RS2_OPTION_EXPOSURE)) {
-            sensor.set_option(RS2_OPTION_EXPOSURE, static_cast<float>(rgb_exposure_));
-            RCLCPP_INFO(get_logger(), "RGB exposure=%d", rgb_exposure_);
-          }
-          if (rgb_gain_ > 0 && sensor.supports(RS2_OPTION_GAIN)) {
-            sensor.set_option(RS2_OPTION_GAIN, static_cast<float>(rgb_gain_));
-            RCLCPP_INFO(get_logger(), "RGB gain=%d", rgb_gain_);
-          }
-        }
+        color_sensor_ = sensor;
+        apply_rgb_sensor_options(sensor, rgb_auto_exposure_, rgb_exposure_, rgb_gain_);
       } catch (const rs2::error & e) {
         RCLCPP_WARN(get_logger(), "Failed to set RGB sensor option: %s", e.what());
       }
@@ -577,6 +570,100 @@ void RealsenseCameraNode::apply_sensor_options(rs2::pipeline_profile & profile)
       }
     }
   }
+}
+
+void RealsenseCameraNode::apply_rgb_sensor_options(
+  rs2::sensor & sensor, bool auto_exposure, int exposure, int gain)
+{
+  if (sensor.supports(RS2_OPTION_ENABLE_AUTO_EXPOSURE)) {
+    sensor.set_option(RS2_OPTION_ENABLE_AUTO_EXPOSURE, auto_exposure ? 1.0f : 0.0f);
+    RCLCPP_INFO(get_logger(), "RGB auto_exposure=%s", auto_exposure ? "true" : "false");
+  }
+  if (!auto_exposure) {
+    if (exposure > 0 && sensor.supports(RS2_OPTION_EXPOSURE)) {
+      sensor.set_option(RS2_OPTION_EXPOSURE, static_cast<float>(exposure));
+      RCLCPP_INFO(get_logger(), "RGB exposure=%d", exposure);
+    }
+    if (gain > 0 && sensor.supports(RS2_OPTION_GAIN)) {
+      sensor.set_option(RS2_OPTION_GAIN, static_cast<float>(gain));
+      RCLCPP_INFO(get_logger(), "RGB gain=%d", gain);
+    }
+  }
+}
+
+rcl_interfaces::msg::SetParametersResult RealsenseCameraNode::handle_runtime_parameters(
+  const std::vector<rclcpp::Parameter> & parameters)
+{
+  rcl_interfaces::msg::SetParametersResult result;
+  result.successful = true;
+
+  bool rgb_params_changed = false;
+  bool new_rgb_auto_exposure = rgb_auto_exposure_;
+  int new_rgb_exposure = rgb_exposure_;
+  int new_rgb_gain = rgb_gain_;
+
+  for (const auto & parameter : parameters) {
+    if (parameter.get_name() == "rgb_camera.enable_auto_exposure") {
+      if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_BOOL) {
+        result.successful = false;
+        result.reason = "rgb_camera.enable_auto_exposure must be a bool";
+        return result;
+      }
+      new_rgb_auto_exposure = parameter.as_bool();
+      rgb_params_changed = true;
+    } else if (parameter.get_name() == "rgb_camera.exposure") {
+      if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_INTEGER) {
+        result.successful = false;
+        result.reason = "rgb_camera.exposure must be an integer";
+        return result;
+      }
+      if (parameter.as_int() < 0) {
+        result.successful = false;
+        result.reason = "rgb_camera.exposure must be >= 0";
+        return result;
+      }
+      new_rgb_exposure = static_cast<int>(parameter.as_int());
+      rgb_params_changed = true;
+    } else if (parameter.get_name() == "rgb_camera.gain") {
+      if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_INTEGER) {
+        result.successful = false;
+        result.reason = "rgb_camera.gain must be an integer";
+        return result;
+      }
+      if (parameter.as_int() < 0) {
+        result.successful = false;
+        result.reason = "rgb_camera.gain must be >= 0";
+        return result;
+      }
+      new_rgb_gain = static_cast<int>(parameter.as_int());
+      rgb_params_changed = true;
+    }
+  }
+
+  if (!rgb_params_changed) {
+    return result;
+  }
+
+  std::lock_guard<std::mutex> lock(sensor_options_mutex_);
+  if (running_ && color_sensor_) {
+    try {
+      apply_rgb_sensor_options(
+        color_sensor_, new_rgb_auto_exposure, new_rgb_exposure, new_rgb_gain);
+    } catch (const rs2::error & e) {
+      result.successful = false;
+      result.reason = std::string("Failed to apply RGB sensor option: ") + e.what();
+      return result;
+    }
+  } else {
+    RCLCPP_INFO(
+      get_logger(),
+      "RGB sensor is not active yet; updated parameters will take effect on next pipeline start.");
+  }
+
+  rgb_auto_exposure_ = new_rgb_auto_exposure;
+  rgb_exposure_ = new_rgb_exposure;
+  rgb_gain_ = new_rgb_gain;
+  return result;
 }
 
 #ifdef HAVE_CUDA
