@@ -72,22 +72,22 @@ loop isn't fighting an untuned speed loop.
 | 2A.4 | If actual > setpoint → increase `RO_MAX_THR_SPEED`; if actual < setpoint → decrease | `RO_MAX_THR_SPEED` |
 | 2A.5 | Repeat until feed-forward tracks within ~10% | — |
 
-### 2B: Yaw Rate PID (turning)
+### 2B: Speed PID (refinement)
 
 | Step | Action | Parameter |
 |------|--------|-----------|
-| 2B.1 | Drive at moderate speed, command various angular.z (0.3, 0.5, 0.8 rad/s) | — |
-| 2B.2 | Plot `adjusted_yaw_rate_setpoint` vs `measured_yaw_rate` from `RoverRateStatus` | — |
-| 2B.3 | Increase until measured tracks setpoint without excessive overshoot | `RO_YAW_RATE_P` (start at 1.0) |
-| 2B.4 | If steady-state error remains, add integral gain gradually | `RO_YAW_RATE_I` (start at 0.01) |
+| 2B.1 | Add small proportional gain to improve step response | `RO_SPEED_P` (start at 0.1) |
+| 2B.2 | If steady-state speed error under load, add integral gain | `RO_SPEED_I` (start at 0.01) |
+| 2B.3 | Optionally cap maximum commanded speed | `RO_SPEED_LIM` |
 
-### 2C: Speed PID (refinement)
+### 2C: Yaw Rate PID (turning)
 
 | Step | Action | Parameter |
 |------|--------|-----------|
-| 2C.1 | Add small proportional gain to improve step response | `RO_SPEED_P` (start at 0.1) |
-| 2C.2 | If steady-state speed error under load, add integral gain | `RO_SPEED_I` (start at 0.01) |
-| 2C.3 | Optionally cap maximum commanded speed | `RO_SPEED_LIM` |
+| 2C.1 | Drive at moderate speed, command various angular.z (0.3, 0.5, 0.8 rad/s) | — |
+| 2C.2 | Plot `adjusted_yaw_rate_setpoint` vs `measured_yaw_rate` from `RoverRateStatus` | — |
+| 2C.3 | Increase until measured tracks setpoint without excessive overshoot | `RO_YAW_RATE_P` (start at 1.0) |
+| 2C.4 | If steady-state error remains, add integral gain gradually | `RO_YAW_RATE_I` (start at 0.01) |
 
 **Log messages:** `RoverVelocityStatus` (speed setpoint vs measured), `RoverRateStatus` (yaw rate setpoint vs measured)
 
@@ -156,13 +156,13 @@ All params verified against Cube Black firmware (PX4 main branch, 2026-05-19).
 | `RO_ACCEL_LIM` | 1 | Limit | -1 (disabled) | Observe from log |
 | `RO_DECEL_LIM` | 1, 5 | Limit | -1 (disabled) | Observe from log |
 | `RO_YAW_RATE_LIM` | 1 | Limit | 90 rad/s (unlimited) | Observe max yaw rate |
-| `RO_YAW_ACCEL_LIM` | 2B | Limit | -1 (disabled) | Optional: limit yaw acceleration |
-| `RO_YAW_RATE_P` | 2B | Yaw rate PID | 0.0 | 1.0 |
-| `RO_YAW_RATE_I` | 2B | Yaw rate PID | 0.0 | 0.01 |
-| `RO_YAW_RATE_CORR` | 2B | Yaw rate correction | 1.0 | Leave at 1.0 unless needed |
-| `RO_SPEED_P` | 2C | Speed PID | 0.0 | 0.1 |
-| `RO_SPEED_I` | 2C | Speed PID | 0.0 | 0.01 |
-| `RO_SPEED_LIM` | 2C | Limit | 2.0 m/s | — |
+| `RO_SPEED_P` | 2B | Speed PID | 0.0 | 0.1 |
+| `RO_SPEED_I` | 2B | Speed PID | 0.0 | 0.01 |
+| `RO_SPEED_LIM` | 2B | Limit | 2.0 m/s | — |
+| `RO_YAW_ACCEL_LIM` | 2C | Limit | -1 (disabled) | Optional: limit yaw acceleration |
+| `RO_YAW_RATE_P` | 2C | Yaw rate PID | 0.0 | 1.0 |
+| `RO_YAW_RATE_I` | 2C | Yaw rate PID | 0.0 | 0.01 |
+| `RO_YAW_RATE_CORR` | 2C | Yaw rate correction | 1.0 | Leave at 1.0 unless needed |
 | `RO_YAW_P` | 3 | Yaw attitude | 0.0 | 1.0 |
 | `PP_LOOKAHD_GAIN` | 4 | Pure pursuit | — | 1.0 |
 | `PP_LOOKAHD_MIN` | 4 | Pure pursuit | — | — |

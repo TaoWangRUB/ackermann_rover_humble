@@ -4,9 +4,11 @@
 #include "rover_health.pb.h"
 
 #include <cmath>
+#include <chrono>
 #include <csignal>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <thread>
 #include <unistd.h>
 
 namespace rover_monitor
@@ -777,7 +779,8 @@ void TelemetryPublisher::handle_register_mode(const std::string & cmd_id,
     mode_procs_.erase(mode);
   }
 
-  // Also check if a process with this exe name is already running (launched externally)
+  // Check if a process with this exe name is already running (launched externally).
+  // If found, adopt it: track the PID and wait for the nav_state announce.
   {
     std::string pgrep_cmd = "pgrep -f 'px4_bringup.*" + exe_name + "' 2>/dev/null";
     FILE * fp = ::popen(pgrep_cmd.c_str(), "r");
@@ -789,13 +792,35 @@ void TelemetryPublisher::handle_register_mode(const std::string & cmd_id,
       }
       ::pclose(fp);
       if (existing_pid > 0) {
-        // Track it so unregister works
-        std::lock_guard<std::mutex> lock(mode_proc_mutex_);
-        mode_procs_[mode] = existing_pid;
+        // Adopt: track it so unregister/activate work
+        {
+          std::lock_guard<std::mutex> lock(mode_proc_mutex_);
+          mode_procs_[mode] = existing_pid;
+        }
+        // Wait for nav_state to appear in cache (the mode may have just
+        // re-registered with PX4 after a respawn). Poll up to 10 s.
+        bool nav_cached = false;
+        for (int i = 0; i < 20; ++i) {
+          {
+            std::lock_guard<std::mutex> lock(mode_id_mutex_);
+            if (mode_id_by_name_.count(mode)) {
+              nav_cached = true;
+              break;
+            }
+          }
+          std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+        std::string detail = "Mode '" + mode + "' adopted externally (pid=" +
+          std::to_string(existing_pid) + ")";
+        if (nav_cached) {
+          std::lock_guard<std::mutex> lock(mode_id_mutex_);
+          detail += ", nav_state=" +
+            std::to_string(static_cast<int>(mode_id_by_name_[mode]));
+        } else {
+          detail += ", nav_state pending (activate may need retry)";
+        }
         send_ack(cmd_id, rover_monitor_proto::CMD_REGISTER_MODE,
-          rover_monitor_proto::ACK_REJECTED,
-          "Mode '" + mode + "' already running externally (pid=" +
-            std::to_string(existing_pid) + ")");
+          rover_monitor_proto::ACK_ACCEPTED, detail);
         return;
       }
     }
