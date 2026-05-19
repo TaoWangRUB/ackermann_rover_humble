@@ -22,6 +22,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <sys/types.h>  // pid_t
 
 namespace rover_monitor
 {
@@ -64,6 +65,8 @@ private:
   void handle_cancel_goal(const std::string & cmd_id);
   void handle_drive(const std::string & cmd_id, const std::string & payload);
   void handle_record(const std::string & cmd_id, const std::string & payload);
+  void handle_register_mode(const std::string & cmd_id, const std::string & payload);
+  void handle_unregister_mode(const std::string & cmd_id, const std::string & payload);
 
   // Dedup
   bool is_duplicate(const std::string & cmd_id);
@@ -111,6 +114,12 @@ private:
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr mode_announce_sub_;
   std::mutex mode_id_mutex_;
   std::unordered_map<std::string, int8_t> mode_id_by_name_;
+
+  // Mode process management: mode_name → PID of spawned mode node
+  std::mutex mode_proc_mutex_;
+  std::unordered_map<std::string, pid_t> mode_procs_;
+  // Map mode display name → executable name
+  static const std::unordered_map<std::string, std::string> kModeExecutableMap;
 
   // E-stop twist publisher
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_pub_;

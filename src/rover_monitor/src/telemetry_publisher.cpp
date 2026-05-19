@@ -4,9 +4,22 @@
 #include "rover_health.pb.h"
 
 #include <cmath>
+#include <csignal>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 namespace rover_monitor
 {
+
+// Map mode display name → ros2 run executable name (package: px4_bringup)
+const std::unordered_map<std::string, std::string>
+  TelemetryPublisher::kModeExecutableMap = {
+    {"Rover Speed Steering", "rover_speed_steering_mode"},
+    {"Rover Speed Attitude", "rover_speed_attitude_mode"},
+    {"Rover Speed Rate", "rover_speed_rate_mode"},
+    {"RoverManual", "rover_manual_mode"},
+  };
 
 namespace
 {
@@ -221,6 +234,8 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
         mqtt_client_->subscribe("rover/cmd/cancel_goal", cmd_qos_);
         mqtt_client_->subscribe("rover/cmd/drive", 0);  // QoS 0 for high-freq drive
         mqtt_client_->subscribe("rover/cmd/record", cmd_qos_);
+        mqtt_client_->subscribe("rover/cmd/register_mode", cmd_qos_);
+        mqtt_client_->subscribe("rover/cmd/unregister_mode", cmd_qos_);
       } catch (const mqtt::exception & e) {
         RCLCPP_WARN(this->get_logger(), "MQTT subscribe failed: %s", e.what());
       }
@@ -280,6 +295,8 @@ void TelemetryPublisher::connect_mqtt()
       mqtt_client_->subscribe("rover/cmd/cancel_goal", cmd_qos_);
       mqtt_client_->subscribe("rover/cmd/drive", 0);  // QoS 0 for high-freq drive
       mqtt_client_->subscribe("rover/cmd/record", cmd_qos_);
+      mqtt_client_->subscribe("rover/cmd/register_mode", cmd_qos_);
+      mqtt_client_->subscribe("rover/cmd/unregister_mode", cmd_qos_);
       RCLCPP_INFO(this->get_logger(), "Subscribed to rover/cmd/* topics (QoS %d)",
         cmd_qos_);
     } catch (const mqtt::exception & e) {
@@ -387,6 +404,12 @@ void TelemetryPublisher::dispatch_command(const std::string & cmd_id, int cmd_ty
       break;
     case rover_monitor_proto::CMD_RECORD:
       handle_record(cmd_id, payload);
+      break;
+    case rover_monitor_proto::CMD_REGISTER_MODE:
+      handle_register_mode(cmd_id, payload);
+      break;
+    case rover_monitor_proto::CMD_UNREGISTER_MODE:
+      handle_unregister_mode(cmd_id, payload);
       break;
     default:
       RCLCPP_WARN(this->get_logger(), "Unknown command type %d for cmd_id=%s",
@@ -711,6 +734,137 @@ void TelemetryPublisher::handle_set_mode(const std::string & cmd_id,
     rover_monitor_proto::ACK_ACCEPTED,
     "Mode change sent to PX4: " + mode + " (nav_state=" +
       std::to_string(static_cast<int>(nav_state)) + ")");
+}
+
+void TelemetryPublisher::handle_register_mode(const std::string & cmd_id,
+  const std::string & payload)
+{
+  rover_monitor_proto::RoverCommand cmd;
+  cmd.ParseFromString(payload);
+
+  if (!cmd.has_register_mode()) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_REGISTER_MODE,
+      rover_monitor_proto::ACK_REJECTED, "Missing register_mode field");
+    return;
+  }
+
+  const auto & mode = cmd.register_mode().mode_name();
+  RCLCPP_INFO(this->get_logger(), "REGISTER_MODE command: cmd_id=%s mode=%s",
+    cmd_id.c_str(), mode.c_str());
+
+  // Look up executable
+  auto exe_it = kModeExecutableMap.find(mode);
+  if (exe_it == kModeExecutableMap.end()) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_REGISTER_MODE,
+      rover_monitor_proto::ACK_REJECTED,
+      "Unknown mode name: '" + mode + "'");
+    return;
+  }
+
+  // Check if already running
+  {
+    std::lock_guard<std::mutex> lock(mode_proc_mutex_);
+    auto it = mode_procs_.find(mode);
+    if (it != mode_procs_.end()) {
+      // Verify process is still alive
+      if (::kill(it->second, 0) == 0) {
+        send_ack(cmd_id, rover_monitor_proto::CMD_REGISTER_MODE,
+          rover_monitor_proto::ACK_REJECTED,
+          "Mode '" + mode + "' already registered (pid=" +
+            std::to_string(it->second) + ")");
+        return;
+      }
+      // Process is dead, clean up stale entry
+      mode_procs_.erase(it);
+    }
+  }
+
+  const std::string & exe_name = exe_it->second;
+
+  // Fork and exec: ros2 run px4_bringup <executable>
+  pid_t pid = ::fork();
+  if (pid < 0) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_REGISTER_MODE,
+      rover_monitor_proto::ACK_FAILED,
+      "fork() failed: " + std::string(strerror(errno)));
+    return;
+  }
+
+  if (pid == 0) {
+    // Child process — exec ros2 run
+    // Detach from parent's process group so SIGTERM to parent doesn't cascade
+    ::setsid();
+    ::execlp("ros2", "ros2", "run", "px4_bringup", exe_name.c_str(), nullptr);
+    // If execlp returns, it failed
+    _exit(127);
+  }
+
+  // Parent process
+  {
+    std::lock_guard<std::mutex> lock(mode_proc_mutex_);
+    mode_procs_[mode] = pid;
+  }
+
+  RCLCPP_INFO(this->get_logger(),
+    "Spawned mode node: %s (exe=%s, pid=%d)",
+    mode.c_str(), exe_name.c_str(), pid);
+
+  send_ack(cmd_id, rover_monitor_proto::CMD_REGISTER_MODE,
+    rover_monitor_proto::ACK_ACCEPTED,
+    "Mode node spawned: " + mode + " (pid=" + std::to_string(pid) + ")");
+}
+
+void TelemetryPublisher::handle_unregister_mode(const std::string & cmd_id,
+  const std::string & payload)
+{
+  rover_monitor_proto::RoverCommand cmd;
+  cmd.ParseFromString(payload);
+
+  if (!cmd.has_unregister_mode()) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_UNREGISTER_MODE,
+      rover_monitor_proto::ACK_REJECTED, "Missing unregister_mode field");
+    return;
+  }
+
+  const auto & mode = cmd.unregister_mode().mode_name();
+  RCLCPP_INFO(this->get_logger(), "UNREGISTER_MODE command: cmd_id=%s mode=%s",
+    cmd_id.c_str(), mode.c_str());
+
+  pid_t pid = -1;
+  {
+    std::lock_guard<std::mutex> lock(mode_proc_mutex_);
+    auto it = mode_procs_.find(mode);
+    if (it == mode_procs_.end()) {
+      send_ack(cmd_id, rover_monitor_proto::CMD_UNREGISTER_MODE,
+        rover_monitor_proto::ACK_REJECTED,
+        "Mode '" + mode + "' is not registered (no tracked process)");
+      return;
+    }
+    pid = it->second;
+    mode_procs_.erase(it);
+  }
+
+  // Remove cached nav_state
+  {
+    std::lock_guard<std::mutex> lock(mode_id_mutex_);
+    mode_id_by_name_.erase(mode);
+  }
+
+  // Send SIGTERM then wait briefly
+  if (::kill(pid, SIGTERM) == 0) {
+    RCLCPP_INFO(this->get_logger(),
+      "Sent SIGTERM to mode node: %s (pid=%d)", mode.c_str(), pid);
+    // Non-blocking waitpid to reap zombie (best effort)
+    int status = 0;
+    ::waitpid(pid, &status, WNOHANG);
+  } else {
+    RCLCPP_WARN(this->get_logger(),
+      "kill(%d, SIGTERM) failed: %s", pid, strerror(errno));
+  }
+
+  send_ack(cmd_id, rover_monitor_proto::CMD_UNREGISTER_MODE,
+    rover_monitor_proto::ACK_ACCEPTED,
+    "Mode node terminated: " + mode + " (pid=" + std::to_string(pid) + ")");
 }
 
 void TelemetryPublisher::handle_cancel_goal(const std::string & cmd_id)

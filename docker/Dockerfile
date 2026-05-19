@@ -62,6 +62,10 @@ RUN curl -sSL https://packages.osrfoundation.org/gazebo.gpg \
 
 ENV ROS_DISTRO=${ROS_DISTRO}
 ENV ROS_ROOT=/opt/ros/${ROS_DISTRO}
+ENV CUDA_HOME=/usr/local/cuda
+ENV CUDA_PATH=/usr/local/cuda
+ENV PATH=/usr/local/cuda/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/targets/aarch64-linux/lib:/usr/local/cuda/targets/x86_64-linux/lib
 
 # Install ROS 2, Gazebo (gz), ROS–gz bridge, and ROS dev tools
 RUN apt-get update && apt-get install -y \
