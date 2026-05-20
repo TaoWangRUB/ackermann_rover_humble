@@ -34,6 +34,7 @@ class InfluxDBWriter:
         bus.subscribe("evt.health", self._on_health)
         bus.subscribe("evt.alert", self._on_alert)
         bus.subscribe("evt.cmd_ack", self._on_cmd_ack)
+        bus.subscribe("evt.px4_hw", self._on_px4_hw)
 
     async def start(self) -> None:
         if not HAS_INFLUX:
@@ -85,6 +86,10 @@ class InfluxDBWriter:
                 p.field("px4_battery_v", px4.battery_voltage_v)
                 p.field("px4_battery_pct", px4.battery_remaining_pct)
                 p.field("px4_heartbeat_age_ms", px4.heartbeat_age_ms)
+                if px4.cpu_load_pct > 0:
+                    p.field("px4_cpu_pct", px4.cpu_load_pct)
+                if px4.ram_usage_pct > 0:
+                    p.field("px4_ram_pct", px4.ram_usage_pct)
 
             # Jetson fields
             if data.HasField("jetson"):
@@ -133,3 +138,17 @@ class InfluxDBWriter:
             self._write_api.write(bucket=self._bucket, record=p)
         except Exception:
             logger.exception("InfluxDB command write failed")
+
+    async def _on_px4_hw(self, data: Any = None, **kwargs: Any) -> None:
+        if not self._write_api or not isinstance(data, dict):
+            return
+        try:
+            p = Point("rover_telemetry")
+            p.tag("source", "px4_hw_monitor")
+            if "cpu_load_pct" in data:
+                p.field("px4_cpu_pct", data["cpu_load_pct"])
+            if "ram_usage_pct" in data:
+                p.field("px4_ram_pct", data["ram_usage_pct"])
+            self._write_api.write(bucket=self._bucket, record=p)
+        except Exception:
+            logger.exception("InfluxDB px4_hw write failed")

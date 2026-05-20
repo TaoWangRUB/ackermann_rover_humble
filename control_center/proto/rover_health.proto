@@ -29,6 +29,8 @@ message Px4Status {
   int32 error_code = 10;
   string error_msg = 11;
   int64 timestamp = 12;
+  float cpu_load_pct = 13;
+  float ram_usage_pct = 14;
 }
 
 message JetsonStatus {
