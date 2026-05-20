@@ -50,10 +50,13 @@ class DashboardServer:
         if HAS_FASTAPI:
             self._build_app()
 
+        self._px4_hw: dict = {}  # latest PX4 HW metrics from MAVLink
+
         # Subscribe to events for WS broadcast
         bus.subscribe("evt.health", self._broadcast_health)
         bus.subscribe("evt.alert", self._broadcast_alert)
         bus.subscribe("evt.cmd_ack_resolved", self._broadcast_cmd_ack)
+        bus.subscribe("evt.px4_hw", self._on_px4_hw)
 
     def _build_app(self) -> None:
         self._app = FastAPI(title="Rover Control Center")
@@ -179,11 +182,27 @@ class DashboardServer:
             self._server.should_exit = True
             logger.info("Dashboard server stopped")
 
+    async def _on_px4_hw(self, data: Any = None, **kwargs: Any) -> None:
+        if isinstance(data, dict):
+            self._px4_hw = data
+
     async def _broadcast_health(self, data: Any = None, **kwargs: Any) -> None:
         if not self._health_ws_clients or not MessageToDict:
             return
         effective_health, _ = await self._cache.get_effective_health()
-        payload = json.dumps(MessageToDict(effective_health if effective_health is not None else data))
+        health_dict = MessageToDict(effective_health if effective_health is not None else data)
+        # Merge PX4 HW metrics (CPU/RAM from MAVLink) into the px4 sub-dict
+        if self._px4_hw and "px4" in health_dict:
+            for k in ("cpuLoadPct", "ramUsagePct"):
+                snake = "".join(f"_{c.lower()}" if c.isupper() else c for c in k)
+                if snake in self._px4_hw:
+                    health_dict["px4"][k] = self._px4_hw[snake]
+            # Also pass raw keys
+            if "cpu_load_pct" in self._px4_hw:
+                health_dict["px4"]["cpuLoadPct"] = self._px4_hw["cpu_load_pct"]
+            if "ram_usage_pct" in self._px4_hw:
+                health_dict["px4"]["ramUsagePct"] = self._px4_hw["ram_usage_pct"]
+        payload = json.dumps(health_dict)
         dead: set[Any] = set()
         for ws in self._health_ws_clients:
             try:

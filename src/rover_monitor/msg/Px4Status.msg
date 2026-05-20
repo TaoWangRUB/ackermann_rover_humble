@@ -10,3 +10,5 @@ int32 heartbeat_age_ms
 int32 error_code
 string error_msg
 int64 timestamp
+float32 cpu_load_pct
+float32 ram_usage_pct

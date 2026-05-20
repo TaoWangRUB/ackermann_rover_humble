@@ -141,6 +141,9 @@ else
     fi
 fi
 
+# ── Kill host-side helper processes ─────────────────────────────────────────
+pkill -f 'px4_hw_monitor\.py' 2>/dev/null || true
+
 # ── Tmux session cleanup (host) ────────────────────────────────────────────
 if [[ -n "${TMUX_SESSION}" ]]; then
     if tmux has-session -t "${TMUX_SESSION}" 2>/dev/null; then

@@ -122,6 +122,12 @@ class MQTTReceiver:
                 asyncio.run_coroutine_threadsafe(
                     self._bus.emit("evt.alert", data=health), self._loop)
 
+            elif topic == "rover/health/px4_hw":
+                import json as _json
+                hw = _json.loads(payload)
+                asyncio.run_coroutine_threadsafe(
+                    self._bus.emit("evt.px4_hw", data=hw), self._loop)
+
             elif topic == "rover/cmd/ack":
                 ack = pb.CommandAck()
                 ack.ParseFromString(payload)

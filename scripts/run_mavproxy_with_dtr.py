@@ -21,7 +21,9 @@ def main():
         "MAVPROXY_SCRIPT",
         os.path.expanduser("~/.local/lib/python3.8/site-packages/MAVProxy/mavproxy.py"),
     )
-    sys.argv = [mavproxy_path] + sys.argv[1:]
+    # --non-interactive prevents the console input loop that causes 80%+ CPU
+    # when MAVProxy runs in a non-tty context (pipe, tmux send-keys, etc.).
+    sys.argv = [mavproxy_path, "--non-interactive"] + sys.argv[1:]
     runpy.run_path(mavproxy_path, run_name="__main__")
 
 

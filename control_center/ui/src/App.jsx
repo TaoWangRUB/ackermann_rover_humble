@@ -121,6 +121,8 @@ function Px4Panel({ px4, hwMode }) {
       <p>Nav State: {px4.navStateLabel}</p>
       <p>Battery: {px4.batteryRemainingPct?.toFixed(0)}% ({px4.batteryVoltageV?.toFixed(1)}V)</p>
       <p>Heartbeat Age: {px4.heartbeatAgeMs} ms</p>
+      {px4.cpuLoadPct != null && <p>CPU: {px4.cpuLoadPct.toFixed(1)}%</p>}
+      {px4.ramUsagePct != null && <p>RAM: {px4.ramUsagePct.toFixed(1)}%</p>}
     </Panel>
   );
 }
