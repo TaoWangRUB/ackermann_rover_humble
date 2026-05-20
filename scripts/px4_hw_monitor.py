@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """PX4 hardware monitor — reads CPU load and RAM via MAVLink, publishes to MQTT.
 
-Listens for MAVLink SYS_STATUS (CPU load) and MEMINFO (RAM) from MAVProxy,
-publishes JSON to MQTT topic ``rover/health/px4_hw``.
+Listens for MAVLink SYS_STATUS (CPU load) and polls NuttX ``free`` command
+via the MAVLink shell (SERIAL_CONTROL) for RAM usage.
+Publishes JSON to MQTT topic ``rover/health/px4_hw``.
 
 Requires: pymavlink, paho-mqtt  (both already on the Jetson host)
 
@@ -14,6 +15,7 @@ Usage:
 import argparse
 import json
 import logging
+import re
 import signal
 import sys
 import time
@@ -28,6 +30,43 @@ log = logging.getLogger("px4_hw_monitor")
 
 TOPIC = "rover/health/px4_hw"
 DEFAULT_INTERVAL = 2.0
+NSH_FREE_INTERVAL = 10.0  # poll NSH free every 10 seconds (lightweight)
+
+
+def _nsh_free(mav) -> tuple:
+    """Run ``free`` on PX4 NuttX shell via MAVLink SERIAL_CONTROL.
+
+    Returns (total_bytes, used_bytes) from the Umem line, or (None, None).
+    """
+    cmd = b"free\n"
+    padding = b"\x00" * (70 - len(cmd))
+    try:
+        mav.mav.serial_control_send(
+            10,  # SERIAL_CONTROL_DEV_SHELL
+            6,   # FLAG_RESPOND | FLAG_EXCLUSIVE
+            0, 0, len(cmd), cmd + padding,
+        )
+    except Exception:
+        return None, None
+
+    output = b""
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        msg = mav.recv_match(type="SERIAL_CONTROL", blocking=True, timeout=0.5)
+        if msg and msg.count > 0:
+            output += bytes(msg.data[:msg.count])
+            if b"nsh>" in output and b"Umem" in output:
+                break  # got the full response
+
+    # Parse:  "        Umem:     231488     212960      18528 ..."
+    for line in output.decode("ascii", errors="replace").splitlines():
+        if "Umem" in line:
+            nums = re.findall(r"\d+", line)
+            if len(nums) >= 3:
+                total, used = int(nums[0]), int(nums[1])
+                if total > 0:
+                    return total, used
+    return None, None
 
 
 def main() -> int:
@@ -84,6 +123,7 @@ def main() -> int:
     cpu_load_pct: float | None = None
     ram_usage_pct: float | None = None
     last_publish = 0.0
+    last_nsh_free = 0.0
     running = True
 
     def _stop(sig, frame):
@@ -100,16 +140,17 @@ def main() -> int:
             if mtype == "SYS_STATUS":
                 # load: 0-1000 (permille of mainloop time)
                 cpu_load_pct = msg.load / 10.0
-            elif mtype == "MEMINFO":
-                # freemem32: bytes free (uint32); freemem: uint16 (legacy)
-                free_b = msg.freemem32 if hasattr(msg, "freemem32") and msg.freemem32 > 0 else msg.freemem
-                if free_b > 0:
-                    # Cube Black total SRAM ~256 KB
-                    TOTAL_RAM = 256 * 1024
-                    used = max(0, TOTAL_RAM - free_b)
-                    ram_usage_pct = (used / TOTAL_RAM) * 100.0
 
         now = time.monotonic()
+
+        # Poll NuttX "free" for RAM usage (every NSH_FREE_INTERVAL seconds)
+        if now - last_nsh_free >= NSH_FREE_INTERVAL and mav.target_system:
+            total, used = _nsh_free(mav)
+            if total is not None and total > 0:
+                ram_usage_pct = (used / total) * 100.0
+                log.debug("NSH free: %d/%d bytes (%.1f%%)", used, total, ram_usage_pct)
+            last_nsh_free = now
+
         if now - last_publish >= args.interval and cpu_load_pct is not None:
             payload: dict = {
                 "cpu_load_pct": round(cpu_load_pct, 1),
