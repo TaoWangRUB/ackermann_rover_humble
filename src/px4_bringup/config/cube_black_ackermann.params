@@ -112,11 +112,31 @@
 # Disable GPS serial port — module never starts, frees ~6 KB
 1	1	GPS_1_CONFIG	0	6
 
-# Disable TELEM1 MAVLink — only USB MAVLink needed, frees ~17 KB
+# Disable MAVLink instance 0 (TELEM1, /dev/ttyS1) — nobody connects to it.
+# Frees ~17 KB RAM. USB MAVLink (instance 2) is unaffected.
+# NOTE: MAV_1_CONFIG is already 0 by default (MAVLink instance 1 unused).
+1	1	MAV_0_CONFIG	0	6
 1	1	MAV_1_CONFIG	0	6
 
-# Disable SD logger at boot — no SD card, saves RAM + CPU
-1	1	SDLOG_BACKEND	0	6
+# ── SD Card Logging ─────────────────────────────────────────────────────────
+# SDLOG_BACKEND: 0=disabled, 1=SD card, 2=MAVLink.
+# SD card logging enabled for post-flight analysis (uses ~6 KB RAM when armed).
+1	1	SDLOG_BACKEND	1	6
+
+# SDLOG_MODE: 0=log when armed, 1=from boot until disarm, 2=boot to shutdown.
+# Armed-only minimises wear and RAM consumption.
+1	1	SDLOG_MODE	0	6
+
+# SDLOG_PROFILE: bitmask controlling which topic groups are logged.
+#   bit 0 (1) = Default set (attitude, position, RC, battery, system)
+#   bit 1 (2) = Estimator replay
+#   bit 2 (4) = High rate (IMU, gyro, accel at full speed)
+#   bit 3 (8) = Debug topics
+#   bit 4 (16) = Sensor comparison
+#   bit 5 (32) = GPS satellite info
+#   bit 6 (64) = Raw sensor data
+# Use 1 (default) for standard flight review; add 2 for EKF diagnostics.
+1	1	SDLOG_PROFILE	1	6
 
 # ── USB CDC MAVLink autostart ────────────────────────────────────────────────
 # Keep USB MAVLink available without requiring QGroundControl to first trigger

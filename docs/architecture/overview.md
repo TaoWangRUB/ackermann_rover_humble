@@ -1152,8 +1152,11 @@ SLAM -->|"TF map->odom"| LocalCostmap
 | `COM_RC_IN_MODE` | 3 | RC + MAVLink joystick (companion + RC) |
 | `UXRCE_DDS_CFG` | 102 | DDS on TELEM2 |
 | `GPS_1_CONFIG` | 0 | Disable GPS module at boot (frees ~6 KB RAM) |
-| `MAV_1_CONFIG` | 0 | Disable TELEM1 MAVLink at boot (frees ~17 KB RAM) |
-| `SDLOG_BACKEND` | 0 | Disable SD logger at boot (no SD card, saves RAM) |
+| `MAV_0_CONFIG` | 0 | Disable MAVLink instance 0 on TELEM1 (frees ~17 KB RAM) |
+| `MAV_1_CONFIG` | 0 | Disable MAVLink instance 1 (unused, already default 0) |
+| `SDLOG_BACKEND` | 1 | SD card logging enabled for post-flight analysis |
+| `SDLOG_MODE` | 0 | Log when armed only (minimises wear and RAM) |
+| `SDLOG_PROFILE` | 1 | Default logging profile (attitude, position, RC, battery) |
 | `CBRK_SUPPLY_CHK` | 894281 | Bypass battery check (USB power only) |
 
 ### Test Procedure
@@ -1170,17 +1173,19 @@ ls -la /dev/ttyACM* /dev/ttyUSB*
 
 The Cube Black has only 231 KB RAM. With default PX4 modules all running, only ~12 KB
 is free — not enough for DDS + VO. The parameter file disables unused modules at boot
-via `GPS_1_CONFIG=0`, `MAV_1_CONFIG=0`, and `SDLOG_BACKEND=0`, which frees ~23 KB at startup.
+via `GPS_1_CONFIG=0`, `MAV_0_CONFIG=0`, and `MAV_1_CONFIG=0`, which frees ~23 KB at startup.
+SD card logging is enabled (`SDLOG_BACKEND=1`, `SDLOG_PROFILE=1`) and activates only
+when armed (`SDLOG_MODE=0`), consuming ~6 KB RAM while logging.
 
 Verify after boot:
 
 ```bash
-# Check free RAM — should be ~28 KB or more
+# Check free RAM — should be ~28 KB or more (before arming)
 ./scripts/px4_cmd.sh 'free' 8
 
-# Confirm logger is off (SDLOG_BACKEND=0 prevents startup)
+# Confirm logger is ready (starts when armed)
 ./scripts/px4_cmd.sh 'logger status' 8
-# Expected: "not running"
+# Expected: "not running" (disarmed) or "running" (armed)
 ```
 
 If free RAM is below 20 KB, the USB MAVLink port may become unresponsive under DDS load.
@@ -1188,8 +1193,10 @@ Check that the RAM-saving params are active:
 
 ```bash
 ./scripts/px4_cmd.sh 'param show GPS_1_CONFIG' 8   # Expected: 0
+./scripts/px4_cmd.sh 'param show MAV_0_CONFIG' 8   # Expected: 0
 ./scripts/px4_cmd.sh 'param show MAV_1_CONFIG' 8   # Expected: 0
-./scripts/px4_cmd.sh 'param show SDLOG_BACKEND' 8  # Expected: 0
+./scripts/px4_cmd.sh 'param show SDLOG_BACKEND' 8  # Expected: 1
+./scripts/px4_cmd.sh 'param show SDLOG_PROFILE' 8  # Expected: 1
 ```
 
 **RAM comparison:**
@@ -1197,7 +1204,8 @@ Check that the RAM-saving params are active:
 | State | Free RAM | Largest Block |
 |-------|----------|---------------|
 | Default (all modules) | 12.7 KB | 8.3 KB |
-| With GPS_1_CONFIG=0 + MAV_1_CONFIG=0 + SDLOG_BACKEND=0 | 28.7 KB | 25.9 KB |
+| With GPS_1_CONFIG=0 + MAV_0_CONFIG=0 + MAV_1_CONFIG=0 | 28.7 KB | 25.9 KB |
+| Armed + SD logging (SDLOG_BACKEND=1) | ~18.5 KB | ~17.9 KB |
 | With DDS + VO running | ~22 KB | ~11 KB |
 
 #### Phase 3 — Start Companion Infrastructure
@@ -1373,22 +1381,36 @@ Without GPS, set the origin manually via MAVLink `SET_GPS_GLOBAL_ORIGIN` +
    leave ~12 KB free — not enough for DDS traffic. Stopping GPS + TELEM1 MAVLink frees
    ~28 KB, bringing free RAM to ~40 KB which allows DDS and USB MAVLink to coexist.
 
-2. **Logger is already off** on this build variant, so no additional savings there.
+2. **SD card logging is enabled** (`SDLOG_BACKEND=1`, `SDLOG_PROFILE=1`, `SDLOG_MODE=0`).
+   The logger starts when armed and writes the default topic set (attitude, position,
+   RC, battery, system) to the SD card. This consumes ~6 KB RAM while armed but provides
+   essential flight logs for post-flight review via [Flight Review](https://review.px4.io).
 
-3. **USB CDC is flaky.** The PX4 USB ACM port occasionally fails to respond after
+3. **MAVLink bridge replaces MAVProxy.** The lightweight `scripts/mavlink_bridge.py`
+   (select-based serial↔UDP forwarder) runs on the Jetson host at ~2% CPU, replacing
+   MAVProxy which consumed 80%+ CPU due to its tight polling loop. It forwards USB
+   MAVLink (`/dev/serial/by-id/usb-3D_Robotics_PX4_FMU_v2.x_0-if00`, 57600 baud) to
+   UDP 127.0.0.1:14550 and sends GCS heartbeats to keep PX4 telemetry active.
+
+4. **PX4 hardware monitor** (`scripts/px4_hw_monitor.py`) reads PX4 CPU load from
+   `SYS_STATUS.load` and RAM usage via the NSH `free` command over the MAVLink shell
+   (`SERIAL_CONTROL`), then publishes JSON to MQTT topic `rover/health/px4_hw` every 2s.
+   The Control Center dashboard merges this data into the PX4 panel.
+
+5. **USB CDC is flaky.** The PX4 USB ACM port occasionally fails to respond after
    rapid open/close cycles. The `px4_cmd.sh` wrapper (and underlying `px4_cmd.py`) includes
    retry logic (3 attempts with 2s delay) to handle this.
 
-4. **`commander status` output doesn't route through SERIAL_CONTROL.** Use ROS2
+6. **`commander status` output doesn't route through SERIAL_CONTROL.** Use ROS2
    `vehicle_status_v2` topic (via DDS) instead for status verification.
 
-5. **DDS topic naming:** PX4 publishes with `_v2` suffix (e.g., `/fmu/out/vehicle_status_v2`)
+7. **DDS topic naming:** PX4 publishes with `_v2` suffix (e.g., `/fmu/out/vehicle_status_v2`)
    and uses BEST_EFFORT + TRANSIENT_LOCAL QoS.
 
-6. **CBRK_SUPPLY_CHK=894281** is required for bench testing without a battery —
+8. **CBRK_SUPPLY_CHK=894281** is required for bench testing without a battery —
    otherwise `pre_flight_checks_pass` stays false due to 0.03V supply voltage.
 
-7. **XRCE-DDS stall causes custom mode unregistration when VO bridge is active.**
+9. **XRCE-DDS stall causes custom mode unregistration when VO bridge is active.**
    When `px4_vision_odom.py` publishes `vehicle_visual_odometry` at ≥10 Hz, the
    `uxrce_dds_client` on the STM32F427 occasionally stalls for up to ~1 second
    (measured: `cycle max 1012245us`). During the stall, `arming_check_reply`
@@ -1423,7 +1445,7 @@ Without GPS, set the origin manually via MAVLink `SET_GPS_GLOBAL_ORIGIN` +
    `uxrce_dds_client` (same priority 100) and worsening stall duration.
    Mitigate by reducing MAVLink telemetry rates: `param set MAV_0_RATE 4800`.
 
-8. **USB MAVLink RX-wedge between script invocations.** On Cube Black firmware
+10. **USB MAVLink RX-wedge between script invocations.** On Cube Black firmware
    the USB MAVLink instance is `mavlink_if1`, spawned by `cdcacm_autostart`
    (controlled by `SYS_USB_AUTO` + `USB_MAV_MODE`, NOT by `MAV_0_CONFIG` — USB
    is not a valid value in the `MAV_X_CONFIG` enum for FMUv3, see
