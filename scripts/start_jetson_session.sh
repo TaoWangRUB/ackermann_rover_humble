@@ -320,7 +320,7 @@ fi
 # ── Background: PX4 HW monitor (MAVLink → MQTT, only with telemetry) ─
 if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     (
-        sleep 15  # wait for MAVProxy to settle
+        sleep 15  # wait for MAVLink bridge to settle
         python3 "${SCRIPT_DIR}/px4_hw_monitor.py" \
             --mqtt-host "${BROKER_HOST}" \
             --interval 2 \

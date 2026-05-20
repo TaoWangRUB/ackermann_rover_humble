@@ -143,6 +143,7 @@ fi
 
 # ── Kill host-side helper processes ─────────────────────────────────────────
 pkill -f 'px4_hw_monitor\.py' 2>/dev/null || true
+pkill -f 'mavlink_bridge\.py' 2>/dev/null || true
 
 # ── Tmux session cleanup (host) ────────────────────────────────────────────
 if [[ -n "${TMUX_SESSION}" ]]; then
