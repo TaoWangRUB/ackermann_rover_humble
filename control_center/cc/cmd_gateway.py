@@ -1,5 +1,6 @@
 """CC-6b: Command Gateway — serialize and publish RoverCommand to MQTT."""
 import logging
+import time
 import uuid
 from typing import Any
 
@@ -95,7 +96,6 @@ class CommandGateway:
         cmd.cmd_id = cmd_id
         cmd.cmd_type = CMD_TYPE_MAP.get(cmd_type, 0)
         cmd.issued_by = issued_by
-        import time
         cmd.timestamp = int(time.time() * 1000)
 
         # Populate type-specific fields
@@ -110,8 +110,14 @@ class CommandGateway:
             cmd.set_param.param_name = params.get("param_name", "")
             cmd.set_param.param_value = params.get("param_value", "")
         elif cmd_type == "drive":
-            cmd.drive.speed_ms = float(params.get("speed_ms", 0.0))
-            cmd.drive.steering = float(params.get("steering", 0.0))
+            speed = float(params.get("speed_ms", 0.0))
+            steering = float(params.get("steering", 0.0))
+            if not -10.0 <= speed <= 10.0:
+                raise ValueError(f"speed_ms out of range [-10, 10]: {speed}")
+            if not -1.0 <= steering <= 1.0:
+                raise ValueError(f"steering out of range [-1, 1]: {steering}")
+            cmd.drive.speed_ms = speed
+            cmd.drive.steering = steering
         elif cmd_type == "record":
             action = str(params.get("action", "toggle")).lower()
             if action not in ("start", "stop", "toggle"):

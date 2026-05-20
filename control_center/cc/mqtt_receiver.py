@@ -5,6 +5,11 @@ import time
 from typing import Any
 
 import paho.mqtt.client as paho
+try:
+    from paho.mqtt.enums import CallbackAPIVersion
+    _PAHO_V2 = True
+except ImportError:
+    _PAHO_V2 = False
 
 from cc.event_bus import EventBus
 
@@ -30,7 +35,14 @@ class MQTTReceiver:
         self._reconnect_max = cfg.get("reconnect_max_s", 30)
         self._subscriptions = cfg.get("subscriptions", [])
 
-        self._client = paho.Client(client_id=self._client_id, protocol=paho.MQTTv311)
+        if _PAHO_V2:
+            self._client = paho.Client(
+                callback_api_version=CallbackAPIVersion.VERSION1,
+                client_id=self._client_id,
+                protocol=paho.MQTTv311,
+            )
+        else:
+            self._client = paho.Client(client_id=self._client_id, protocol=paho.MQTTv311)
         self._client.on_connect = self._on_connect
         self._client.on_disconnect = self._on_disconnect
         self._client.on_message = self._on_message
@@ -88,11 +100,17 @@ class MQTTReceiver:
         delay = self._backoff
         self._backoff = min(self._backoff * 2, self._reconnect_max)
         logger.info("Reconnecting in %ds", delay)
+        if self._loop:
+            self._loop.call_later(delay, self._try_reconnect)
+        else:
+            self._try_reconnect()
+
+    def _try_reconnect(self) -> None:
         try:
-            time.sleep(0.1)  # small delay before retry
             self._client.reconnect()
         except Exception:
             logger.warning("Reconnect failed, next attempt in %ds", self._backoff)
+            self._schedule_reconnect()
 
     def _on_message(self, client: Any, userdata: Any, msg: paho.MQTTMessage) -> None:
         if not self._loop or pb is None:

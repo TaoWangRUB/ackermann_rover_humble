@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const WS_BASE = `ws://${window.location.host}`;
+const WS_PROTO = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_BASE = `${WS_PROTO}//${window.location.host}`;
 
 function useWebSocket(path, initialUrl = null) {
   const [data, setData] = useState(null);
@@ -8,6 +9,7 @@ function useWebSocket(path, initialUrl = null) {
 
   useEffect(() => {
     let cancelled = false;
+    let backoff = 1000;
 
     const fetchInitial = async () => {
       if (!initialUrl) return;
@@ -26,11 +28,18 @@ function useWebSocket(path, initialUrl = null) {
     const connect = () => {
       const ws = new WebSocket(`${WS_BASE}${path}`);
       wsRef.current = ws;
+      ws.onopen = () => { backoff = 1000; };
       ws.onmessage = (e) => setData(JSON.parse(e.data));
       ws.onclose = () => {
-        if (!cancelled) setTimeout(connect, 2000);
+        if (!cancelled) {
+          setTimeout(connect, backoff);
+          backoff = Math.min(backoff * 2, 30000);
+        }
       };
-      ws.onerror = () => ws.close();
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', path, err);
+        ws.close();
+      };
     };
 
     fetchInitial();

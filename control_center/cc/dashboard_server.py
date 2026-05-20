@@ -193,11 +193,6 @@ class DashboardServer:
         health_dict = MessageToDict(effective_health if effective_health is not None else data)
         # Merge PX4 HW metrics (CPU/RAM from MAVLink) into the px4 sub-dict
         if self._px4_hw and "px4" in health_dict:
-            for k in ("cpuLoadPct", "ramUsagePct"):
-                snake = "".join(f"_{c.lower()}" if c.isupper() else c for c in k)
-                if snake in self._px4_hw:
-                    health_dict["px4"][k] = self._px4_hw[snake]
-            # Also pass raw keys
             if "cpu_load_pct" in self._px4_hw:
                 health_dict["px4"]["cpuLoadPct"] = self._px4_hw["cpu_load_pct"]
             if "ram_usage_pct" in self._px4_hw:
