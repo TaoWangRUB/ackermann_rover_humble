@@ -85,6 +85,7 @@ PUBLISHER_CONFIG_FILE="/workspace/src/rover_monitor/config/publisher.yaml"
 PX4_MODE_TYPE="manual"
 REVERSIBLE_DRIVE=true
 NAV2_CONTROLLER="mppi"
+ENABLE_SLAM=true
 ENABLE_RECORD=true
 RECORD_BAG_NAME=""
 RECORD_COMPRESS_FISHEYE=""   # "" | "true" | "false"
@@ -107,6 +108,7 @@ for arg in "$@"; do
         --mode-id=*)       MODE_ID="${arg#--mode-id=}" ;;
         --mode-type=*)     PX4_MODE_TYPE="${arg#--mode-type=}" ;;
         --reversible-drive) REVERSIBLE_DRIVE=true ;;
+        --no-slam)         ENABLE_SLAM=false ;;
         --depth-camera=*)  DEPTH_CAMERA="${arg#--depth-camera=}" ;;
         --broker-host=*)   BROKER_HOST="${arg#--broker-host=}" ;;
         --publisher-config=*) PUBLISHER_CONFIG_FILE="${arg#--publisher-config=}" ;;
@@ -160,11 +162,14 @@ if ! is_valid_mode_type "${PX4_MODE_TYPE}"; then
 fi
 
 # ── Build sub-command arguments ───────────────────────────────────────
-ROS2_ARGS="--hw --no-rviz --depth-camera=${DEPTH_CAMERA}"
-if [[ "${LOCALIZATION}" == true ]]; then
-    ROS2_ARGS+=" --localization"
-else
-    ROS2_ARGS+=" --rtabmap"
+ROS2_ARGS="--hw --no-rviz"
+if [[ "${ENABLE_SLAM}" == true ]]; then
+    ROS2_ARGS+=" --depth-camera=${DEPTH_CAMERA}"
+    if [[ "${LOCALIZATION}" == true ]]; then
+        ROS2_ARGS+=" --localization"
+    else
+        ROS2_ARGS+=" --rtabmap"
+    fi
 fi
 if [[ -n "${DELETE_DB_ON_START}" ]]; then
     if [[ "${DELETE_DB_ON_START}" == "true" ]]; then
