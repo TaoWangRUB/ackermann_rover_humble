@@ -50,9 +50,37 @@ Real-time health monitoring for the Ackermann rover. The `rover_monitor` package
               │   MQTT)        │────► MQTT outbound (rover/alerts)
               │                │────► MQTT outbound (rover/cmd/ack)
               └────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  Host-side MAVLink processes (outside Docker, on Jetson host)      │
+  │                                                                     │
+  │  mavlink_bridge.py ─── serial↔UDP ──► px4_hw_monitor.py            │
+  │  (USB CDC → UDP:14550)                (MAVLink → MQTT)             │
+  │                                        ────► rover/health/px4_hw   │
+  └─────────────────────────────────────────────────────────────────────┘
 ```
 
-All nodes run in a single `component_container` process via `rclcpp_components`.
+All ROS 2 nodes run in a single `component_container` process via `rclcpp_components`.
+
+### 1.3 PX4 Hardware Monitor (host-side, non-ROS)
+
+The `px4_hw_monitor.py` script runs on the Jetson host (outside Docker) and provides
+PX4 MCU-level metrics not available via the DDS bridge:
+
+| Metric | Source | Method |
+|--------|--------|--------|
+| CPU load (%) | `SYS_STATUS.load` | MAVLink message (5 Hz from PX4) |
+| RAM usage (%) | NuttX `free` command | MAVLink shell via `SERIAL_CONTROL` (polled every 10s) |
+
+Data is published as JSON to MQTT topic `rover/health/px4_hw` every 2 seconds.
+The Control Center's MQTT receiver handles this topic via the `rover/health/#` wildcard
+and merges `cpuLoadPct` / `ramUsagePct` into the dashboard's PX4 panel.
+
+**Dependencies:** `pymavlink`, `paho-mqtt` (installed on Jetson host Python 3.8)
+
+**MAVLink bridge:** `mavlink_bridge.py` provides the serial↔UDP link, replacing
+MAVProxy (which consumed 80%+ CPU). It uses `select()` with 100ms timeout and
+forwards bidirectionally between the USB CDC serial port and UDP 127.0.0.1:14550.
 
 ## 2. Architecture
 

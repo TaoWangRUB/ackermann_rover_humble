@@ -114,10 +114,16 @@ await bus.emit("evt.health", data=health_msg)
 | Subscription | QoS | Emits Event |
 |---|---|---|
 | `rover/health/#` | 0 | `evt.health`, `evt.health.cam`, `evt.health.px4`, `evt.health.jetson` |
+| `rover/health/px4_hw` | 0 | `evt.px4_hw` (matched by `rover/health/#` wildcard) |
 | `rover/alerts` | 1 | `evt.alert` |
 | `rover/cmd/ack` | 1 | `evt.cmd_ack` |
 
-- Deserializes Protobuf messages and dispatches typed events via `asyncio.run_coroutine_threadsafe`
+- Deserializes Protobuf messages (`rover/health/overall`, `rover/alerts`, `rover/cmd/ack`) and JSON messages (`rover/health/px4_hw`) and dispatches typed events via `asyncio.run_coroutine_threadsafe`
+- The `rover/health/px4_hw` topic carries JSON from `px4_hw_monitor.py` (runs on Jetson host):
+  ```json
+  {"cpu_load_pct": 56.8, "ram_usage_pct": 92.0, "timestamp": 1779306274086}
+  ```
+  CPU load comes from MAVLink `SYS_STATUS.load`; RAM usage from the NuttX `free` command via MAVLink shell (`SERIAL_CONTROL`).
 - Exposes `publish()` method used by CommandGateway for outbound commands
 
 #### CC-2: Telemetry Cache (`telemetry_cache.py`)
@@ -132,6 +138,7 @@ await bus.emit("evt.health", data=health_msg)
 | Measurement | Write Mode | Fields |
 |---|---|---|
 | `rover_telemetry` | Async batch (500ms flush) | Camera/PX4/Jetson metrics, map→odom TF age |
+| `px4_hardware` | Async batch (500ms flush) | `cpu_load_pct`, `ram_usage_pct` (from `evt.px4_hw`) |
 | `rover_alerts` | Sync | alert_id, severity, message, timestamp |
 | `rover_commands` | Sync | cmd_id, cmd_type, issued_by, ack_status |
 
@@ -165,7 +172,22 @@ Per-alert_id cooldown deduplication (60s default). Supported channels:
 
 | Path | Broadcasts |
 |---|---|
-| `/ws/health` | Real-time `RoverHealth` (JSON) |
+| `/ws/health` | Real-time `RoverHealth` (JSON) + PX4 HW metrics |
+
+The `/ws/health` WebSocket merges PX4 hardware metrics (CPU load and RAM usage from `evt.px4_hw`) into the `px4` sub-object of each health broadcast:
+
+```json
+{
+  "px4": {
+    "connected": true, "armed": true, "batteryVoltageV": 12.1,
+    "cpuLoadPct": 56.8, "ramUsagePct": 92.0
+  }
+}
+```
+
+Data sources:
+- `cpuLoadPct` / `ramUsagePct` — from `px4_hw_monitor.py` via MQTT `rover/health/px4_hw`
+- All other PX4 fields — from `rover_monitor` Protobuf via MQTT `rover/health/overall`
 | `/ws/alerts` | Real-time alerts (JSON) |
 | `/ws/cmd_ack` | Real-time command ACK (JSON) |
 
