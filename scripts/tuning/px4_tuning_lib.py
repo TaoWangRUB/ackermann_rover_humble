@@ -33,11 +33,34 @@ def find_acm_device() -> str:
     return devs[0]
 
 
+def _port_is_busy(device: str) -> bool:
+    """Check if a serial device is already opened by another process."""
+    try:
+        with open(f"/proc/locks") as f:
+            pass  # /proc/locks doesn't help for char devices
+        # Use fuser to check
+        result = subprocess.run(
+            ["fuser", device], capture_output=True, timeout=2)
+        return result.returncode == 0  # 0 = someone is using it
+    except Exception:
+        return False
+
+
 def connect_mavlink(device: Optional[str] = None, baud: int = 57600,
                     timeout: float = 10) -> mavutil.mavfile:
-    """Connect to PX4 via MAVLink, wait for first valid message."""
+    """Connect to PX4 via MAVLink, wait for first valid message.
+
+    If ``device`` looks like a serial port and is already in use (e.g. by
+    MAVProxy), fall back to ``udp:127.0.0.1:14550`` automatically.
+    """
     if device is None:
         device = find_acm_device()
+
+    # Auto-detect MAVProxy holding the serial port
+    if device.startswith("/dev/") and _port_is_busy(device):
+        udp = "udp:127.0.0.1:14550"
+        print(f"{device} is busy (MAVProxy?) — connecting via {udp}")
+        device = udp
     print(f"Connecting to PX4 on {device} @ {baud}...")
     m = mavutil.mavlink_connection(device, baud=baud, source_system=254)
     for _ in range(5):
