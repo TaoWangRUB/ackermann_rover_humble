@@ -7,13 +7,19 @@ Runs automated test maneuvers to measure:
   3. Max deceleration (RO_DECEL_LIM)
   4. Max yaw rate (RO_YAW_RATE_LIM)
 
+The script automatically:
+  - Checks if the RoverManual mode node is running, launches it if needed
+  - Activates the mode on PX4
+  - Arms the vehicle (with retry on failure)
+
 Prerequisites:
-  - PX4 test session running with RoverManual mode registered and activated
+  - Docker container 'ackermann_slam' running with ROS2 workspace built
   - T265 odometry + VO bridge active (PX4 EKF needs velocity)
   - Vehicle on flat ground with space to drive
 
 Usage:
     python3 scripts/tuning/tune_stage1_limits.py [--device /dev/ttyACM0] [--apply]
+    python3 scripts/tuning/tune_stage1_limits.py --skip-preflight  # manual mode/arm
 """
 
 import argparse
@@ -24,7 +30,7 @@ sys.path.insert(0, __import__("os").path.dirname(__file__))
 from px4_tuning_lib import (
     connect_mavlink, param_get, param_set, collect_telemetry,
     pub_cmd_vel, stop_cmd_vel, compute_stats, install_abort_handler,
-    is_aborted, confirm,
+    is_aborted, confirm, ensure_mode_and_arm,
 )
 
 
@@ -219,9 +225,19 @@ def main():
     parser.add_argument("--skip-accel", action="store_true")
     parser.add_argument("--skip-decel", action="store_true")
     parser.add_argument("--skip-yaw", action="store_true")
+    parser.add_argument("--mode-id", type=int, default=23,
+                        help="PX4 external mode nav_state (default: 23)")
+    parser.add_argument("--skip-preflight", action="store_true",
+                        help="Skip mode registration and arming checks")
     args = parser.parse_args()
 
     mav = connect_mavlink(args.device)
+
+    if not args.skip_preflight:
+        if not ensure_mode_and_arm(mav, mode_id=args.mode_id):
+            print("Pre-flight failed. Exiting.")
+            mav.close()
+            sys.exit(1)
 
     results = {}
 
