@@ -201,6 +201,16 @@ Q_JETSON_GPU = (
     ' |> yield(name: "mean")'
 )
 
+Q_PX4_CPU_RAM = (
+    'from(bucket: "rover_telemetry")'
+    " |> range(start: v.timeRangeStart, stop: v.timeRangeStop)"
+    ' |> filter(fn: (r) => r._measurement == "rover_telemetry")'
+    ' |> filter(fn: (r) => r._field == "px4_cpu_pct"'
+    ' or r._field == "px4_ram_pct")'
+    " |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+    ' |> yield(name: "mean")'
+)
+
 Q_ALERTS = (
     'from(bucket: "rover_telemetry")'
     " |> range(start: v.timeRangeStart, stop: v.timeRangeStop)"
@@ -249,9 +259,9 @@ def main():
     c2 = add_cell(dash_id, 4, 0, 4, 3, "Camera Depth FPS")
     c3 = add_cell(dash_id, 8, 0, 4, 3, "Jetson CPU / GPU %")
 
-    # Row 2: PX4 Battery Voltage, PX4 Battery %, Jetson Temperatures
+    # Row 2: PX4 Battery Voltage, PX4 CPU / RAM %, Jetson Temperatures
     c4 = add_cell(dash_id, 0, 3, 4, 3, "PX4 Battery Voltage")
-    c5 = add_cell(dash_id, 4, 3, 4, 3, "PX4 Battery %")
+    c5 = add_cell(dash_id, 4, 3, 4, 3, "PX4 CPU / RAM %")
     c6 = add_cell(dash_id, 8, 3, 4, 3, "Jetson Temperatures (°C)")
 
     # Configure views
@@ -264,8 +274,9 @@ def main():
                 colors=["#38BDF8", "#A78BFA"])
     set_xy_view(dash_id, c4, "PX4 Battery Voltage", Q_BATTERY_V,
                 colors=["#60A5FA"])
-    set_xy_view(dash_id, c5, "PX4 Battery %", Q_BATTERY_PCT,
-                colors=["#22C55E"])
+    set_xy_view(dash_id, c5, "PX4 CPU / RAM %", Q_PX4_CPU_RAM,
+                y_bounds=["0", "100"], y_label="%", legend=True,
+                colors=["#F59E0B", "#EF4444"])
     set_xy_view(dash_id, c6, "Jetson Temperatures (°C)", Q_JETSON_TEMPS,
                 y_bounds=["30", "80"], y_label="°C", legend=True,
                 colors=["#F97316", "#EF4444"])

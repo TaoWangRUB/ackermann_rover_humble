@@ -72,8 +72,15 @@ class DashboardServer:
                     result[key] = {"data": None, "stale": stale}
             if MessageToDict:
                 effective_health, effective_stale = await self._cache.get_effective_health()
+                health_dict = MessageToDict(effective_health) if effective_health is not None else None
+                # Merge PX4 HW metrics (CPU/RAM) into the health px4 sub-dict
+                if health_dict and self._px4_hw and "px4" in health_dict:
+                    if "cpu_load_pct" in self._px4_hw:
+                        health_dict["px4"]["cpuLoadPct"] = self._px4_hw["cpu_load_pct"]
+                    if "ram_usage_pct" in self._px4_hw:
+                        health_dict["px4"]["ramUsagePct"] = self._px4_hw["ram_usage_pct"]
                 result["health"] = {
-                    "data": MessageToDict(effective_health) if effective_health is not None else None,
+                    "data": health_dict,
                     "stale": effective_stale,
                 }
             return result
