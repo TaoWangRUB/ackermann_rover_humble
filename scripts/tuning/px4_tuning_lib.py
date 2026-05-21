@@ -5,6 +5,7 @@ Provides:
 - PX4 parameter read/write
 - MAVLink telemetry streaming (LOCAL_POSITION_NED, ATTITUDE, etc.)
 - cmd_vel publishing via docker exec
+- Pre-flight: mode registration check, activation, arming with retry
 - Data recording and basic analysis
 """
 
@@ -211,6 +212,195 @@ def pub_cmd_vel(linear_x: float, angular_z: float, duration: float,
 def stop_cmd_vel(container: str = "ackermann_slam"):
     """Publish zero cmd_vel briefly to stop the rover."""
     pub_cmd_vel(0.0, 0.0, 1.0, rate_hz=10, container=container).wait()
+
+
+# ---------------------------------------------------------------------------
+# Pre-flight: mode registration, activation, arming
+# ---------------------------------------------------------------------------
+
+_ROS2_SOURCE = (
+    "source /opt/ros/$ROS_DISTRO/setup.bash && "
+    "source /workspace/install/setup.bash"
+)
+
+
+def _docker_ros2(cmd: str, container: str = "ackermann_slam",
+                 timeout: float = 10) -> Tuple[int, str]:
+    """Run a ros2 command inside the Docker container. Returns (rc, stdout)."""
+    full = f"{_ROS2_SOURCE} && {cmd}"
+    try:
+        result = subprocess.run(
+            ["docker", "exec", container, "bash", "-c", full],
+            capture_output=True, text=True, timeout=timeout)
+        return result.returncode, result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return 1, "timeout"
+
+
+def is_mode_node_running(node_name: str = "rover_manual_mode",
+                         container: str = "ackermann_slam") -> bool:
+    """Check if the mode node is running inside the container."""
+    rc, out = _docker_ros2(f"ros2 node list 2>/dev/null | grep -q {node_name}",
+                           container)
+    return rc == 0
+
+
+def launch_mode_node(container: str = "ackermann_slam") -> subprocess.Popen:
+    """Launch rover_manual_mode node in background inside the container."""
+    full = (
+        f"{_ROS2_SOURCE} && "
+        "ros2 run px4_bringup rover_manual_mode "
+        "--ros-args -p skip_message_compatibility_check:=true -p use_stamped:=true"
+    )
+    proc = subprocess.Popen(
+        ["docker", "exec", container, "bash", "-c", full],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return proc
+
+
+def wait_mode_registered(container: str = "ackermann_slam",
+                         mode_name: str = "RoverManual",
+                         timeout: float = 15) -> Optional[int]:
+    """Wait until the mode announces itself on /px4_modes/announce.
+
+    Returns the nav_state (e.g. 23) or None on timeout.
+    """
+    cmd = (
+        f"timeout {int(timeout)} ros2 topic echo /px4_modes/announce "
+        f"std_msgs/msg/String --once 2>/dev/null"
+    )
+    rc, out = _docker_ros2(cmd, container, timeout=timeout + 5)
+    # Parse output: "data: 'RoverManual:23'"
+    for line in out.splitlines():
+        if mode_name in line:
+            # Extract the nav_state after the last colon
+            colon = line.rfind(":")
+            if colon >= 0:
+                try:
+                    return int(line[colon + 1:].strip().rstrip("'\""))
+                except ValueError:
+                    pass
+    return None
+
+
+def activate_mode(mode_id: int, container: str = "ackermann_slam") -> bool:
+    """Send VehicleCommand to switch PX4 into the given external mode."""
+    cmd = (
+        "ros2 topic pub --once /fmu/in/vehicle_command "
+        "px4_msgs/msg/VehicleCommand "
+        f"'{{command: 100001, param1: {mode_id}.0, "
+        "target_system: 1, target_component: 1, "
+        "source_system: 255, source_component: 0, from_external: true}}'"
+    )
+    rc, _ = _docker_ros2(cmd, container, timeout=10)
+    return rc == 0
+
+
+def send_arm_command(container: str = "ackermann_slam") -> bool:
+    """Send arm command via ROS2 VehicleCommand."""
+    cmd = (
+        "ros2 topic pub --once /fmu/in/vehicle_command "
+        "px4_msgs/msg/VehicleCommand "
+        "'{command: 400, param1: 1.0, "
+        "target_system: 1, target_component: 1, "
+        "source_system: 255, source_component: 0, from_external: true}'"
+    )
+    rc, _ = _docker_ros2(cmd, container, timeout=10)
+    return rc == 0
+
+
+def check_armed(mav: mavutil.mavfile, timeout: float = 3) -> bool:
+    """Check if PX4 reports armed state via MAVLink HEARTBEAT."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        msg = mav.recv_match(type="HEARTBEAT", blocking=True, timeout=1)
+        if msg and msg.get_srcSystem() == 1:
+            return bool(msg.base_mode & 128)
+    return False
+
+
+def check_nav_state(mav: mavutil.mavfile, timeout: float = 3) -> Optional[int]:
+    """Read current nav_state from SYS_STATUS / HEARTBEAT custom_mode."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        msg = mav.recv_match(type="HEARTBEAT", blocking=True, timeout=1)
+        if msg and msg.get_srcSystem() == 1:
+            return msg.custom_mode
+    return None
+
+
+def ensure_mode_and_arm(mav: mavutil.mavfile, mode_id: int = 23,
+                        container: str = "ackermann_slam") -> bool:
+    """Ensure custom mode is registered, activated, and vehicle is armed.
+
+    Returns True if armed successfully, False if user aborted.
+    """
+    # 1. Check if mode node is running
+    print(f"\n{'='*60}")
+    print("PRE-FLIGHT CHECK")
+    print(f"{'='*60}")
+
+    if is_mode_node_running(container=container):
+        print(f"  Mode node running ✓")
+    else:
+        print(f"  Mode node not found — launching rover_manual_mode...")
+        proc = launch_mode_node(container=container)
+        print(f"  Waiting for mode registration...")
+        nav = wait_mode_registered(container=container, timeout=15)
+        if nav is not None:
+            print(f"  Mode registered with nav_state={nav} ✓")
+        else:
+            print(f"  WARNING: Could not confirm registration (continuing anyway)")
+
+    time.sleep(0.5)
+
+    # 2. Check current nav_state
+    current = check_nav_state(mav)
+    if current is not None and current == mode_id:
+        print(f"  Already in mode {mode_id} ✓")
+    else:
+        print(f"  Activating mode {mode_id}...")
+        if activate_mode(mode_id, container=container):
+            time.sleep(1)
+            current = check_nav_state(mav)
+            if current == mode_id:
+                print(f"  Mode {mode_id} active ✓")
+            else:
+                print(f"  WARNING: nav_state={current}, expected {mode_id}")
+        else:
+            print(f"  ERROR: Failed to send mode activation command")
+            return False
+
+    # 3. Check if already armed
+    if check_armed(mav):
+        print(f"  Already armed ✓")
+        print(f"{'='*60}\n")
+        return True
+
+    # 4. Arm with retry
+    if not confirm("Arm the rover?"):
+        return False
+
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        print(f"  Arming attempt {attempt}/{max_attempts}...")
+        send_arm_command(container=container)
+        time.sleep(1.5)
+
+        if check_armed(mav):
+            print(f"  Armed ✓")
+            print(f"{'='*60}\n")
+            return True
+
+        print(f"  Arming failed (PX4 preflight checks may not pass)")
+        if attempt < max_attempts:
+            resp = input("  Clear the fault and retry? [y/N] ").strip().lower()
+            if resp not in ("y", "yes"):
+                return False
+            time.sleep(1)
+
+    print("  Arming failed after all attempts. Exiting.")
+    return False
 
 
 # ---------------------------------------------------------------------------
