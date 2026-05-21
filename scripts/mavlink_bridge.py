@@ -7,7 +7,7 @@ Typical CPU usage: <2% vs MAVProxy's 80%+.
 Usage:
     python3 scripts/mavlink_bridge.py \\
         --serial /dev/serial/by-id/usb-3D_Robotics_PX4_FMU_v2.x_0-if00 \\
-        --baud 57600 --out 127.0.0.1:14550
+        --baud 57600 --out 127.0.0.1:14550 --out 127.0.0.1:14551
 """
 import argparse
 import io
@@ -45,15 +45,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Lightweight MAVLink serial↔UDP bridge")
     parser.add_argument("--serial", required=True, help="Serial device path")
     parser.add_argument("--baud", type=int, default=57600, help="Serial baud rate")
-    parser.add_argument("--out", default="127.0.0.1:14550",
-                        help="UDP target host:port for forwarding")
+    parser.add_argument("--out", action="append", default=None,
+                        help="UDP target host:port (repeatable for fan-out)")
     parser.add_argument("--heartbeat-interval", type=float, default=1.0,
                         help="GCS heartbeat interval in seconds")
     args = parser.parse_args()
 
-    # Parse UDP target
-    host, port = args.out.rsplit(":", 1)
-    udp_target = (host, int(port))
+    # Parse UDP targets (default to 14550 if none given)
+    out_list = args.out or ["127.0.0.1:14550"]
+    udp_targets = []
+    for ep in out_list:
+        h, p = ep.rsplit(":", 1)
+        udp_targets.append((h, int(p)))
 
     # Open serial with DTR set (required for Cube Black USB CDC)
     try:
@@ -70,7 +73,9 @@ def main() -> int:
     # Bind to an ephemeral port — we send TO udp_target, listeners bind there.
     udp.bind(("0.0.0.0", 0))
     bound_port = udp.getsockname()[1]
-    log.info("UDP sending to %s:%s (bound on ephemeral port %d)", host, port, bound_port)
+    for t in udp_targets:
+        log.info("UDP target: %s:%d", t[0], t[1])
+    log.info("Bound on ephemeral port %d", bound_port)
 
     # Pre-build heartbeat
     gcs_hb = build_gcs_heartbeat()
@@ -99,10 +104,11 @@ def main() -> int:
             if fd is ser:
                 data = ser.read(ser.in_waiting or 1)
                 if data:
-                    try:
-                        udp.sendto(data, udp_target)
-                    except OSError:
-                        pass  # UDP send failure (no listener) — harmless
+                    for t in udp_targets:
+                        try:
+                            udp.sendto(data, t)
+                        except OSError:
+                            pass  # UDP send failure (no listener) — harmless
                     serial_bytes += len(data)
             elif fd is udp:
                 try:

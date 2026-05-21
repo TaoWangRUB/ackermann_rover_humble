@@ -59,8 +59,8 @@ def connect_mavlink(device: Optional[str] = None, baud: int = 57600,
 
     # Auto-detect MAVProxy holding the serial port
     if device.startswith("/dev/") and _port_is_busy(device):
-        udp = "udp:127.0.0.1:14550"
-        print(f"{device} is busy (MAVProxy?) — connecting via {udp}")
+        udp = "udpin:0.0.0.0:14551"
+        print(f"{device} is busy (bridge?) — connecting via {udp}")
         device = udp
     print(f"Connecting to PX4 on {device} @ {baud}...")
     m = mavutil.mavlink_connection(device, baud=baud, source_system=254)
