@@ -200,8 +200,9 @@ def pub_cmd_vel(linear_x: float, angular_z: float, duration: float,
         f"source /opt/ros/$ROS_DISTRO/setup.bash && "
         f"source /workspace/install/setup.bash && "
         f"ros2 topic pub -r {rate_hz} -t {count} /cmd_vel "
-        f"geometry_msgs/msg/Twist "
-        f"'{{linear: {{x: {linear_x}}}, angular: {{z: {angular_z}}}}}'"
+        f"geometry_msgs/msg/TwistStamped "
+        f"'{{header: {{frame_id: ackermann/base_link}}, "
+        f"twist: {{linear: {{x: {linear_x}}}, angular: {{z: {angular_z}}}}}}}'"
     )
     docker_cmd = [
         "docker", "exec", container, "bash", "-c", ros_cmd
@@ -310,8 +311,22 @@ def wait_mode_registered(container: Optional[str] = None,
     return None
 
 
-def activate_mode(mode_id: int, container: Optional[str] = None) -> bool:
-    """Send VehicleCommand to switch PX4 into the given external mode."""
+def activate_mode(mode_id: int, mav: mavutil.mavfile = None,
+                  container: Optional[str] = None) -> bool:
+    """Switch PX4 into the given external mode.
+
+    Prefers MAVLink (instant) when *mav* is provided; falls back to DDS.
+    """
+    if mav is not None:
+        mav.mav.command_long_send(
+            1, 1,  # target sys/comp
+            mavutil.mavlink.MAV_CMD_DO_SET_MODE,
+            0,  # confirmation
+            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+            mode_id, 0, 0, 0, 0, 0)
+        ack = mav.recv_match(type="COMMAND_ACK", blocking=True, timeout=3)
+        return ack is not None and ack.result == 0
+    # Fallback: DDS (slow due to discovery)
     cmd = (
         "ros2 topic pub --once /fmu/in/vehicle_command "
         "px4_msgs/msg/VehicleCommand "
@@ -319,12 +334,22 @@ def activate_mode(mode_id: int, container: Optional[str] = None) -> bool:
         "target_system: 1, target_component: 1, "
         "source_system: 255, source_component: 0, from_external: true}}'"
     )
-    rc, _ = _docker_ros2(cmd, container, timeout=30)
+    rc, _ = _docker_ros2(cmd, container, timeout=60)
     return rc == 0
 
 
-def send_arm_command(container: Optional[str] = None) -> bool:
-    """Send arm command via ROS2 VehicleCommand."""
+def send_arm_command(mav: mavutil.mavfile = None,
+                     container: Optional[str] = None) -> bool:
+    """Arm the vehicle. Prefers MAVLink when *mav* is provided."""
+    if mav is not None:
+        mav.mav.command_long_send(
+            1, 1,
+            mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
+            0,
+            1, 0, 0, 0, 0, 0, 0)  # param1=1 → arm
+        ack = mav.recv_match(type="COMMAND_ACK", blocking=True, timeout=3)
+        return ack is not None and ack.result == 0
+    # Fallback: DDS
     cmd = (
         "ros2 topic pub --once /fmu/in/vehicle_command "
         "px4_msgs/msg/VehicleCommand "
@@ -332,7 +357,7 @@ def send_arm_command(container: Optional[str] = None) -> bool:
         "target_system: 1, target_component: 1, "
         "source_system: 255, source_component: 0, from_external: true}'"
     )
-    rc, _ = _docker_ros2(cmd, container, timeout=30)
+    rc, _ = _docker_ros2(cmd, container, timeout=60)
     return rc == 0
 
 
@@ -387,7 +412,7 @@ def ensure_mode_and_arm(mav: mavutil.mavfile, mode_id: int = 23,
         print(f"  Already in mode {mode_id} ✓")
     else:
         print(f"  Activating mode {mode_id}...")
-        if activate_mode(mode_id, container=container):
+        if activate_mode(mode_id, mav=mav, container=container):
             time.sleep(1)
             current = check_nav_state(mav)
             if current == mode_id:
@@ -411,7 +436,7 @@ def ensure_mode_and_arm(mav: mavutil.mavfile, mode_id: int = 23,
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
         print(f"  Arming attempt {attempt}/{max_attempts}...")
-        send_arm_command(container=container)
+        send_arm_command(mav=mav, container=container)
         time.sleep(1.5)
 
         if check_armed(mav):
