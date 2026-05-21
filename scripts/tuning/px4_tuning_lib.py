@@ -286,23 +286,37 @@ def launch_mode_node(container: Optional[str] = None) -> subprocess.Popen:
     return proc
 
 
+def _nav_state_to_custom_mode(nav_state: int) -> int:
+    """Convert PX4 nav_state to packed MAVLink HEARTBEAT custom_mode.
+
+    PX4 external modes (nav_state 23-30) map to:
+        main_mode = 4 (AUTO)
+        sub_mode  = nav_state - 12   (11-18 for EXTERNAL1-8)
+    Packed: (sub_mode << 24) | (main_mode << 16)
+    """
+    sub_mode = nav_state - 12   # 23→11, 24→12, ...
+    main_mode = 4               # PX4_CUSTOM_MAIN_MODE_AUTO
+    return (sub_mode << 24) | (main_mode << 16)
+
+
 def _send_activate_mavlink(mode_id: int, mav: mavutil.mavfile) -> Tuple[bool, str]:
     """Try to activate external mode via MAVLink DO_SET_MODE.
 
-    Uses MAV_CMD_DO_SET_MODE (176) with custom_mode=mode_id.
+    PX4 external modes use main_mode=AUTO(4), sub_mode=11+ in the packed
+    custom_mode.  DO_SET_MODE param2 must be this packed value.
     Returns (success, detail_message).
     """
     # Drain stale ACKs before sending
     while mav.recv_match(type="COMMAND_ACK", blocking=False):
         pass
 
-    # MAV_MODE_FLAG_CUSTOM_MODE_ENABLED = 1
+    packed = _nav_state_to_custom_mode(mode_id)
     mav.mav.command_long_send(
         1, 1,           # target_system, target_component
         mavutil.mavlink.MAV_CMD_DO_SET_MODE,  # command 176
         0,              # confirmation
         1,              # param1: MAV_MODE_FLAG_CUSTOM_MODE_ENABLED
-        float(mode_id), # param2: custom_mode (nav_state)
+        float(packed),  # param2: packed custom_mode
         0, 0, 0, 0, 0)
 
     # Wait for ACK with matching command
@@ -321,7 +335,6 @@ def _send_activate_mavlink(mode_id: int, mav: mavutil.mavfile) -> Tuple[bool, st
                     5: "IN_PROGRESS", 6: "CANCELLED",
                 }.get(ack.result, "UNKNOWN")
                 return False, f"ACK result={ack.result} ({result_name})"
-        # ACK for a different command — keep waiting
     return False, "no ACK received for MAV_CMD_DO_SET_MODE (176)"
 
 
@@ -345,22 +358,25 @@ def activate_mode(mode_id: int, mav: mavutil.mavfile = None,
                   retries: int = 3, retry_delay: float = 5) -> bool:
     """Switch PX4 into the given external mode with retry.
 
-    Tries MAVLink COMMAND_LONG(100001) first (instant), falls back to DDS
-    (~20s discovery delay). Confirms via MAVLink heartbeat nav_state.
+    Tries MAVLink DO_SET_MODE first (instant), falls back to DDS
+    (~20s discovery delay). Confirms via HEARTBEAT custom_mode.
     """
+    expected_cm = _nav_state_to_custom_mode(mode_id)
+
     for attempt in range(1, retries + 1):
         # --- Try MAVLink first (fast path) ---
         if mav is not None:
             print(f"    Attempt {attempt}/{retries}: activating via MAVLink "
-                  f"COMMAND_LONG(100001, param1={mode_id})...")
+                  f"DO_SET_MODE (packed custom_mode={expected_cm:#010x})...")
             ok, detail = _send_activate_mavlink(mode_id, mav)
             print(f"    MAVLink: {detail}")
             if ok:
                 time.sleep(0.5)
                 current = check_nav_state(mav, timeout=3)
-                if current == mode_id:
+                if current == expected_cm:
                     return True
-                print(f"    nav_state={current}, expected {mode_id}")
+                print(f"    custom_mode={current:#010x}, "
+                      f"expected {expected_cm:#010x}")
 
         # --- Fallback: DDS (slow path) ---
         print(f"    Attempt {attempt}/{retries}: activating via DDS "
@@ -369,9 +385,11 @@ def activate_mode(mode_id: int, mav: mavutil.mavfile = None,
         if ok:
             time.sleep(1)
             current = check_nav_state(mav, timeout=3) if mav else None
-            if current == mode_id:
+            if current == expected_cm:
                 return True
-            print(f"    nav_state={current}, expected {mode_id}")
+            if current is not None:
+                print(f"    custom_mode={current:#010x}, "
+                      f"expected {expected_cm:#010x}")
         else:
             print(f"    DDS publish failed")
 
@@ -447,10 +465,11 @@ def ensure_mode_and_arm(mav: mavutil.mavfile, mode_id: int = 23,
 
     time.sleep(0.5)
 
-    # 2. Check current nav_state
+    # 2. Check current custom_mode
+    expected_cm = _nav_state_to_custom_mode(mode_id)
     current = check_nav_state(mav)
-    if current is not None and current == mode_id:
-        print(f"  Already in mode {mode_id} ✓")
+    if current is not None and current == expected_cm:
+        print(f"  Already in mode {mode_id} (custom_mode={current:#010x}) ✓")
     else:
         print(f"  Activating mode {mode_id}...")
         if activate_mode(mode_id, mav=mav, container=container):
