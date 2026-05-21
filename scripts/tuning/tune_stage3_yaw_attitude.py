@@ -13,11 +13,12 @@ Algorithm:
 
 Prerequisites:
   - Stages 2A/2B/2C completed (speed + yaw rate tuned)
-  - RoverSpeedAttitude mode activated
+  - Docker container 'ackermann_slam' running with ROS2 workspace built
   - T265 + VO bridge active
 
 Usage:
     python3 scripts/tuning/tune_stage3_yaw_attitude.py [--device /dev/ttyACM0] [--apply]
+    python3 scripts/tuning/tune_stage3_yaw_attitude.py --skip-preflight
 """
 
 import argparse
@@ -29,7 +30,7 @@ sys.path.insert(0, __import__("os").path.dirname(__file__))
 from px4_tuning_lib import (
     connect_mavlink, param_get, param_set, collect_telemetry,
     pub_cmd_vel, stop_cmd_vel, compute_stats,
-    install_abort_handler, is_aborted, confirm,
+    install_abort_handler, is_aborted, confirm, ensure_mode_and_arm,
 )
 
 P_VALUES = [0.5, 1.0, 1.5, 2.0, 3.0, 5.0]
@@ -98,9 +99,19 @@ def main():
     parser.add_argument("--device", default=None)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--speed", type=float, default=DRIVE_SPEED)
+    parser.add_argument("--mode-id", type=int, default=23,
+                        help="PX4 external mode nav_state (default: 23)")
+    parser.add_argument("--skip-preflight", action="store_true",
+                        help="Skip mode registration and arming checks")
     args = parser.parse_args()
 
     mav = connect_mavlink(args.device)
+
+    if not args.skip_preflight:
+        if not ensure_mode_and_arm(mav, mode_id=args.mode_id):
+            print("Pre-flight failed. Exiting.")
+            mav.close()
+            sys.exit(1)
 
     print(f"\nCurrent: RO_YAW_P = {param_get(mav, 'RO_YAW_P')}")
     print(f"  (depends on tuned RO_YAW_RATE_P = {param_get(mav, 'RO_YAW_RATE_P')})")
