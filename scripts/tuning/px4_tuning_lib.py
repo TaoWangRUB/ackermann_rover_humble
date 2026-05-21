@@ -286,39 +286,8 @@ def launch_mode_node(container: Optional[str] = None) -> subprocess.Popen:
     return proc
 
 
-def wait_mode_registered(container: Optional[str] = None,
-                         mode_name: str = "RoverManual",
-                         timeout: float = 15) -> Optional[int]:
-    """Wait until the mode announces itself on /px4_modes/announce.
-
-    Returns the nav_state (e.g. 23) or None on timeout.
-    """
-    cmd = (
-        f"timeout {int(timeout)} ros2 topic echo /px4_modes/announce "
-        f"std_msgs/msg/String --once 2>/dev/null"
-    )
-    rc, out = _docker_ros2(cmd, container, timeout=timeout + 5)
-    # Parse output: "data: 'RoverManual:23'"
-    for line in out.splitlines():
-        if mode_name in line:
-            # Extract the nav_state after the last colon
-            colon = line.rfind(":")
-            if colon >= 0:
-                try:
-                    return int(line[colon + 1:].strip().rstrip("'\""))
-                except ValueError:
-                    pass
-    return None
-
-
-def activate_mode(mode_id: int, mav: mavutil.mavfile = None,
-                  container: Optional[str] = None) -> bool:
-    """Switch PX4 into the given external mode.
-
-    PX4 external modes require VehicleCommand(100001) via DDS — MAVLink
-    DO_SET_MODE does not work for them.  Uses DDS with generous timeout.
-    """
-    print(f"    (activating via DDS VehicleCommand 100001, ~20s for discovery...)")
+def _send_activate_dds(mode_id: int, container: Optional[str] = None) -> bool:
+    """Send a single DDS VehicleCommand(100001) to request mode switch."""
     yaml = (
         f'"{{command: 100001, param1: {mode_id}.0, '
         'target_system: 1, target_component: 1, '
@@ -330,6 +299,39 @@ def activate_mode(mode_id: int, mav: mavutil.mavfile = None,
     )
     rc, _ = _docker_ros2(cmd, container, timeout=60)
     return rc == 0
+
+
+def activate_mode(mode_id: int, mav: mavutil.mavfile = None,
+                  container: Optional[str] = None,
+                  retries: int = 3, retry_delay: float = 5) -> bool:
+    """Switch PX4 into the given external mode with retry.
+
+    Sends DDS VehicleCommand(100001) then confirms via MAVLink heartbeat.
+    Retries on failure (e.g. mode node still registering after fresh launch).
+    """
+    for attempt in range(1, retries + 1):
+        print(f"    Attempt {attempt}/{retries}: activating via DDS "
+              f"VehicleCommand 100001 (~20s for discovery...)")
+        ok = _send_activate_dds(mode_id, container)
+        if not ok:
+            print(f"    DDS publish failed")
+            if attempt < retries:
+                print(f"    Retrying in {retry_delay}s...")
+                time.sleep(retry_delay)
+            continue
+
+        # Confirm via MAVLink heartbeat
+        time.sleep(1)
+        current = check_nav_state(mav, timeout=3) if mav else None
+        if current == mode_id:
+            return True
+
+        print(f"    nav_state={current}, expected {mode_id}")
+        if attempt < retries:
+            print(f"    Retrying in {retry_delay}s...")
+            time.sleep(retry_delay)
+
+    return False
 
 
 def send_arm_command(mav: mavutil.mavfile = None,
@@ -392,13 +394,8 @@ def ensure_mode_and_arm(mav: mavutil.mavfile, mode_id: int = 23,
         print(f"  Mode node running ✓")
     else:
         print(f"  Mode node not found — launching rover_manual_mode...")
-        proc = launch_mode_node(container=container)
-        print(f"  Waiting for mode registration...")
-        nav = wait_mode_registered(container=container, timeout=15)
-        if nav is not None:
-            print(f"  Mode registered with nav_state={nav} ✓")
-        else:
-            print(f"  WARNING: Could not confirm registration (continuing anyway)")
+        launch_mode_node(container=container)
+        print(f"  Launched (registration will be confirmed during activation)")
 
     time.sleep(0.5)
 
@@ -409,14 +406,9 @@ def ensure_mode_and_arm(mav: mavutil.mavfile, mode_id: int = 23,
     else:
         print(f"  Activating mode {mode_id}...")
         if activate_mode(mode_id, mav=mav, container=container):
-            time.sleep(1)
-            current = check_nav_state(mav)
-            if current == mode_id:
-                print(f"  Mode {mode_id} active ✓")
-            else:
-                print(f"  WARNING: nav_state={current}, expected {mode_id}")
+            print(f"  Mode {mode_id} active ✓")
         else:
-            print(f"  ERROR: Failed to send mode activation command")
+            print(f"  ERROR: Failed to activate mode {mode_id} after retries")
             return False
 
     # 3. Check if already armed
