@@ -315,18 +315,10 @@ def activate_mode(mode_id: int, mav: mavutil.mavfile = None,
                   container: Optional[str] = None) -> bool:
     """Switch PX4 into the given external mode.
 
-    Prefers MAVLink (instant) when *mav* is provided; falls back to DDS.
+    PX4 external modes require VehicleCommand(100001) via DDS — MAVLink
+    DO_SET_MODE does not work for them.  Uses DDS with generous timeout.
     """
-    if mav is not None:
-        mav.mav.command_long_send(
-            1, 1,  # target sys/comp
-            mavutil.mavlink.MAV_CMD_DO_SET_MODE,
-            0,  # confirmation
-            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-            mode_id, 0, 0, 0, 0, 0)
-        ack = mav.recv_match(type="COMMAND_ACK", blocking=True, timeout=3)
-        return ack is not None and ack.result == 0
-    # Fallback: DDS (slow due to discovery)
+    print(f"    (activating via DDS VehicleCommand 100001, ~20s for discovery...)")
     cmd = (
         "ros2 topic pub --once /fmu/in/vehicle_command "
         "px4_msgs/msg/VehicleCommand "
