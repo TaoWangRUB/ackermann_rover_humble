@@ -286,6 +286,37 @@ def launch_mode_node(container: Optional[str] = None) -> subprocess.Popen:
     return proc
 
 
+def _send_activate_mavlink(mode_id: int, mav: mavutil.mavfile) -> Tuple[bool, str]:
+    """Try to activate external mode via MAVLink COMMAND_LONG(100001).
+
+    Returns (success, detail_message).
+    """
+    # Drain stale ACKs before sending
+    while mav.recv_match(type="COMMAND_ACK", blocking=False):
+        pass
+
+    mav.mav.command_long_send(
+        1, 1,           # target_system, target_component
+        100001,         # command: PX4 external mode activation
+        0,              # confirmation
+        float(mode_id), # param1: nav_state of the external mode
+        0, 0, 0, 0, 0, 0)
+
+    # Wait for ACK with matching command
+    deadline = time.time() + 3
+    while time.time() < deadline:
+        ack = mav.recv_match(type="COMMAND_ACK", blocking=True, timeout=1)
+        if ack is None:
+            continue
+        if ack.command == 100001:
+            if ack.result == 0:
+                return True, "ACK result=0 (accepted)"
+            else:
+                return False, f"ACK result={ack.result} (rejected)"
+        # ACK for a different command — keep waiting
+    return False, "no ACK received for command 100001"
+
+
 def _send_activate_dds(mode_id: int, container: Optional[str] = None) -> bool:
     """Send a single DDS VehicleCommand(100001) to request mode switch."""
     yaml = (
@@ -306,27 +337,36 @@ def activate_mode(mode_id: int, mav: mavutil.mavfile = None,
                   retries: int = 3, retry_delay: float = 5) -> bool:
     """Switch PX4 into the given external mode with retry.
 
-    Sends DDS VehicleCommand(100001) then confirms via MAVLink heartbeat.
-    Retries on failure (e.g. mode node still registering after fresh launch).
+    Tries MAVLink COMMAND_LONG(100001) first (instant), falls back to DDS
+    (~20s discovery delay). Confirms via MAVLink heartbeat nav_state.
     """
     for attempt in range(1, retries + 1):
+        # --- Try MAVLink first (fast path) ---
+        if mav is not None:
+            print(f"    Attempt {attempt}/{retries}: activating via MAVLink "
+                  f"COMMAND_LONG(100001, param1={mode_id})...")
+            ok, detail = _send_activate_mavlink(mode_id, mav)
+            print(f"    MAVLink: {detail}")
+            if ok:
+                time.sleep(0.5)
+                current = check_nav_state(mav, timeout=3)
+                if current == mode_id:
+                    return True
+                print(f"    nav_state={current}, expected {mode_id}")
+
+        # --- Fallback: DDS (slow path) ---
         print(f"    Attempt {attempt}/{retries}: activating via DDS "
               f"VehicleCommand 100001 (~20s for discovery...)")
         ok = _send_activate_dds(mode_id, container)
-        if not ok:
+        if ok:
+            time.sleep(1)
+            current = check_nav_state(mav, timeout=3) if mav else None
+            if current == mode_id:
+                return True
+            print(f"    nav_state={current}, expected {mode_id}")
+        else:
             print(f"    DDS publish failed")
-            if attempt < retries:
-                print(f"    Retrying in {retry_delay}s...")
-                time.sleep(retry_delay)
-            continue
 
-        # Confirm via MAVLink heartbeat
-        time.sleep(1)
-        current = check_nav_state(mav, timeout=3) if mav else None
-        if current == mode_id:
-            return True
-
-        print(f"    nav_state={current}, expected {mode_id}")
         if attempt < retries:
             print(f"    Retrying in {retry_delay}s...")
             time.sleep(retry_delay)
