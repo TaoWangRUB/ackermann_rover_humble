@@ -300,10 +300,11 @@ def _nav_state_to_custom_mode(nav_state: int) -> int:
 
 
 def _send_activate_mavlink(mode_id: int, mav: mavutil.mavfile) -> Tuple[bool, str]:
-    """Try to activate external mode via MAVLink DO_SET_MODE.
+    """Activate external mode via MAVLink DO_SET_MODE.
 
     PX4 external modes use main_mode=AUTO(4), sub_mode=11+ in the packed
     custom_mode.  DO_SET_MODE param2 must be this packed value.
+    ACK result=0 confirms activation.
     Returns (success, detail_message).
     """
     # Drain stale ACKs before sending
@@ -328,71 +329,40 @@ def _send_activate_mavlink(mode_id: int, mav: mavutil.mavfile) -> Tuple[bool, st
         if ack.command == mavutil.mavlink.MAV_CMD_DO_SET_MODE:
             if ack.result == 0:
                 return True, "ACK result=0 (accepted)"
-            else:
-                result_name = {
-                    0: "ACCEPTED", 1: "TEMPORARILY_REJECTED",
-                    2: "DENIED", 3: "UNSUPPORTED", 4: "FAILED",
-                    5: "IN_PROGRESS", 6: "CANCELLED",
-                }.get(ack.result, "UNKNOWN")
-                return False, f"ACK result={ack.result} ({result_name})"
-    return False, "no ACK received for MAV_CMD_DO_SET_MODE (176)"
-
-
-def _send_activate_dds(mode_id: int, container: Optional[str] = None) -> bool:
-    """Send a single DDS VehicleCommand(100001) to request mode switch."""
-    yaml = (
-        f'"{{command: 100001, param1: {mode_id}.0, '
-        'target_system: 1, target_component: 1, '
-        'source_system: 255, source_component: 0, from_external: true}"'
-    )
-    cmd = (
-        "ros2 topic pub --once /fmu/in/vehicle_command "
-        f"px4_msgs/msg/VehicleCommand {yaml}"
-    )
-    rc, _ = _docker_ros2(cmd, container, timeout=60)
-    return rc == 0
+            result_name = {
+                1: "TEMPORARILY_REJECTED", 2: "DENIED",
+                3: "UNSUPPORTED", 4: "FAILED",
+                5: "IN_PROGRESS", 6: "CANCELLED",
+            }.get(ack.result, "UNKNOWN")
+            return False, f"ACK result={ack.result} ({result_name})"
+    return False, "no ACK received (timeout)"
 
 
 def activate_mode(mode_id: int, mav: mavutil.mavfile = None,
                   container: Optional[str] = None,
-                  retries: int = 3, retry_delay: float = 5) -> bool:
-    """Switch PX4 into the given external mode with retry.
+                  retries: int = 5, retry_delay: float = 3) -> bool:
+    """Switch PX4 into the given external mode via MAVLink with retry.
 
-    Tries MAVLink DO_SET_MODE first (instant), falls back to DDS
-    (~20s discovery delay). Confirms via HEARTBEAT custom_mode.
+    Sends DO_SET_MODE with the correct packed custom_mode, then verifies
+    HEARTBEAT custom_mode matches. Retries handle the case where the mode
+    node is still registering after a fresh launch.
     """
     expected_cm = _nav_state_to_custom_mode(mode_id)
 
     for attempt in range(1, retries + 1):
-        # --- Try MAVLink first (fast path) ---
-        if mav is not None:
-            print(f"    Attempt {attempt}/{retries}: activating via MAVLink "
-                  f"DO_SET_MODE (packed custom_mode={expected_cm:#010x})...")
-            ok, detail = _send_activate_mavlink(mode_id, mav)
-            print(f"    MAVLink: {detail}")
-            if ok:
-                time.sleep(0.5)
-                current = check_nav_state(mav, timeout=3)
-                if current == expected_cm:
-                    return True
-                print(f"    custom_mode={current:#010x}, "
-                      f"expected {expected_cm:#010x}")
-
-        # --- Fallback: DDS (slow path) ---
-        print(f"    Attempt {attempt}/{retries}: activating via DDS "
-              f"VehicleCommand 100001 (~20s for discovery...)")
-        ok = _send_activate_dds(mode_id, container)
+        print(f"    Attempt {attempt}/{retries}: DO_SET_MODE "
+              f"(custom_mode={expected_cm:#010x})...")
+        ok, detail = _send_activate_mavlink(mode_id, mav)
+        print(f"    {detail}")
         if ok:
-            time.sleep(1)
-            current = check_nav_state(mav, timeout=3) if mav else None
+            # Verify via HEARTBEAT that mode actually changed
+            time.sleep(0.3)
+            current = check_nav_state(mav, timeout=2)
             if current == expected_cm:
+                print(f"    Confirmed: custom_mode={current:#010x} ✓")
                 return True
-            if current is not None:
-                print(f"    custom_mode={current:#010x}, "
-                      f"expected {expected_cm:#010x}")
-        else:
-            print(f"    DDS publish failed")
-
+            print(f"    ACK accepted but custom_mode={current:#010x}, "
+                  f"expected {expected_cm:#010x} — mode may not be {mode_id}")
         if attempt < retries:
             print(f"    Retrying in {retry_delay}s...")
             time.sleep(retry_delay)
