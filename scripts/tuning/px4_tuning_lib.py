@@ -319,7 +319,7 @@ def activate_mode(mode_id: int, container: Optional[str] = None) -> bool:
         "target_system: 1, target_component: 1, "
         "source_system: 255, source_component: 0, from_external: true}}'"
     )
-    rc, _ = _docker_ros2(cmd, container, timeout=10)
+    rc, _ = _docker_ros2(cmd, container, timeout=30)
     return rc == 0
 
 
@@ -332,7 +332,7 @@ def send_arm_command(container: Optional[str] = None) -> bool:
         "target_system: 1, target_component: 1, "
         "source_system: 255, source_component: 0, from_external: true}'"
     )
-    rc, _ = _docker_ros2(cmd, container, timeout=10)
+    rc, _ = _docker_ros2(cmd, container, timeout=30)
     return rc == 0
 
 
