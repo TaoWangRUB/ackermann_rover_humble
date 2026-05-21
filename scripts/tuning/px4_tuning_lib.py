@@ -357,7 +357,7 @@ def check_nav_state(mav: mavutil.mavfile, timeout: float = 3) -> Optional[int]:
 
 
 def ensure_mode_and_arm(mav: mavutil.mavfile, mode_id: int = 23,
-                        container: str = "ackermann_slam") -> bool:
+                        container: Optional[str] = None) -> bool:
     """Ensure custom mode is registered, activated, and vehicle is armed.
 
     Returns True if armed successfully, False if user aborted.
