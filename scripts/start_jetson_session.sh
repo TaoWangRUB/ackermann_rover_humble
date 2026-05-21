@@ -317,15 +317,27 @@ if [[ "${ENABLE_TELEMETRY}" == true ]]; then
     "source ${SCRIPT_DIR}/lib/dc.sh && dcomp exec ackermann_slam bash -lc 'set -o pipefail; if ! command -v mosquitto_sub >/dev/null 2>&1; then echo \"mosquitto_sub not installed\"; exit 1; fi; if ! python3 -c \"import google.protobuf\" >/dev/null 2>&1; then echo \"protobuf not installed\"; exit 1; fi; cd /tmp && protoc --python_out=/tmp -I /workspace/src/rover_monitor/proto /workspace/src/rover_monitor/proto/rover_health.proto >/dev/null 2>&1 || true; while true; do echo \"Subscribing to MQTT broker ${BROKER_HOST}...\"; mosquitto_sub -h ${BROKER_HOST} -t \"rover/health/#\" -F \"%x\" | python3 /workspace/scripts/decode_rover_health_mqtt.py --hex && break; status=$?; echo \"MQTT subscribe failed with status \${status}; retrying in 5s\"; sleep 5; done'" Enter
 fi
 
-# ── Background: PX4 HW monitor (MAVLink → MQTT, only with telemetry) ─
+# ── Background: MAVLink serial→UDP bridge + PX4 HW monitor ──────────
 if [[ "${ENABLE_TELEMETRY}" == true ]]; then
-    (
-        sleep 15  # wait for MAVLink bridge to settle
-        python3 "${SCRIPT_DIR}/px4_hw_monitor.py" \
-            --mqtt-host "${BROKER_HOST}" \
-            --interval 2 \
-            >> /tmp/px4_hw_monitor.log 2>&1
-    ) &
+    MAV_SERIAL=$(ls /dev/ttyACM* 2>/dev/null | head -1)
+    if [[ -n "${MAV_SERIAL}" ]]; then
+        (
+            sleep 10  # wait for XRCE agent to grab ttyUSB0 first
+            python3 "${SCRIPT_DIR}/mavlink_bridge.py" \
+                --serial "${MAV_SERIAL}" --baud 57600 \
+                --out 127.0.0.1:14550 --out 127.0.0.1:14551 \
+                >> /tmp/mavlink_bridge.log 2>&1
+        ) &
+        (
+            sleep 15  # wait for MAVLink bridge to settle
+            python3 "${SCRIPT_DIR}/px4_hw_monitor.py" \
+                --mqtt-host "${BROKER_HOST}" \
+                --interval 2 \
+                >> /tmp/px4_hw_monitor.log 2>&1
+        ) &
+    else
+        echo "WARNING: No /dev/ttyACM* found — skipping MAVLink bridge + HW monitor"
+    fi
 fi
 
 tmux select-pane -t "${PANE_ROS2}"
