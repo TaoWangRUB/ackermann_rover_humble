@@ -14,11 +14,12 @@ Algorithm:
   4. Binary search until mean error < tolerance
 
 Prerequisites:
-  - PX4 test session running with RoverSpeedRate mode activated
+  - Docker container 'ackermann_slam' running with ROS2 workspace built
   - T265 + VO bridge active
 
 Usage:
     python3 scripts/tuning/tune_stage2a_speed_ff.py [--device /dev/ttyACM0] [--apply]
+    python3 scripts/tuning/tune_stage2a_speed_ff.py --skip-preflight  # manual mode/arm
 """
 
 import argparse
@@ -29,7 +30,7 @@ sys.path.insert(0, __import__("os").path.dirname(__file__))
 from px4_tuning_lib import (
     connect_mavlink, param_get, param_set, collect_telemetry,
     pub_cmd_vel, stop_cmd_vel, steady_state_samples, compute_stats,
-    install_abort_handler, is_aborted, confirm,
+    install_abort_handler, is_aborted, confirm, ensure_mode_and_arm,
 )
 
 TOLERANCE = 0.10   # 10% acceptable error
@@ -61,9 +62,19 @@ def main():
                         help="Auto-apply final RO_MAX_THR_SPEED")
     parser.add_argument("--tolerance", type=float, default=TOLERANCE,
                         help=f"Acceptable tracking error fraction (default {TOLERANCE})")
+    parser.add_argument("--mode-id", type=int, default=23,
+                        help="PX4 external mode nav_state (default: 23)")
+    parser.add_argument("--skip-preflight", action="store_true",
+                        help="Skip mode registration and arming checks")
     args = parser.parse_args()
 
     mav = connect_mavlink(args.device)
+
+    if not args.skip_preflight:
+        if not ensure_mode_and_arm(mav, mode_id=args.mode_id):
+            print("Pre-flight failed. Exiting.")
+            mav.close()
+            sys.exit(1)
 
     # Ensure P and I are zero
     current_p = param_get(mav, "RO_SPEED_P")
