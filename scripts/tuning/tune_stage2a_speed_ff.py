@@ -31,6 +31,7 @@ from px4_tuning_lib import (
     connect_mavlink, param_get, param_set, collect_telemetry,
     pub_cmd_vel, stop_cmd_vel, steady_state_samples, compute_stats,
     install_abort_handler, is_aborted, confirm, ensure_mode_and_arm,
+    shutdown_cmd_vel_publisher,
 )
 
 TOLERANCE = 0.10   # 10% acceptable error
@@ -170,6 +171,7 @@ def main():
     else:
         print("Run with --apply to write to PX4.")
 
+    shutdown_cmd_vel_publisher()
     mav.close()
 
 

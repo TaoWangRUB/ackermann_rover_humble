@@ -30,6 +30,7 @@ from px4_tuning_lib import (
     connect_mavlink, param_get, param_set, collect_telemetry,
     pub_cmd_vel, stop_cmd_vel, compute_stats,
     install_abort_handler, is_aborted, confirm, ensure_mode_and_arm,
+    shutdown_cmd_vel_publisher,
 )
 
 P_VALUES = [0.0, 0.05, 0.1, 0.2, 0.4, 0.8]
@@ -196,6 +197,7 @@ def main():
         if not args.apply:
             print("Run with --apply to keep these values.")
 
+    shutdown_cmd_vel_publisher()
     mav.close()
 
 
