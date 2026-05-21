@@ -287,20 +287,23 @@ def launch_mode_node(container: Optional[str] = None) -> subprocess.Popen:
 
 
 def _send_activate_mavlink(mode_id: int, mav: mavutil.mavfile) -> Tuple[bool, str]:
-    """Try to activate external mode via MAVLink COMMAND_LONG(100001).
+    """Try to activate external mode via MAVLink DO_SET_MODE.
 
+    Uses MAV_CMD_DO_SET_MODE (176) with custom_mode=mode_id.
     Returns (success, detail_message).
     """
     # Drain stale ACKs before sending
     while mav.recv_match(type="COMMAND_ACK", blocking=False):
         pass
 
+    # MAV_MODE_FLAG_CUSTOM_MODE_ENABLED = 1
     mav.mav.command_long_send(
         1, 1,           # target_system, target_component
-        100001,         # command: PX4 external mode activation
+        mavutil.mavlink.MAV_CMD_DO_SET_MODE,  # command 176
         0,              # confirmation
-        float(mode_id), # param1: nav_state of the external mode
-        0, 0, 0, 0, 0, 0)
+        1,              # param1: MAV_MODE_FLAG_CUSTOM_MODE_ENABLED
+        float(mode_id), # param2: custom_mode (nav_state)
+        0, 0, 0, 0, 0)
 
     # Wait for ACK with matching command
     deadline = time.time() + 3
@@ -308,13 +311,18 @@ def _send_activate_mavlink(mode_id: int, mav: mavutil.mavfile) -> Tuple[bool, st
         ack = mav.recv_match(type="COMMAND_ACK", blocking=True, timeout=1)
         if ack is None:
             continue
-        if ack.command == 100001:
+        if ack.command == mavutil.mavlink.MAV_CMD_DO_SET_MODE:
             if ack.result == 0:
                 return True, "ACK result=0 (accepted)"
             else:
-                return False, f"ACK result={ack.result} (rejected)"
+                result_name = {
+                    0: "ACCEPTED", 1: "TEMPORARILY_REJECTED",
+                    2: "DENIED", 3: "UNSUPPORTED", 4: "FAILED",
+                    5: "IN_PROGRESS", 6: "CANCELLED",
+                }.get(ack.result, "UNKNOWN")
+                return False, f"ACK result={ack.result} ({result_name})"
         # ACK for a different command — keep waiting
-    return False, "no ACK received for command 100001"
+    return False, "no ACK received for MAV_CMD_DO_SET_MODE (176)"
 
 
 def _send_activate_dds(mode_id: int, container: Optional[str] = None) -> bool:
