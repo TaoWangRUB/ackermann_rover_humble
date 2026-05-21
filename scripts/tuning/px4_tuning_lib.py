@@ -239,15 +239,22 @@ def _ensure_cmd_vel_publisher(container: Optional[str] = None):
     if container is None:
         container = _find_container()
 
+    # Write script to temp file inside the container to avoid quoting issues
+    subprocess.run(
+        ["docker", "exec", container, "bash", "-c",
+         f"cat > /tmp/_tuning_cmd_vel_pub.py << 'EOFSCRIPT'\n"
+         f"{_CMD_VEL_PUBLISHER_SCRIPT}\nEOFSCRIPT"],
+        check=True, capture_output=True, timeout=5)
+
     ros_cmd = (
-        f"source /opt/ros/$ROS_DISTRO/setup.bash && "
-        f"source /workspace/install/setup.bash && "
-        f"python3 -c {_CMD_VEL_PUBLISHER_SCRIPT!r}"
+        "source /opt/ros/$ROS_DISTRO/setup.bash && "
+        "source /workspace/install/setup.bash && "
+        "python3 /tmp/_tuning_cmd_vel_pub.py"
     )
     _CMD_VEL_PROC = subprocess.Popen(
         ["docker", "exec", "-i", container, "bash", "-c", ros_cmd],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL, text=True)
+        stderr=subprocess.PIPE, text=True)
 
     # Wait for "READY" line — means the publisher node is alive.
     # DDS discovery of the subscriber may still take a moment, but the
@@ -259,7 +266,9 @@ def _ensure_cmd_vel_publisher(container: Optional[str] = None):
             print("  cmd_vel publisher ready (DDS node created)")
             return
         if _CMD_VEL_PROC.poll() is not None:
-            raise RuntimeError("cmd_vel publisher exited unexpectedly")
+            err = _CMD_VEL_PROC.stderr.read() if _CMD_VEL_PROC.stderr else ""
+            raise RuntimeError(
+                f"cmd_vel publisher exited (rc={_CMD_VEL_PROC.returncode}): {err}")
     raise RuntimeError("cmd_vel publisher did not become ready in 30s")
 
 
