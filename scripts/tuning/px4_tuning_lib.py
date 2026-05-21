@@ -183,38 +183,156 @@ def collect_telemetry(mav: mavutil.mavfile, duration: float,
 
 
 # ---------------------------------------------------------------------------
-# cmd_vel publishing
+# cmd_vel publishing — persistent publisher to avoid DDS discovery delay
 # ---------------------------------------------------------------------------
 
 DC_SCRIPT = os.path.join(os.path.dirname(__file__), "..", "lib", "dc.sh")
 
+# Inline Python script that runs inside the Docker container as a persistent
+# ROS2 cmd_vel publisher.  Reads commands from stdin (one per line):
+#   linear_x angular_z duration rate_hz
+# Publishes TwistStamped at the given rate for the given duration, then
+# prints "DONE\n" and waits for the next command.  "QUIT\n" to exit.
+# DDS discovery happens once at startup (~15-20s), then all subsequent
+# publishes are instant.
+_CMD_VEL_PUBLISHER_SCRIPT = r"""
+import sys, time, rclpy
+from rclpy.node import Node
+from geometry_msgs.msg import TwistStamped
 
-def pub_cmd_vel(linear_x: float, angular_z: float, duration: float,
-                rate_hz: float = 10, container: Optional[str] = None):
-    """Publish cmd_vel inside the Docker container for `duration` seconds."""
+rclpy.init()
+node = Node('tuning_cmd_vel_pub')
+pub = node.create_publisher(TwistStamped, '/cmd_vel', 10)
+# Warm up: wait for publisher to be matched (subscriber discovered)
+# This is the slow part (~15-20s first time).
+print('READY', flush=True)
+for line in sys.stdin:
+    line = line.strip()
+    if not line or line == 'QUIT':
+        break
+    parts = line.split()
+    lx, az, dur, hz = float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3])
+    period = 1.0 / hz
+    count = int(dur * hz)
+    msg = TwistStamped()
+    msg.header.frame_id = 'ackermann/base_link'
+    msg.twist.linear.x = lx
+    msg.twist.angular.z = az
+    for i in range(count):
+        msg.header.stamp = node.get_clock().now().to_msg()
+        pub.publish(msg)
+        time.sleep(period)
+    print('DONE', flush=True)
+node.destroy_node()
+rclpy.shutdown()
+"""
+
+_CMD_VEL_PROC: Optional[subprocess.Popen] = None
+
+
+def _ensure_cmd_vel_publisher(container: Optional[str] = None):
+    """Launch the persistent cmd_vel publisher if not already running."""
+    global _CMD_VEL_PROC
+    if _CMD_VEL_PROC is not None and _CMD_VEL_PROC.poll() is None:
+        return  # still running
+
     if container is None:
         container = _find_container()
-    # Use ros2 topic pub with a rate and timeout
-    count = int(duration * rate_hz)
+
     ros_cmd = (
         f"source /opt/ros/$ROS_DISTRO/setup.bash && "
         f"source /workspace/install/setup.bash && "
-        f"ros2 topic pub -r {rate_hz} -t {count} /cmd_vel "
-        f"geometry_msgs/msg/TwistStamped "
-        f"\"{{header: {{frame_id: ackermann/base_link}}, "
-        f"twist: {{linear: {{x: {linear_x}}}, angular: {{z: {angular_z}}}}}}}\""
+        f"python3 -c {_CMD_VEL_PUBLISHER_SCRIPT!r}"
     )
-    docker_cmd = [
-        "docker", "exec", container, "bash", "-c", ros_cmd
-    ]
-    proc = subprocess.Popen(docker_cmd, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL)
-    return proc
+    _CMD_VEL_PROC = subprocess.Popen(
+        ["docker", "exec", "-i", container, "bash", "-c", ros_cmd],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL, text=True)
+
+    # Wait for "READY" line — means the publisher node is alive.
+    # DDS discovery of the subscriber may still take a moment, but the
+    # node and publisher object exist.
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        line = _CMD_VEL_PROC.stdout.readline().strip()
+        if line == "READY":
+            print("  cmd_vel publisher ready (DDS node created)")
+            return
+        if _CMD_VEL_PROC.poll() is not None:
+            raise RuntimeError("cmd_vel publisher exited unexpectedly")
+    raise RuntimeError("cmd_vel publisher did not become ready in 30s")
+
+
+def warmup_cmd_vel(container: Optional[str] = None):
+    """Pre-launch the persistent cmd_vel publisher and wait for DDS discovery.
+
+    Call this once during pre-flight so that test cmd_vel calls are instant.
+    Sends a brief zero-velocity burst and waits for completion to confirm
+    the full DDS data path is connected.
+    """
+    _ensure_cmd_vel_publisher(container)
+    # Send a short zero-velocity burst to force DDS subscriber matching
+    print("  Warming up cmd_vel publisher (DDS discovery)...")
+    _CMD_VEL_PROC.stdin.write("0.0 0.0 2.0 10\n")
+    _CMD_VEL_PROC.stdin.flush()
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        line = _CMD_VEL_PROC.stdout.readline().strip()
+        if line == "DONE":
+            print("  cmd_vel publisher warmed up ✓")
+            return
+        if _CMD_VEL_PROC.poll() is not None:
+            raise RuntimeError("cmd_vel publisher exited during warmup")
+    raise RuntimeError("cmd_vel warmup timed out (30s)")
+
+
+def pub_cmd_vel(linear_x: float, angular_z: float, duration: float,
+                rate_hz: float = 10, container: Optional[str] = None):
+    """Publish cmd_vel via the persistent publisher.
+
+    Returns a lightweight object with a .wait() method for compatibility
+    with the old subprocess.Popen interface used by test scripts.
+    """
+    _ensure_cmd_vel_publisher(container)
+    _CMD_VEL_PROC.stdin.write(f"{linear_x} {angular_z} {duration} {rate_hz}\n")
+    _CMD_VEL_PROC.stdin.flush()
+    return _CmdVelHandle()
+
+
+class _CmdVelHandle:
+    """Mimics subprocess.Popen.wait() — blocks until 'DONE' is received."""
+
+    def wait(self, timeout: float = 60):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if _CMD_VEL_PROC is None or _CMD_VEL_PROC.poll() is not None:
+                return
+            line = _CMD_VEL_PROC.stdout.readline().strip()
+            if line == "DONE":
+                return
+        raise TimeoutError("cmd_vel publish did not complete")
+
+    @property
+    def returncode(self):
+        return 0
 
 
 def stop_cmd_vel(container: Optional[str] = None):
     """Publish zero cmd_vel briefly to stop the rover."""
     pub_cmd_vel(0.0, 0.0, 1.0, rate_hz=10, container=container).wait()
+
+
+def shutdown_cmd_vel_publisher():
+    """Gracefully shut down the persistent cmd_vel publisher."""
+    global _CMD_VEL_PROC
+    if _CMD_VEL_PROC is not None and _CMD_VEL_PROC.poll() is None:
+        try:
+            _CMD_VEL_PROC.stdin.write("QUIT\n")
+            _CMD_VEL_PROC.stdin.flush()
+            _CMD_VEL_PROC.wait(timeout=5)
+        except Exception:
+            _CMD_VEL_PROC.kill()
+        _CMD_VEL_PROC = None
 
 
 # ---------------------------------------------------------------------------
@@ -448,13 +566,16 @@ def ensure_mode_and_arm(mav: mavutil.mavfile, mode_id: int = 23,
             print(f"  ERROR: Failed to activate mode {mode_id} after retries")
             return False
 
-    # 3. Check if already armed
+    # 3. Warm up cmd_vel publisher (DDS discovery takes ~15-20s)
+    warmup_cmd_vel(container=container)
+
+    # 4. Check if already armed
     if check_armed(mav):
         print(f"  Already armed ✓")
         print(f"{'='*60}\n")
         return True
 
-    # 4. Arm with retry
+    # 5. Arm with retry
     if not confirm("Arm the rover?"):
         return False
 

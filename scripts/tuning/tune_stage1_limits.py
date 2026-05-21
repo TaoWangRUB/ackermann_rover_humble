@@ -30,7 +30,7 @@ sys.path.insert(0, __import__("os").path.dirname(__file__))
 from px4_tuning_lib import (
     connect_mavlink, param_get, param_set, collect_telemetry,
     pub_cmd_vel, stop_cmd_vel, compute_stats, install_abort_handler,
-    is_aborted, confirm, ensure_mode_and_arm,
+    is_aborted, confirm, ensure_mode_and_arm, shutdown_cmd_vel_publisher,
 )
 
 
@@ -283,6 +283,7 @@ def main():
     elif results:
         print("\nRun with --apply to write these values to PX4.")
 
+    shutdown_cmd_vel_publisher()
     mav.close()
 
 
