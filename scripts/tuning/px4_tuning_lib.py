@@ -201,8 +201,8 @@ def pub_cmd_vel(linear_x: float, angular_z: float, duration: float,
         f"source /workspace/install/setup.bash && "
         f"ros2 topic pub -r {rate_hz} -t {count} /cmd_vel "
         f"geometry_msgs/msg/TwistStamped "
-        f"'{{header: {{frame_id: ackermann/base_link}}, "
-        f"twist: {{linear: {{x: {linear_x}}}, angular: {{z: {angular_z}}}}}}}'"
+        f"\"{{header: {{frame_id: ackermann/base_link}}, "
+        f"twist: {{linear: {{x: {linear_x}}}, angular: {{z: {angular_z}}}}}}}\""
     )
     docker_cmd = [
         "docker", "exec", container, "bash", "-c", ros_cmd
@@ -319,12 +319,14 @@ def activate_mode(mode_id: int, mav: mavutil.mavfile = None,
     DO_SET_MODE does not work for them.  Uses DDS with generous timeout.
     """
     print(f"    (activating via DDS VehicleCommand 100001, ~20s for discovery...)")
+    yaml = (
+        f'"{{command: 100001, param1: {mode_id}.0, '
+        'target_system: 1, target_component: 1, '
+        'source_system: 255, source_component: 0, from_external: true}"'
+    )
     cmd = (
         "ros2 topic pub --once /fmu/in/vehicle_command "
-        "px4_msgs/msg/VehicleCommand "
-        f"'{{command: 100001, param1: {mode_id}.0, "
-        "target_system: 1, target_component: 1, "
-        "source_system: 255, source_component: 0, from_external: true}}'"
+        f"px4_msgs/msg/VehicleCommand {yaml}"
     )
     rc, _ = _docker_ros2(cmd, container, timeout=60)
     return rc == 0
@@ -342,12 +344,14 @@ def send_arm_command(mav: mavutil.mavfile = None,
         ack = mav.recv_match(type="COMMAND_ACK", blocking=True, timeout=3)
         return ack is not None and ack.result == 0
     # Fallback: DDS
+    yaml = (
+        '"{command: 400, param1: 1.0, '
+        'target_system: 1, target_component: 1, '
+        'source_system: 255, source_component: 0, from_external: true}"'
+    )
     cmd = (
         "ros2 topic pub --once /fmu/in/vehicle_command "
-        "px4_msgs/msg/VehicleCommand "
-        "'{command: 400, param1: 1.0, "
-        "target_system: 1, target_component: 1, "
-        "source_system: 255, source_component: 0, from_external: true}'"
+        f"px4_msgs/msg/VehicleCommand {yaml}"
     )
     rc, _ = _docker_ros2(cmd, container, timeout=60)
     return rc == 0
