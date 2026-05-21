@@ -190,8 +190,10 @@ DC_SCRIPT = os.path.join(os.path.dirname(__file__), "..", "lib", "dc.sh")
 
 
 def pub_cmd_vel(linear_x: float, angular_z: float, duration: float,
-                rate_hz: float = 10, container: str = "ackermann_slam"):
+                rate_hz: float = 10, container: Optional[str] = None):
     """Publish cmd_vel inside the Docker container for `duration` seconds."""
+    if container is None:
+        container = _find_container()
     # Use ros2 topic pub with a rate and timeout
     count = int(duration * rate_hz)
     ros_cmd = (
@@ -209,7 +211,7 @@ def pub_cmd_vel(linear_x: float, angular_z: float, duration: float,
     return proc
 
 
-def stop_cmd_vel(container: str = "ackermann_slam"):
+def stop_cmd_vel(container: Optional[str] = None):
     """Publish zero cmd_vel briefly to stop the rover."""
     pub_cmd_vel(0.0, 0.0, 1.0, rate_hz=10, container=container).wait()
 
@@ -223,10 +225,33 @@ _ROS2_SOURCE = (
     "source /workspace/install/setup.bash"
 )
 
+_CONTAINER_CACHE: Optional[str] = None
 
-def _docker_ros2(cmd: str, container: str = "ackermann_slam",
+
+def _find_container() -> str:
+    """Auto-detect the running ROS2 Docker container name."""
+    global _CONTAINER_CACHE
+    if _CONTAINER_CACHE:
+        return _CONTAINER_CACHE
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}"],
+            capture_output=True, text=True, timeout=5)
+        for name in result.stdout.strip().split("\n"):
+            if "slam" in name or "ackermann" in name:
+                _CONTAINER_CACHE = name
+                return name
+    except Exception:
+        pass
+    _CONTAINER_CACHE = "ackermann_slam"  # fallback
+    return _CONTAINER_CACHE
+
+
+def _docker_ros2(cmd: str, container: Optional[str] = None,
                  timeout: float = 10) -> Tuple[int, str]:
     """Run a ros2 command inside the Docker container. Returns (rc, stdout)."""
+    if container is None:
+        container = _find_container()
     full = f"{_ROS2_SOURCE} && {cmd}"
     try:
         result = subprocess.run(
@@ -238,15 +263,17 @@ def _docker_ros2(cmd: str, container: str = "ackermann_slam",
 
 
 def is_mode_node_running(node_name: str = "rover_manual_mode",
-                         container: str = "ackermann_slam") -> bool:
+                         container: Optional[str] = None) -> bool:
     """Check if the mode node is running inside the container."""
     rc, out = _docker_ros2(f"ros2 node list 2>/dev/null | grep -q {node_name}",
                            container)
     return rc == 0
 
 
-def launch_mode_node(container: str = "ackermann_slam") -> subprocess.Popen:
+def launch_mode_node(container: Optional[str] = None) -> subprocess.Popen:
     """Launch rover_manual_mode node in background inside the container."""
+    if container is None:
+        container = _find_container()
     full = (
         f"{_ROS2_SOURCE} && "
         "ros2 run px4_bringup rover_manual_mode "
@@ -258,7 +285,7 @@ def launch_mode_node(container: str = "ackermann_slam") -> subprocess.Popen:
     return proc
 
 
-def wait_mode_registered(container: str = "ackermann_slam",
+def wait_mode_registered(container: Optional[str] = None,
                          mode_name: str = "RoverManual",
                          timeout: float = 15) -> Optional[int]:
     """Wait until the mode announces itself on /px4_modes/announce.
@@ -283,7 +310,7 @@ def wait_mode_registered(container: str = "ackermann_slam",
     return None
 
 
-def activate_mode(mode_id: int, container: str = "ackermann_slam") -> bool:
+def activate_mode(mode_id: int, container: Optional[str] = None) -> bool:
     """Send VehicleCommand to switch PX4 into the given external mode."""
     cmd = (
         "ros2 topic pub --once /fmu/in/vehicle_command "
@@ -296,7 +323,7 @@ def activate_mode(mode_id: int, container: str = "ackermann_slam") -> bool:
     return rc == 0
 
 
-def send_arm_command(container: str = "ackermann_slam") -> bool:
+def send_arm_command(container: Optional[str] = None) -> bool:
     """Send arm command via ROS2 VehicleCommand."""
     cmd = (
         "ros2 topic pub --once /fmu/in/vehicle_command "
