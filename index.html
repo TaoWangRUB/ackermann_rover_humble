@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autonomous Rover — ROS 2 / Nav2 / PX4 Runtime Stack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#070b12; --bg2:#0b1220; --grid:rgba(86,120,160,.07);
+  --ink:#e8eef7; --ink-dim:#8497ad; --line:#2c3a4f; --line-soft:#1c2738;
+  --panel:rgba(13,20,33,.92); --panel-bd:rgba(120,150,190,.18);
+  --cam:#34d399; --rtab:#fbbf24; --nav:#38bdf8; --px4:#f472b6;
+  --bridge:#a78bfa; --fw:#c084fc; --act:#fb923c; --misc:#94a3b8;
+  --cmd:#94a3b8; --io:#94a3b8; --mon:#94a3b8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif;overflow:hidden}
+#app{position:fixed;inset:0;
+  background:
+    radial-gradient(1200px 800px at 70% -10%, rgba(56,189,248,.10), transparent 60%),
+    radial-gradient(1000px 700px at 10% 110%, rgba(244,114,182,.08), transparent 60%),
+    linear-gradient(180deg,var(--bg),var(--bg2));
+}
+#grid{position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:42px 42px;mask:radial-gradient(120% 120% at 50% 40%,#000 55%,transparent 100%)}
+header{position:absolute;top:0;left:0;right:0;z-index:6;padding:16px 22px;
+  display:flex;flex-direction:column;gap:6px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(7,11,18,.85),transparent)}
+header .row{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+h1{font-family:"Chakra Petch",sans-serif;font-weight:700;letter-spacing:.5px;
+  font-size:19px;margin:0;text-transform:uppercase}
+h1 .dot{color:var(--nav)}
+.sub{font-size:12px;color:var(--ink-dim);font-family:"IBM Plex Mono",monospace}
+.cmdline{font-family:"IBM Plex Mono",monospace;font-size:11px;color:#6f86a0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62vw}
+.cmdline b{color:var(--cam);font-weight:600}
+svg{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+svg.grabbing{cursor:grabbing}
+/* clusters */
+.cluster rect{rx:14;fill:rgba(255,255,255,.012);stroke-width:1.4;
+  stroke-dasharray:2 5;transition:opacity .2s, stroke .2s}
+.cluster text{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:13px;
+  letter-spacing:.4px;text-transform:uppercase}
+.cluster.sub-cam rect{stroke:var(--cam)} .cluster.sub-cam text{fill:var(--cam)}
+.cluster.sub-rtab rect{stroke:var(--rtab)} .cluster.sub-rtab text{fill:var(--rtab)}
+.cluster.sub-nav rect{stroke:var(--nav)} .cluster.sub-nav text{fill:var(--nav)}
+.cluster.sub-px4 rect{stroke:var(--px4)} .cluster.sub-px4 text{fill:var(--px4)}
+/* edges */
+.edge path{fill:none;stroke:var(--line);stroke-width:1.5;transition:stroke .18s,stroke-width .18s,opacity .18s}
+.edge .arr{fill:var(--line);transition:fill .18s,opacity .18s}
+.edge .elabel rect{fill:rgba(10,16,26,.9);stroke:var(--line-soft);stroke-width:1;rx:4}
+.edge .elabel text{font-family:"IBM Plex Mono",monospace;font-size:10px;fill:#9fb2c9}
+.edge.dashed path{stroke-dasharray:6 5}
+.edge.dotted path{stroke-dasharray:1.5 6;stroke-linecap:round}
+/* nodes */
+.node rect{rx:9;fill:#0e1726;stroke-width:1.4;transition:filter .2s,stroke .2s,opacity .2s,transform .12s}
+.node .t1{font-weight:600;font-size:11px;fill:var(--ink)}
+.node .t2{font-size:9.5px;fill:var(--ink-dim);font-family:"IBM Plex Mono",monospace}
+.node{cursor:pointer}
+.node.sub-cam rect{stroke:var(--cam)} .node.sub-rtab rect{stroke:var(--rtab)}
+.node.sub-nav rect{stroke:var(--nav)} .node.sub-px4 rect{stroke:var(--px4)}
+.node.sub-bridge rect{stroke:var(--bridge)} .node.sub-fw rect{stroke:var(--fw)}
+.node.sub-act rect{stroke:var(--act)} .node.sub-cmd rect{stroke:var(--cmd)}
+.node.sub-io rect{stroke:var(--io)} .node.sub-mon rect{stroke:var(--mon)}
+.node.sub-misc rect{stroke:var(--misc)}
+/* highlight state */
+svg.focusing .node:not(.hot){opacity:.16}
+svg.focusing .edge:not(.hot){opacity:.07}
+svg.focusing .cluster:not(.hot){opacity:.35}
+.edge.hot path{stroke-width:2.4;stroke-dasharray:9 7;animation:flow 1s linear infinite}
+.edge.hot path{stroke:#cfe3f5;fill:none} .edge.hot .arr{fill:#cfe3f5}
+.edge.hot.sub-cam path{stroke:var(--cam)} .edge.hot.sub-cam .arr{fill:var(--cam)}
+.edge.hot.sub-rtab path{stroke:var(--rtab)} .edge.hot.sub-rtab .arr{fill:var(--rtab)}
+.edge.hot.sub-nav path{stroke:var(--nav)} .edge.hot.sub-nav .arr{fill:var(--nav)}
+.edge.hot.sub-px4 path{stroke:var(--px4)} .edge.hot.sub-px4 .arr{fill:var(--px4)}
+.edge.hot.sub-bridge path{stroke:var(--bridge)} .edge.hot.sub-bridge .arr{fill:var(--bridge)}
+.edge.hot.sub-fw path{stroke:var(--fw)} .edge.hot.sub-fw .arr{fill:var(--fw)}
+@keyframes flow{to{stroke-dashoffset:-16}}
+.node.hot rect{filter:drop-shadow(0 0 9px currentColor);transform:translateY(-1px)}
+.node.sel rect{stroke-width:2.4;filter:drop-shadow(0 0 12px currentColor)}
+.node.sub-cam.hot rect{color:var(--cam)} .node.sub-rtab.hot rect{color:var(--rtab)}
+.node.sub-nav.hot rect{color:var(--nav)} .node.sub-px4.hot rect{color:var(--px4)}
+.node.sub-bridge.hot rect{color:var(--bridge)} .node.sub-fw.hot rect{color:var(--fw)}
+.node.sub-act.hot rect{color:var(--act)} .node.hot rect{color:#7fd3ff}
+/* controls */
+.controls{position:absolute;right:18px;bottom:18px;z-index:6;display:flex;flex-direction:column;gap:7px}
+.controls button{width:38px;height:38px;border-radius:10px;border:1px solid var(--panel-bd);
+  background:var(--panel);color:var(--ink);font-size:17px;cursor:pointer;
+  backdrop-filter:blur(8px);transition:.15s;display:grid;place-items:center;font-family:"IBM Plex Mono",monospace}
+.controls button:hover{border-color:var(--nav);color:var(--nav)}
+.controls .lbl{font-size:11px}
+/* legend */
+.legend{position:absolute;left:18px;bottom:18px;z-index:6;display:flex;gap:8px;flex-wrap:wrap;
+  max-width:46vw}
+.legend .chip{display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:20px;
+  background:var(--panel);border:1px solid var(--panel-bd);font-size:11px;cursor:pointer;
+  backdrop-filter:blur(8px);transition:.15s;color:var(--ink-dim);font-family:"IBM Plex Mono",monospace}
+.legend .chip:hover{color:var(--ink);border-color:currentColor}
+.legend .chip i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.legend .chip.off{opacity:.4}
+/* detail panel */
+#panel{position:absolute;top:0;right:0;height:100%;width:360px;max-width:88vw;z-index:7;
+  background:var(--panel);backdrop-filter:blur(14px);border-left:1px solid var(--panel-bd);
+  transform:translateX(102%);transition:transform .32s cubic-bezier(.2,.8,.2,1);
+  display:flex;flex-direction:column;padding:22px 22px 26px}
+#panel.open{transform:none}
+#panel .x{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:8px;
+  border:1px solid var(--panel-bd);background:transparent;color:var(--ink-dim);cursor:pointer;font-size:15px}
+#panel .x:hover{color:var(--ink)}
+#panel .kicker{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:1px;
+  text-transform:uppercase;margin-bottom:4px}
+#panel h2{font-family:"Chakra Petch",sans-serif;font-size:21px;margin:0 0 10px;line-height:1.15}
+#panel .desc{font-size:13.5px;line-height:1.6;color:#c4d2e3;margin-bottom:18px}
+#panel .io h3{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-dim);
+  margin:16px 0 8px;font-family:"IBM Plex Mono",monospace}
+#panel .io ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+#panel .io li{font-family:"IBM Plex Mono",monospace;font-size:11.5px;line-height:1.4;
+  padding:7px 10px;border-radius:7px;background:rgba(255,255,255,.03);border:1px solid var(--line-soft)}
+#panel .io li b{color:var(--ink)} #panel .io .topic{color:#7fd3ff}
+.hint{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5;
+  color:var(--ink-dim);font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:center;
+  pointer-events:none;opacity:.0;transition:opacity .4s}
+@media(max-width:760px){h1{font-size:15px}.cmdline{display:none}.legend{max-width:64vw}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="grid"></div>
+  <header>
+    <div class="row">
+      <h1>Autonomous Rover<span class="dot"> · </span>ROS 2 / Nav2 / PX4 Runtime Stack</h1>
+    </div>
+    <div class="sub">jetson_profile · t265-odom · controller=mppi · vision-only EKF2</div>
+    <div class="cmdline"><b>$</b> start_jetson_session.sh --t265-odom --nav2 → start_ros2_nodes.sh --hw --rtabmap --t265-odom --nav2 --controller=mppi --jetson-profile</div>
+  </header>
+  <svg id="svg"></svg>
+  <div class="legend" id="legend"></div>
+  <div class="controls">
+    <button id="zin" title="Zoom in">+</button>
+    <button id="zout" title="Zoom out">−</button>
+    <button id="fit" class="lbl" title="Fit to screen">⤢</button>
+  </div>
+  <aside id="panel">
+    <button class="x" id="px">✕</button>
+    <div class="kicker" id="pk"></div>
+    <h2 id="pt"></h2>
+    <div class="desc" id="pd"></div>
+    <div class="io" id="pio"></div>
+  </aside>
+</div>
+<script>
+const DATA = {"model": {"W": 2185.8, "H": 1101.0, "nodes": [{"id": "CMD", "label": "start_jetson_session.sh --t265-odom --nav2\n=> start_ros2_nodes.sh --hw --no-rviz --depth-camera=d435i\n--rtabmap --t265-odom --nav2 --controller=mppi --jetson-profile", "sub": "cmd", "cx": 1225.0, "cy": 78.0, "w": 374.99760000000003, "h": 51.99984}, {"id": "D435I", "label": "D435i\ncolor + aligned depth + IMU", "sub": "cam", "cx": 710.0, "cy": 78.0, "w": 184.9968, "h": 40.00032}, {"id": "T265", "label": "T265\npose + IMU (fisheye OFF)", "sub": "cam", "cx": 920.0, "cy": 78.0, "w": 169.9992, "h": 40.00032}, {"id": "D435N", "label": "d435i node (realsense_camera_node)\n20s startup delay, no HW reset", "sub": "cam", "cx": 710.0, "cy": 205.0, "w": 234.0, "h": 40.00032}, {"id": "T265N", "label": "t265 node (realsense_camera_node)\nHW reset (Movidius VPU)", "sub": "cam", "cx": 1290.0, "cy": 205.0, "w": 229.0032, "h": 40.00032}, {"id": "RELAY", "label": "t265_odom_relay (odom_tf_relay)\n/t265/odom -> /t265/odom_base\nOWNS odom->base_link TF", "sub": "cam", "cx": 1282.0, "cy": 345.0, "w": 211.9968, "h": 51.99984}, {"id": "RSP", "label": "robot_state_publisher\nURDF TF: camera mounts, wheels, cubepilot", "sub": "cam", "cx": 1001.0, "cy": 345.0, "w": 272.0016, "h": 40.00032}, {"id": "JREL", "label": "cmd_vel_joint_relay (C++ 10Hz)\n/cmd_vel -> /joint_states (inverse Ackermann)", "sub": "cam", "cx": 1001.0, "cy": 205.0, "w": 283.9968, "h": 40.00032}, {"id": "RGBDSYNC", "label": "rgbd_sync", "sub": "rtab", "cx": 318.0, "cy": 345.0, "w": 84.00240000000001, "h": 36.0}, {"id": "D2S", "label": "rgbd_to_scan\n(depthimage_to_laserscan)", "sub": "rtab", "cx": 481.0, "cy": 345.0, "w": 176.9976, "h": 40.00032}, {"id": "RTM", "label": "rtabmap (mapping, wipe DB)\nsubscribe_odom + scan + RGBD\nGrid/Sensor=1, Reg/Strategy=2\nout: /map, map->odom TF, /rtabmap/info", "sub": "rtab", "cx": 441.0, "cy": 491.0, "w": 255.0024, "h": 64.00008}, {"id": "P2P", "label": "point_cloud_xyz", "sub": "rtab", "cx": 186.0, "cy": 345.0, "w": 115.9992, "h": 36.0}, {"id": "OBST", "label": "obstacles_detection", "sub": "rtab", "cx": 186.0, "cy": 491.0, "w": 138.0024, "h": 36.0}, {"id": "BT", "label": "bt_navigator\n(NavigateToPose / ThroughPoses)", "sub": "nav", "cx": 1971.0, "cy": 491.0, "w": 211.9968, "h": 40.00032}, {"id": "PLAN", "label": "planner_server\n(Smac/Hybrid-A*, min_turn_radius)", "sub": "nav", "cx": 1846.0, "cy": 597.0, "w": 218.0016, "h": 40.00032}, {"id": "CTRL", "label": "controller_server\nMPPI Ackermann, batch=200, 10Hz", "sub": "nav", "cx": 1346.0, "cy": 682.0, "w": 222.9984, "h": 40.00032}, {"id": "BEH", "label": "behavior_server", "sub": "nav", "cx": 1774.0, "cy": 491.0, "w": 117.0, "h": 36.0}, {"id": "SMOOTH", "label": "velocity_smoother", "sub": "nav", "cx": 1618.0, "cy": 491.0, "w": 130.0032, "h": 36.0}, {"id": "LIFE", "label": "lifecycle_manager (6 nodes)", "sub": "nav", "cx": 1429.0, "cy": 491.0, "w": 184.0032, "h": 36.0}, {"id": "GC", "label": "global_costmap", "sub": "nav", "cx": 1248.0, "cy": 491.0, "w": 113.99759999999999, "h": 36.0}, {"id": "LC", "label": "local_costmap", "sub": "nav", "cx": 1105.0, "cy": 491.0, "w": 106.9992, "h": 36.0}, {"id": "VOBR", "label": "px4_vision_odom\nENU->NED, FLU->FRD", "sub": "px4", "cx": 1819.0, "cy": 812.0, "w": 148.9968, "h": 40.00032}, {"id": "VEHODOM", "label": "px4_vehicle_odometry (diag)", "sub": "px4", "cx": 1618.0, "cy": 812.0, "w": 187.9992, "h": 36.0}, {"id": "MODE", "label": "rover mode node (manual; speed_steering rec.)\nNav2 /cmd_vel -> rover setpoints", "sub": "px4", "cx": 1346.0, "cy": 812.0, "w": 292.0032, "h": 40.00032}, {"id": "GOAL", "label": "Goal: RViz / NavigateToPose action /\nMQTT rover/cmd/goal", "sub": "io", "cx": 1971.0, "cy": 345.0, "w": 227.0016, "h": 40.00032}, {"id": "XRCE", "label": "MicroXRCE-DDS Agent (serial /dev/ttyUSB0)", "sub": "bridge", "cx": 1346.0, "cy": 904.0, "w": 268.9992, "h": 36.0}, {"id": "PX4FW", "label": "PX4 / Cube Black (FMUv3)\nEKF2 (EV hpos+vpos+yaw, no GPS/mag)", "sub": "fw", "cx": 1346.0, "cy": 996.0, "w": 254.0016, "h": 40.00032}, {"id": "ACT", "label": "activate_rover_manual.sh\narm + set custom mode", "sub": "io", "cx": 1017.0, "cy": 812.0, "w": 169.9992, "h": 40.00032}, {"id": "MOTORS", "label": "ESC + steering servo\n(PWM MAIN1 throttle, MAIN2 steer)", "sub": "act", "cx": 1424.0, "cy": 1081.0, "w": 223.9992, "h": 40.00032}, {"id": "MON", "label": "rover_monitor (Cam/Px4/Jetson probes)\n-> MQTT rover/health/#", "sub": "mon", "cx": 1157.0, "cy": 1081.0, "w": 246.0024, "h": 40.00032}], "clusters": [{"id": "cluster_hw", "label": "RealSense USB sensors", "sub": "cam", "x": 610.0, "y": 8.0, "w": 403.0, "h": 98.0}, {"id": "cluster_cams", "label": "realsense_camera.launch.py + robot_state_publisher", "sub": "cam", "x": 585.0, "y": 135.0, "w": 828.0, "h": 244.0}, {"id": "cluster_rtab", "label": "rtabmap_slam.launch.py  \u2014  EKF/IMU/VO/ICP commented OUT", "sub": "rtab", "x": 8.0, "y": 275.0, "w": 569.0, "h": 256.0}, {"id": "cluster_nav", "label": "nav2_bringup.launch.py (mppi)  \u2014  gated on /rtabmap/info + odom", "sub": "nav", "x": 1044.0, "y": 421.0, "w": 1041.0, "h": 289.0}, {"id": "cluster_px4", "label": "start_px4_bringup_vo.sh  \u2014  bridge + vo-bridge, manual mode", "sub": "px4", "x": 1192.0, "y": 742.0, "w": 709.0, "h": 98.0}], "edges": [{"s": "CMD", "t": "D435N", "label": "", "pts": [[1045.19, 104.02999999999997], [951.15, 117.35000000000002], [853.34, 131.66999999999996], [843.0, 135.0]], "lp": null, "style": "dotted", "ssub": "cmd"}, {"s": "CMD", "t": "RGBDSYNC", "label": "", "pts": [[1042.72, 104.05999999999995], [968.87, 114.41999999999996], [900.37, 124.41999999999996], [899.0, 126.0], [898.71, 126.34000000000003], [898.69, 126.67999999999995], [899.0, 127.0], [919.35, 147.66999999999996], [1400.65, 114.33000000000004], [1421.0, 135.0], [1462.16, 176.79999999999995], [1462.32, 225.36], [1421.0, 267.0], [1410.79, 277.28999999999996], [390.15, 268.88], [377.0, 275.0]], "lp": null, "style": "dotted", "ssub": "cmd"}, {"s": "CMD", "t": "BT", "label": "", "pts": [[1368.86, 104.05999999999995], [1399.98, 111.96000000000004], [1432.17, 122.11000000000001], [1461.0, 135.0], [1627.67, 209.53999999999996], [1796.87, 340.67999999999995], [1892.41, 421.0]], "lp": null, "style": "dotted", "ssub": "cmd"}, {"s": "D435I", "t": "D435N", "label": "", "pts": [[710.0, 98.25999999999999], [710.0, 119.24000000000001], [710.0, 152.97000000000003], [710.0, 176.69000000000005]], "lp": null, "style": "solid", "ssub": "cam"}, {"s": "T265", "t": "T265N", "label": "", "pts": [[990.12, 98.04999999999995], [1000.78, 100.80999999999995], [1011.66, 103.53999999999996], [1022.0, 106.0], [1082.55, 120.40999999999997], [1100.47, 113.85000000000002], [1159.0, 135.0], [1192.04, 146.94000000000005], [1227.13, 165.78999999999996], [1252.67, 180.77999999999997]], "lp": null, "style": "solid", "ssub": "cam"}, {"s": "D435N", "t": "RGBDSYNC", "label": "color/image_raw +\naligned_depth + camera_info", "pts": [[592.92, 218.92999999999995], [547.52, 225.36], [495.39, 234.49], [449.0, 247.0], [415.85, 255.94000000000005], [405.0, 255.13], [377.0, 275.0], [359.88, 287.15], [344.6, 305.34000000000003], [333.88, 319.99]], "lp": [515.5, 257.0], "style": "solid", "ssub": "cam"}, {"s": "D435N", "t": "D2S", "label": "aligned_depth_to_color/image_raw", "pts": [[669.6, 225.05999999999995], [642.8, 238.16999999999996], [607.14, 256.48], [577.0, 275.0], [554.57, 288.78], [530.52, 306.07000000000005], [512.1, 319.89]], "lp": [701.5, 257.0], "style": "solid", "ssub": "cam"}, {"s": "D435N", "t": "P2P", "label": "depth", "pts": [[592.9, 214.39], [478.97, 224.25], [315.22, 243.39], [260.0, 275.0], [239.19, 286.90999999999997], [219.54, 305.74], [205.72, 320.72]], "lp": [355.0, 257.0], "style": "solid", "ssub": "cam"}, {"s": "D435N", "t": "MON", "label": "", "pts": [[827.06, 223.37], [832.44, 223.97000000000003], [837.77, 224.51], [843.0, 225.0], [1067.14, 245.83000000000004], [1126.51, 212.79999999999995], [1349.0, 247.0], [1573.2, 281.46000000000004], [1619.96, 332.65], [1842.0, 379.0], [1964.32, 404.53], [2021.94, 343.54999999999995], [2120.0, 421.0], [2178.68, 467.34000000000003], [2168.74, 503.6], [2183.0, 577.0], [2196.61, 647.06], [2158.17, 680.89], [2093.0, 710.0], [1966.3, 766.6], [1607.69, 729.39], [1469.0, 734.0], [1461.08, 734.26], [1189.52, 736.3199999999999], [1184.0, 742.0], [1153.64, 773.23], [1153.91, 808.51], [1184.0, 840.0], [1207.51, 864.61], [1463.98, 832.06], [1490.0, 854.0], [1501.13, 863.39], [1495.44, 871.53], [1497.0, 886.0], [1503.22, 943.55], [1527.72, 972.97], [1489.0, 1016.0], [1481.75, 1024.06], [1372.36, 1044.12], [1281.1, 1059.65]], "lp": null, "style": "dashed", "ssub": "cam"}, {"s": "T265N", "t": "RELAY", "label": "/t265/odom", "pts": [[1288.89, 225.19000000000005], [1287.61, 247.24], [1285.49, 283.83000000000004], [1283.94, 310.59000000000003]], "lp": [1314.0, 257.0], "style": "solid", "ssub": "cam"}, {"s": "RELAY", "t": "RTM", "label": "odom = /t265/odom_base", "pts": [[1194.01, 371.03], [1180.37, 374.17999999999995], [1166.37, 376.99], [1153.0, 379.0], [1023.63, 398.41999999999996], [988.57, 375.03], [859.0, 393.0], [756.24, 407.25], [641.59, 434.70000000000005], [558.39, 456.77]], "lp": [918.0, 403.0], "style": "solid", "ssub": "cam"}, {"s": "RELAY", "t": "BT", "label": "/t265/odom_base", "pts": [[1293.09, 371.1], [1301.23, 386.19000000000005], [1313.85, 404.13], [1331.0, 413.0], [1356.56, 426.22], [1821.22, 413.46000000000004], [1849.0, 421.0], [1882.13, 429.99], [1915.79, 450.03], [1939.34, 466.21000000000004]], "lp": [1370.5, 403.0], "style": "solid", "ssub": "cam"}, {"s": "RELAY", "t": "CTRL", "label": "/t265/odom_base", "pts": [[1190.38, 371.07000000000005], [1177.88, 374.01], [1165.16, 376.76], [1153.0, 379.0], [1126.16, 383.95000000000005], [1049.16, 372.63], [1031.0, 393.0], [1011.02, 415.40999999999997], [925.03, 362.09000000000003], [1036.0, 531.0], [1081.99, 601.01], [1170.49, 639.3199999999999], [1241.19, 659.65]], "lp": [1092.5, 550.0], "style": "solid", "ssub": "cam"}, {"s": "RELAY", "t": "VOBR", "label": "/t265/odom_base", "pts": [[1281.73, 371.08000000000004], [1283.04, 385.75], [1287.43, 403.26], [1300.0, 413.0], [1317.41, 426.49], [2077.5, 405.34000000000003], [2093.0, 421.0], [2103.71, 431.82000000000005], [2094.53, 702.25], [2089.0, 710.0], [2046.44, 769.7], [1964.19, 794.14], [1901.6, 804.14]], "lp": [2135.5, 597.0], "style": "solid", "ssub": "cam"}, {"s": "JREL", "t": "RSP", "label": "joint_states (URDF anim only)", "pts": [[1001.0, 225.19000000000005], [1001.0, 248.98000000000002], [1001.0, 289.69000000000005], [1001.0, 316.72]], "lp": [1068.0, 257.0], "style": "dashed", "ssub": "cam"}, {"s": "RGBDSYNC", "t": "RTM", "label": "/rgbd_image", "pts": [[332.59, 363.08000000000004], [351.29, 384.97], [384.22, 423.53], [408.9, 452.41999999999996]], "lp": [402.0, 403.0], "style": "solid", "ssub": "rtab"}, {"s": "D2S", "t": "RTM", "label": "/scan", "pts": [[475.69, 365.12], [469.63, 386.91999999999996], [459.58, 423.12], [451.85, 450.95000000000005]], "lp": [479.5, 403.0], "style": "solid", "ssub": "rtab"}, {"s": "D2S", "t": "GC", "label": "/scan", "pts": [[527.1, 365.13], [542.67, 370.70000000000005], [560.34, 376.07000000000005], [577.0, 379.0], [599.9, 383.02], [1397.7, 376.41999999999996], [1414.0, 393.0], [1420.23, 399.34000000000003], [1420.01, 406.45000000000005], [1414.0, 413.0], [1399.98, 428.28], [1339.93, 412.51], [1321.0, 421.0], [1298.72, 430.99], [1278.98, 450.69000000000005], [1265.66, 466.49]], "lp": [1430.5, 403.0], "style": "solid", "ssub": "rtab"}, {"s": "D2S", "t": "LC", "label": "/scan", "pts": [[527.1, 365.14], [542.67, 370.71000000000004], [560.33, 376.08000000000004], [577.0, 379.0], [601.79, 383.34000000000003], [1465.34, 375.07000000000005], [1483.0, 393.0], [1489.24, 399.33000000000004], [1489.2, 406.63], [1483.0, 413.0], [1471.05, 425.26], [1190.75, 414.29999999999995], [1175.0, 421.0], [1152.88, 430.40999999999997], [1133.91, 450.36], [1121.32, 466.4]], "lp": [1499.5, 403.0], "style": "solid", "ssub": "rtab"}, {"s": "RTM", "t": "GC", "label": "/map + map->odom TF", "pts": [[568.79, 470.53999999999996], [689.48, 452.32000000000005], [875.75, 427.03999999999996], [1038.5, 417.0], [1099.08, 413.26], [1120.34, 394.62], [1175.0, 421.0], [1196.59, 431.41999999999996], [1215.91, 450.63], [1229.24, 466.28999999999996]], "lp": [1092.0, 403.0], "style": "solid", "ssub": "rtab"}, {"s": "P2P", "t": "OBST", "label": "cloud", "pts": [[186.0, 363.08000000000004], [186.0, 388.30999999999995], [186.0, 435.66999999999996], [186.0, 464.86]], "lp": [198.5, 403.0], "style": "solid", "ssub": "rtab"}, {"s": "OBST", "t": "LC", "label": "/camera/obstacles +\n/camera/ground", "pts": [[206.8, 472.99], [227.91, 455.97], [262.33, 431.51], [297.0, 421.0], [374.62, 397.46000000000004], [951.71, 390.84000000000003], [1027.0, 421.0], [1050.56, 430.44000000000005], [1071.6, 450.37], [1085.88, 466.55999999999995]], "lp": [687.0, 403.0], "style": "solid", "ssub": "rtab"}, {"s": "BT", "t": "PLAN", "label": "", "pts": [[1948.07, 511.08000000000004], [1927.67, 528.05], [1897.72, 552.97], [1875.53, 571.43]], "lp": null, "style": "solid", "ssub": "nav"}, {"s": "PLAN", "t": "CTRL", "label": "", "pts": [[1736.89, 616.11], [1656.86, 629.4], [1548.23, 647.4300000000001], [1465.8, 661.11]], "lp": null, "style": "solid", "ssub": "nav"}, {"s": "CTRL", "t": "MODE", "label": "/cmd_vel (TwistStamped)", "pts": [[1346.0, 702.1600000000001], [1346.0, 723.75], [1346.0, 759.01], [1346.0, 783.52]], "lp": [1403.5, 729.0], "style": "solid", "ssub": "nav"}, {"s": "VOBR", "t": "XRCE", "label": "/fmu/in/vehicle_visual_odometry", "pts": [[1758.58, 832.0699999999999], [1748.43, 834.95], [1737.96, 837.71], [1728.0, 840.0], [1647.1, 858.6], [1555.35, 873.91], [1482.05, 884.78]], "lp": [1727.5, 859.0], "style": "solid", "ssub": "px4"}, {"s": "MODE", "t": "XRCE", "label": "rover_speed/steering_setpoint", "pts": [[1346.0, 832.0899999999999], [1346.0, 845.37], [1346.0, 863.23], [1346.0, 877.7]], "lp": [1414.0, 859.0], "style": "solid", "ssub": "px4"}, {"s": "GOAL", "t": "BT", "label": "", "pts": [[1971.0, 365.12], [1971.0, 390.08000000000004], [1971.0, 433.94000000000005], [1971.0, 462.47]], "lp": null, "style": "solid", "ssub": "io"}, {"s": "XRCE", "t": "PX4FW", "label": "serial XRCE-DDS", "pts": [[1346.0, 930.4], [1346.0, 942.01], [1346.0, 955.77], [1346.0, 967.61]], "lp": [1382.5, 949.0], "style": "solid", "ssub": "bridge"}, {"s": "PX4FW", "t": "MOTORS", "label": "", "pts": [[1364.09, 1016.25], [1374.92, 1027.77], [1388.8, 1042.55], [1400.48, 1054.97]], "lp": null, "style": "solid", "ssub": "fw"}, {"s": "PX4FW", "t": "MON", "label": "", "pts": [[1302.64, 1016.04], [1274.41, 1028.44], [1237.46, 1044.66], [1207.85, 1057.67]], "lp": null, "style": "dashed", "ssub": "fw"}, {"s": "ACT", "t": "XRCE", "label": "vehicle_command", "pts": [[1086.77, 832.0899999999999], [1142.53, 847.34], [1220.31, 868.62], [1276.1, 883.88]], "lp": [1242.0, 859.0], "style": "solid", "ssub": "io"}]}, "desc": {"D435I": "Intel RealSense D435i. Publishes color, depth aligned to color, and IMU. Primary perception sensor feeding SLAM and obstacle detection.", "T265": "Intel RealSense T265 tracking camera. 6-DoF visual-inertial pose + IMU. Fisheye streams disabled \u2014 used purely as an odometry source.", "D435N": "realsense2_camera node for the D435i. 20 s startup delay, hardware reset disabled. Source of color / aligned-depth / camera_info.", "T265N": "realsense2_camera node for the T265. Performs a hardware reset of the Movidius VPU on launch.", "RELAY": "odom_tf_relay. Republishes /t265/odom as /t265/odom_base and owns the odom\u2192base_link TF \u2014 the single odometry source shared by SLAM, Nav2 and the PX4 bridge.", "RSP": "robot_state_publisher. Broadcasts URDF TF for camera mounts, wheels and the CubePilot frame.", "JREL": "cmd_vel_joint_relay (C++, 10 Hz). Inverse-Ackermann conversion of /cmd_vel into /joint_states \u2014 drives URDF animation only, never the hardware.", "RGBDSYNC": "rgbd_sync. Time-synchronises color + aligned depth + camera_info into a single /rgbd_image for RTAB-Map.", "D2S": "depthimage_to_laserscan. Collapses aligned depth into a 2D /scan for SLAM registration and the Nav2 costmaps.", "RTM": "rtabmap mapping node. Subscribes odom + scan + RGBD, wipes DB on launch. Grid/Sensor=1, Reg/Strategy=2. Outputs /map, the map\u2192odom TF and /rtabmap/info. EKF/IMU/VO/ICP inputs are commented out in this profile.", "P2P": "point_cloud_xyz. Reconstructs a 3D point cloud from depth for obstacle detection.", "OBST": "obstacles_detection. Segments ground vs. obstacle from the cloud and feeds the Nav2 local costmap.", "BT": "bt_navigator. Behaviour-tree orchestrator for NavigateToPose / NavigateThroughPoses goals.", "PLAN": "planner_server. Smac Hybrid-A* global planner constrained by the rover's minimum turn radius.", "CTRL": "controller_server. MPPI controller tuned for Ackermann kinematics (batch = 200, 10 Hz). Emits /cmd_vel.", "BEH": "behavior_server. Recovery behaviours \u2014 spin, back-up, wait.", "SMOOTH": "velocity_smoother. Rate-limits controller output before it reaches the rover.", "LIFE": "lifecycle_manager. Brings up and supervises the six managed Nav2 nodes.", "GC": "global_costmap. Static + inflation layers built from /map and /scan.", "LC": "local_costmap. Rolling window fed by /scan plus the camera obstacle / ground layers.", "VOBR": "px4_vision_odom. Bridges T265 odometry into PX4 \u2014 ENU\u2192NED, FLU\u2192FRD \u2014 publishing vehicle_visual_odometry.", "VEHODOM": "px4_vehicle_odometry. Diagnostic readback of PX4's fused odometry estimate.", "MODE": "Rover mode node (manual; speed_steering recommended). Maps Nav2 /cmd_vel into PX4 rover setpoints.", "CMD": "Launch entry point. start_jetson_session.sh wraps start_ros2_nodes.sh with the hardware, RTAB-Map, T265-odom, Nav2/MPPI and Jetson-profile flags.", "GOAL": "Goal source \u2014 RViz, a NavigateToPose action client, or an MQTT rover/cmd/goal message.", "XRCE": "Micro XRCE-DDS Agent on serial /dev/ttyUSB0. The DDS\u2194uORB bridge between ROS 2 and PX4.", "PX4FW": "PX4 firmware on Cube Black (FMUv3). EKF2 fuses external-vision hpos / vpos / yaw \u2014 no GPS, no magnetometer.", "ACT": "activate_rover_manual.sh. Arms the vehicle and sets the custom flight mode via vehicle_command.", "MOTORS": "ESC + steering servo. PWM MAIN1 = throttle, MAIN2 = steering.", "MON": "rover_monitor. Probes camera, PX4 and Jetson health; publishes to MQTT rover/health/#."}, "subs": {"cam": ["Camera / Sensors", "#34d399"], "rtab": ["RTAB-Map SLAM", "#fbbf24"], "nav": ["Nav2", "#38bdf8"], "px4": ["PX4 Bridge", "#f472b6"], "bridge": ["XRCE-DDS", "#a78bfa"], "fw": ["Flight Controller", "#c084fc"], "cmd": ["Launch", "#94a3b8"], "io": ["I/O", "#94a3b8"], "act": ["Actuation", "#fb923c"], "mon": ["Telemetry", "#94a3b8"], "misc": ["Misc", "#94a3b8"]}};
+const M=DATA.model, DESC=DATA.desc, SUBS=DATA.subs;
+const SVGNS="http://www.w3.org/2000/svg";
+const svg=document.getElementById('svg');
+const byId={}; M.nodes.forEach(n=>byId[n.id]=n);
+// adjacency
+const inc={}, out={}, nbr={};
+M.nodes.forEach(n=>{inc[n.id]=[];out[n.id]=[];nbr[n.id]=new Set();});
+M.edges.forEach((e,i)=>{e._i=i; out[e.s].push(e); inc[e.t].push(e);
+  nbr[e.s].add(e.t); nbr[e.t].add(e.s);});
+
+function el(t,a){const x=document.createElementNS(SVGNS,t);for(const k in (a||{}))x.setAttribute(k,a[k]);return x;}
+const vp=el('g',{id:'vp'}); svg.appendChild(vp);
+const gClus=el('g'),gEdge=el('g'),gNode=el('g');
+vp.appendChild(gClus);vp.appendChild(gEdge);vp.appendChild(gNode);
+
+// clusters
+M.clusters.forEach(c=>{
+  const g=el('g',{class:'cluster sub-'+c.sub}); g.dataset.sub=c.sub;
+  g.appendChild(el('rect',{x:c.x,y:c.y,width:c.w,height:c.h,rx:14}));
+  const tx=el('text',{x:c.x+14,y:c.y+20}); tx.textContent=c.label;
+  g.appendChild(tx); gClus.appendChild(g); c._g=g;
+});
+
+// edges
+function pathD(p){if(p.length<2)return'';let d='M'+p[0][0]+','+p[0][1];let i=1;
+  while(i+2<p.length){d+=' C'+p[i][0]+','+p[i][1]+' '+p[i+1][0]+','+p[i+1][1]+' '+p[i+2][0]+','+p[i+2][1];i+=3;}
+  while(i<p.length){d+=' L'+p[i][0]+','+p[i][1];i++;}return d;}
+function arrow(p){const a=p[p.length-2],b=p[p.length-1];
+  const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1;const ux=dx/L,uy=dy/L;
+  const s=8,w=3.2;const bx=b[0]-ux*s,by=b[1]-uy*s;const px=-uy,py=ux;
+  return [b,[bx+px*w,by+py*w],[bx-px*w,by-py*w]].map(q=>q[0].toFixed(1)+','+q[1].toFixed(1)).join(' ');}
+M.edges.forEach(e=>{
+  const g=el('g',{class:'edge sub-'+e.ssub+(e.style!=='solid'?' '+e.style:'')});
+  g.dataset.s=e.s;g.dataset.t=e.t;
+  if(e.pts&&e.pts.length){
+    g.appendChild(el('path',{d:pathD(e.pts)}));
+    if(e.style!=='dotted') g.appendChild(el('polygon',{class:'arr',points:arrow(e.pts)}));
+  }
+  gEdge.appendChild(g); e._g=g;
+});
+// edge labels (size after insert)
+M.edges.forEach(e=>{
+  if(!e.label||!e.lp)return;
+  const lg=el('g',{class:'elabel'});
+  const lines=e.label.split('\n');
+  const t=el('text',{'text-anchor':'middle'});
+  lines.forEach((ln,i)=>{const ts=el('tspan',{x:e.lp[0],dy:(i===0?0:11)});ts.textContent=ln;t.appendChild(ts);});
+  t.setAttribute('y',e.lp[1]-(lines.length-1)*5.5);
+  const r=el('rect',{}); lg.appendChild(r); lg.appendChild(t); e._g.appendChild(lg);
+  requestAnimationFrame(()=>{const bb=t.getBBox();
+    r.setAttribute('x',bb.x-4);r.setAttribute('y',bb.y-2);
+    r.setAttribute('width',bb.width+8);r.setAttribute('height',bb.height+4);});
+});
+
+// nodes
+M.nodes.forEach(n=>{
+  const g=el('g',{class:'node sub-'+n.sub}); g.dataset.id=n.id;
+  const w=n.w+6, h=n.h+2, x=n.cx-w/2, y=n.cy-h/2;
+  g.appendChild(el('rect',{x:x,y:y,width:w,height:h,rx:9}));
+  const lines=n.label.split('\n'); const lh=12;
+  const t=el('text',{'text-anchor':'middle'});
+  const y0=n.cy-(lines.length-1)*lh/2+3.5;
+  lines.forEach((ln,i)=>{
+    const ts=el('tspan',{x:n.cx,y:y0+i*lh,class:i===0?'t1':'t2'});ts.textContent=ln;t.appendChild(ts);});
+  g.appendChild(t); gNode.appendChild(g); n._g=g;
+});
+
+// ===== highlight =====
+let pinned=null, hiddenSubs=new Set();
+function focus(id){
+  const keepE=new Set(), keepN=new Set([id]);
+  [...inc[id],...out[id]].forEach(e=>{keepE.add(e._i);keepN.add(e.s);keepN.add(e.t);});
+  svg.classList.add('focusing');
+  M.nodes.forEach(n=>n._g.classList.toggle('hot',keepN.has(n.id)));
+  M.edges.forEach(e=>e._g.classList.toggle('hot',keepE.has(e._i)));
+  M.clusters.forEach(c=>{
+    const any=M.nodes.some(n=>keepN.has(n.id)&&n.sub===c.sub);
+    c._g.classList.toggle('hot',any);});
+}
+function clearFocus(){svg.classList.remove('focusing');
+  document.querySelectorAll('.hot').forEach(x=>x.classList.remove('hot'));}
+function refocus(){ if(pinned) focus(pinned); else clearFocus(); }
+
+M.nodes.forEach(n=>{
+  n._g.addEventListener('mouseenter',()=>{if(!dragging)focus(n.id);});
+  n._g.addEventListener('mouseleave',()=>{if(!dragging)refocus();});
+  n._g.addEventListener('click',ev=>{ev.stopPropagation();select(n.id);});
+});
+
+// ===== detail panel =====
+const panel=document.getElementById('panel');
+function select(id){
+  pinned=id; focus(id);
+  document.querySelectorAll('.node.sel').forEach(x=>x.classList.remove('sel'));
+  byId[id]._g.classList.add('sel');
+  const n=byId[id];
+  document.getElementById('pk').textContent=(SUBS[n.sub]?SUBS[n.sub][0]:n.sub);
+  document.getElementById('pk').style.color=(SUBS[n.sub]?SUBS[n.sub][1]:'#94a3b8');
+  document.getElementById('pt').textContent=n.label.split('\n')[0];
+  document.getElementById('pd').textContent=DESC[id]||'';
+  const io=document.getElementById('pio');io.innerHTML='';
+  function block(title,arr,key){
+    if(!arr.length)return;
+    const h=document.createElement('h3');h.textContent=title;io.appendChild(h);
+    const ul=document.createElement('ul');
+    arr.forEach(e=>{const li=document.createElement('li');
+      const other=byId[e[key]]; const onm=other?other.label.split('\n')[0]:e[key];
+      const top=e.label?'<span class="topic"> '+e.label.replace(/\n/g,' ')+'</span>':'';
+      li.innerHTML='<b>'+onm+'</b>'+top; ul.appendChild(li);});
+    io.appendChild(ul);
+  }
+  block('Inputs ← ',inc[id],'s');
+  block('Outputs → ',out[id],'t');
+  panel.classList.add('open');
+}
+function closePanel(){panel.classList.remove('open');pinned=null;
+  document.querySelectorAll('.node.sel').forEach(x=>x.classList.remove('sel'));clearFocus();}
+document.getElementById('px').addEventListener('click',closePanel);
+svg.addEventListener('click',()=>{if(pinned)closePanel();});
+window.addEventListener('keydown',e=>{if(e.key==='Escape')closePanel();});
+
+// ===== legend (subsystem highlight) =====
+const legend=document.getElementById('legend');
+['cam','rtab','nav','px4','bridge','fw','act'].forEach(s=>{
+  if(!SUBS[s])return;
+  const c=document.createElement('div');c.className='chip';c.dataset.sub=s;
+  c.innerHTML='<i style="background:'+SUBS[s][1]+'"></i>'+SUBS[s][0];
+  c.addEventListener('mouseenter',()=>{if(pinned)return;
+    svg.classList.add('focusing');
+    M.nodes.forEach(n=>n._g.classList.toggle('hot',n.sub===s));
+    M.edges.forEach(e=>e._g.classList.toggle('hot',e.ssub===s));
+    M.clusters.forEach(cl=>cl._g.classList.toggle('hot',cl.sub===s));});
+  c.addEventListener('mouseleave',()=>{if(!pinned)clearFocus();});
+  legend.appendChild(c);
+});
+
+// ===== pan / zoom =====
+let k=1,tx=0,ty=0,dragging=false,sx=0,sy=0;
+function apply(){vp.setAttribute('transform','translate('+tx+','+ty+') scale('+k+')');}
+function fit(){
+  const r=svg.getBoundingClientRect();
+  const padT=120,padB=70,padX=60;
+  const kx=(r.width-padX*2)/M.W, kyv=(r.height-padT-padB)/M.H;
+  k=Math.min(kx,kyv); k=Math.min(k,1.4);
+  tx=(r.width-M.W*k)/2; ty=padT+((r.height-padT-padB)-M.H*k)/2;
+  apply();
+}
+svg.addEventListener('wheel',e=>{e.preventDefault();
+  const r=svg.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;
+  const f=Math.exp(-e.deltaY*0.0012);const nk=Math.min(3.5,Math.max(.2,k*f));
+  tx=mx-(mx-tx)*(nk/k); ty=my-(my-ty)*(nk/k); k=nk; apply();
+},{passive:false});
+svg.addEventListener('pointerdown',e=>{if(e.target.closest('.node'))return;
+  dragging=true;sx=e.clientX-tx;sy=e.clientY-ty;svg.classList.add('grabbing');svg.setPointerCapture(e.pointerId);});
+svg.addEventListener('pointermove',e=>{if(!dragging)return;tx=e.clientX-sx;ty=e.clientY-sy;apply();});
+svg.addEventListener('pointerup',e=>{dragging=false;svg.classList.remove('grabbing');});
+function zoomC(f){const r=svg.getBoundingClientRect();const mx=r.width/2,my=r.height/2;
+  const nk=Math.min(3.5,Math.max(.2,k*f));tx=mx-(mx-tx)*(nk/k);ty=my-(my-ty)*(nk/k);k=nk;apply();}
+document.getElementById('zin').onclick=()=>zoomC(1.25);
+document.getElementById('zout').onclick=()=>zoomC(.8);
+document.getElementById('fit').onclick=fit;
+window.addEventListener('resize',fit);
+fit();
+</script>
+</body>
+</html>
