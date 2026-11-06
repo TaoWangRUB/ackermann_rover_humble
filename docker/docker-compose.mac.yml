@@ -1,0 +1,37 @@
+# macOS (Docker Desktop, Apple silicon) override for docker/docker-compose.yml.
+# scripts/lib/dc.sh adds this file automatically on Darwin. By hand:
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.mac.yml <cmd> ackermann_slam
+#
+# What differs from Linux/Jetson:
+#   - no "nvidia" runtime, no host CUDA toolkit, no /run/udev and no realsense-ros
+#     checkout (the repo has its own wrapper package)
+#   - Docker Desktop's host networking does not reach the Mac, so the container
+#     gets its own network and publishes the Foxglove bridge port instead
+#     (host port FOXGLOVE_HOST_PORT, default 8766)
+#   - the image gets a thin Mac layer (docker/Dockerfile.mac): rosdep cache for
+#     the container user, the workspace's rosdep dependencies, foxglove_bridge
+#   - Gazebo's Fuel/model cache lives on the host so the warehouse world is
+#     downloaded once, not on every container recreation
+services:
+  ackermann_slam:
+    image: ${IMAGE_NAME-ackermann_rover}_${ARCH-aarch64}_${ROS_DISTRO-jazzy}_mac
+    build:
+      dockerfile: docker/Dockerfile.mac
+      args:
+        BASE_IMAGE: ${IMAGE_NAME-ackermann_rover}_${ARCH-aarch64}_${ROS_DISTRO-jazzy}
+    runtime: runc
+    network_mode: bridge
+    ports:
+      # foxglove_bridge (container port 8765) -> Foxglove app on the Mac.
+      # Host side defaults to 8766 because 8765 is often taken by another local
+      # tool; override with FOXGLOVE_HOST_PORT. Connect Foxglove to
+      # ws://localhost:${FOXGLOVE_HOST_PORT:-8766}.
+      - "${FOXGLOVE_HOST_PORT-8766}:8765"
+    environment:
+      - DISPLAY=${DISPLAY-}
+      - ROS_DDS_MODE=local   # no 10.42.x robot LAN here; keep Fast DDS defaults
+    volumes:
+      - ../docker/empty_cuda:/usr/local/cuda:ro
+      - ../docker/empty_cuda:/run/udev:ro
+      - ../docker/empty_cuda:/realsense-ros:ro
+      - ../gazebo_cache:/home/${USERNAME-nvidia}/.gz

@@ -52,3 +52,6 @@ artifacts/ai/
 
 # rosbag2 recordings
 bags/
+
+# Gazebo Fuel/model cache mounted into the container (docker compose)
+gazebo_cache/

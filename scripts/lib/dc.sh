@@ -34,6 +34,8 @@ fi
 
 # ── runtime defaults (not in .env) ─────────────────────────────────────
 export ARCH="${ARCH:-$(uname -m)}"
+# macOS reports arm64; the images and the Jetson use the Linux name aarch64.
+[[ "${ARCH}" == "arm64" ]] && export ARCH=aarch64
 export USERNAME="${USERNAME:-$(id -un)}"
 export USER_UID="${USER_UID:-$(id -u)}"
 export USER_GID="${USER_GID:-$(id -g)}"
@@ -92,9 +94,19 @@ fi
 # dcomp  — run docker compose (returns to caller; safe for multi-call scripts)
 # xdcomp — exec docker compose (replaces current process; use as last command)
 #           Needed because `exec` only works with external commands, not functions.
+# ── compose file set ───────────────────────────────────────────────────
+# macOS (Docker Desktop) needs the overrides in docker/docker-compose.mac.yml
+# (no nvidia runtime, no host networking, no udev). Add it automatically there
+# so every helper script sees the same stack as a manual `docker compose` call.
+DC_FILES=(-f "${COMPOSE_FILE}")
+COMPOSE_MAC_FILE="${PROJECT_DIR}/docker/docker-compose.mac.yml"
+if [[ "$(uname -s)" == "Darwin" && -f "${COMPOSE_MAC_FILE}" ]]; then
+    DC_FILES+=(-f "${COMPOSE_MAC_FILE}")
+fi
+
 dcomp() {
-    "${DC_CMD[@]}" -f "${COMPOSE_FILE}" "$@"
+    "${DC_CMD[@]}" "${DC_FILES[@]}" "$@"
 }
 xdcomp() {
-    exec "${DC_CMD[@]}" -f "${COMPOSE_FILE}" "$@"
+    exec "${DC_CMD[@]}" "${DC_FILES[@]}" "$@"
 }
