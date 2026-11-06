@@ -44,6 +44,9 @@
 #   --controller=TYPE  Nav2 path controller: mppi (default) or rpp (lightweight)
 #   --reversible-drive Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
 #   --no-rviz          Disable RViz2
+#   --headless         [sim] Gazebo server only with EGL software rendering and no
+#                          RViz: for hosts without an X server (macOS). Visualise
+#                          with ./scripts/start_foxglove_bridge.sh + Foxglove.
 #   --rtabmap-viz      Launch rtabmap_viz alongside RTAB-Map for graph/loop monitoring
 #   --build[=PKG]      Build workspace (or specific pkg) before launching
 #   --build-only[=PKG] Build only, do not launch
@@ -180,6 +183,7 @@ LOCALIZATION="false"
 DELETE_DB_ON_START=""
 NAV2="false"
 RVIZ="true"
+HEADLESS="false"
 RTABMAP_VIZ="false"
 RTABMAP_VIS_ESTIMATION_TYPE="1"
 RTABMAP_VIS_MAX_DEPTH="4.0"
@@ -213,6 +217,7 @@ for arg in "$@"; do
         --keep-rtabmap-db) DELETE_DB_ON_START="false" ;;
         --nav2)         NAV2="true" ;;
         --no-rviz)      RVIZ="false" ;;
+        --headless)     HEADLESS="true"; RVIZ="false" ;;
         --rtabmap-viz)  RTABMAP_VIZ="true" ;;
         --rtabmap-vis-estimation-type=*) RTABMAP_VIS_ESTIMATION_TYPE="${arg#--rtabmap-vis-estimation-type=}" ;;
         --rtabmap-vis-max-depth=*)       RTABMAP_VIS_MAX_DEPTH="${arg#--rtabmap-vis-max-depth=}" ;;
@@ -235,7 +240,7 @@ for arg in "$@"; do
             exit 0 ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--cuvslam-odom] [--rgbd-odom] [--px4] [--rtabmap|--localization] [--wipe-rtabmap-db|--keep-rtabmap-db] [--nav2] [--controller=mppi|rpp] [--no-rviz] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
+            echo "Usage: $0 [--hw] [--depth-camera=NAME] [--t265] [--t265-odom] [--vins-odom] [--cuvslam-odom] [--rgbd-odom] [--px4] [--rtabmap|--localization] [--wipe-rtabmap-db|--keep-rtabmap-db] [--nav2] [--controller=mppi|rpp] [--no-rviz] [--headless] [--bridge[=mode]] [--vo-bridge] [--odom-topic=TOPIC] [--build[=pkg]] [--build-only[=pkg,pkg]]"
             exit 1
             ;;
     esac
@@ -367,6 +372,7 @@ else
     echo "  Depth camera: ${DEPTH_CAMERA}"
     echo "  T265 odom:    ${HW_T265_ODOM}"
     echo "  PX4 SITL:     ${PX4}"
+    echo "  Headless:     ${HEADLESS}"
 fi
 echo "  VINS odom:    ${VINS_ODOM}"
 echo "  cuVSLAM odom: ${CUVSLAM_ODOM}"
@@ -395,6 +401,11 @@ if [[ "${HW}" == "true" ]]; then
     LAUNCH_CMD+=" hw_enable_t265:=${HW_T265}"
 else
     LAUNCH_CMD+=" enable_px4_sitl:=${PX4}"
+    if [[ "${HEADLESS}" == "true" ]]; then
+        # Server only (-s) and EGL/Mesa rendering for the camera and lidar
+        # sensors; the world path is resolved inside the container.
+        LAUNCH_CMD+=" gazebo_args:=\"-s -r --headless-rendering \$(ros2 pkg prefix description_robot)/share/description_robot/worlds/warehouse.sdf\""
+    fi
 fi
 LAUNCH_CMD+=" use_t265_odom:=${HW_T265_ODOM}"
 LAUNCH_CMD+=" use_vins_odom:=${VINS_ODOM}"
