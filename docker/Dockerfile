@@ -255,6 +255,12 @@ RUN set -eux; \
 ENV HOME=/home/${USERNAME}
 USER ${USERNAME}
 
+# The rosdep index above was fetched as root. The entrypoint runs
+# `rosdep install` as this user, which needs its own cache; without it the
+# install fails silently and the workspace's extra deps (gz_ros2_control,
+# behaviortree_cpp_v3, ...) never get installed.
+RUN rosdep update --rosdistro ${ROS_DISTRO}
+
 # Lightweight entrypoint script: provided from the local repo for easy editing
 COPY --chown=${USERNAME}:${USERNAME} docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
