@@ -140,6 +140,13 @@ bash scripts/start_foxglove_bridge.sh
 
 In the Foxglove app: Open connection, Foxglove WebSocket, `ws://localhost:8766` (or `$FOXGLOVE_HOST_PORT`). The WebSocket handshake on that port was verified with curl (HTTP 101).
 
+A layout that mirrors the RViz robot view ([robot.rviz](../../src/robot_bringup/rviz/robot.rviz)) is in [foxglove/ackermann_rover.json](../../foxglove/ackermann_rover.json): 3D panel with the robot model from `/robot_description`, TF, laser scan, map and costmaps, global and local plan, click tools publishing `/goal_pose`, `/clicked_point` and `/initialpose`; L515 colour and depth images; command-vs-odometry plot; PX4 arming, mode and preflight indicators.
+
+1. Settings (gear icon), ROS section, set the package path to this repo's `src` folder so `package://description_robot/...` meshes resolve: `/Users/<you>/workspace/hackthon/ackermann_rover_humble/src`.
+2. Layouts sidebar, Import from file, pick `foxglove/ackermann_rover.json`.
+3. Display frame: the layout uses `$odom`, the rover's odometry frame published by Gazebo on `/ackermann/tf`, which is what Gazebo-only and PX4 sessions provide. With `--rtabmap`/`--nav2`, switch the 3D panel's display frame to `map` and hide the `/ackermann/tf` transform topic, because `ackermann/base_link` would otherwise get two parents.
+4. Driving from Foxglove: the Teleop panel publishes `geometry_msgs/Twist`, but `/cmd_vel` here is `TwistStamped`, so use the Publish panel with a TwistStamped message or the `ros2 topic pub` command below. Clicking a pose in the 3D panel sends a Nav2 goal to `/goal_pose` (needs `--nav2`).
+
 ### 7. Drive the rover
 
 Inside the container (sourced), `/cmd_vel` is a `TwistStamped` that is remapped to the `ackermann_steering_controller` reference:
@@ -199,6 +206,20 @@ Things to know (repo behaviour, not Mac-specific):
 - `scripts/px4_check_modes.py` defaults to `/dev/ttyACM0` and gives interleaved, incomplete output on SITL even with `PX4_DEVICE=udpin:0.0.0.0:14550`; `px4-listener register_ext_component_reply` is the reliable check.
 - `--px4` also starts the VO bridge, but nothing publishes `/odometry/filtered` in this launch set and `EKF2_EV_CTRL` is 0, so PX4 runs on GNSS and magnetometer from the Gazebo sensors. Harmless.
 - Stop with the three background jobs killed, then `docker exec jazzy_slam_aarch64 pkill -INT -f 'ros2 launch'` and `docker exec jazzy_slam_aarch64 pkill -f 'px4|MicroXRCE|gz sim|ruby'`. PX4 leaves `parameters.bson`, `dataman`, `eeprom` and ULogs under `/px4/build/px4_sitl_default/rootfs` (git-ignored).
+
+## Navigation goal in the sim (RTAB-Map + Nav2)
+
+Verified on 2026-11-08: `bash scripts/start_ros2_nodes.sh --px4 --headless --bridge=speed_steering --t265-odom --rtabmap --nav2`, then the XRCE agent, PX4 and `activate_rover_manual.sh 23` as above, then
+
+```bash
+docker exec -i jazzy_slam_aarch64 bash -c 'source /opt/ros/jazzy/setup.bash && source /workspace/install/setup.bash && \
+  ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
+  "{pose: {header: {frame_id: map}, pose: {position: {x: 2.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}}"'
+```
+
+Result: SUCCEEDED after 35 s wall time, rover at (1.70, 0.00) m, 10 global plans, 82 velocity commands. In Foxglove, click a pose in the 3D panel to send the same kind of goal to `/goal_pose`.
+
+`--t265-odom` is required: on `main` the RTAB-Map launch has its visual odometry, ICP odometry and EKF nodes commented out ([rtabmap_slam.launch.py](../../src/rtabmap_bringup/launch/rtabmap_slam.launch.py), the `#ld.add_action(...)` lines), so without an external odometry source no `odom` frame exists, RTAB-Map gets no synced data and Nav2's costmaps never activate. The simulated T265 provides `/t265/odom_base` and the `odom -> ackermann/base_link` transform, which also matches Nav2's odometry remap in [nav2_bringup.launch.py](../../src/ackermann_nav2_bringup/launch/nav2_bringup.launch.py). Cost: the two fisheye cameras render too, and the real-time factor drops to about 0.1 to 0.13, so a 2 m goal takes a few minutes of wall time including planning.
 
 ## Known limits and troubleshooting
 

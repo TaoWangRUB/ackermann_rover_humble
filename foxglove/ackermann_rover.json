@@ -1,0 +1,477 @@
+{
+  "configById": {
+    "3D!rover": {
+      "foxglovePanelTitle": "Rover (mirrors robot_bringup/rviz/robot.rviz)",
+      "cameraState": {
+        "perspective": true,
+        "distance": 7,
+        "phi": 35,
+        "thetaOffset": 180,
+        "targetOffset": [
+          1.5,
+          0,
+          0
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.05,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "map",
+      "scene": {
+        "enableStats": false,
+        "backgroundColor": "#303030",
+        "meshUpAxis": "z_up",
+        "transforms": {
+          "showLabel": false,
+          "axisScale": 0.1,
+          "labelSize": 0.02
+        }
+      },
+      "transforms": {},
+      "topics": {
+        "/tf": {
+          "visible": true
+        },
+        "/tf_static": {
+          "visible": true
+        },
+        "/ackermann/tf": {
+          "visible": false
+        },
+        "/rplidar/scan": {
+          "visible": true,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo",
+          "pointSize": 3,
+          "pointShape": "circle",
+          "decayTime": 0
+        },
+        "/map": {
+          "visible": true,
+          "colorMode": "map",
+          "frameLocked": false
+        },
+        "/global_costmap/costmap": {
+          "visible": true,
+          "colorMode": "costmap"
+        },
+        "/downsampled_costmap": {
+          "visible": true,
+          "colorMode": "costmap"
+        },
+        "/local_costmap/costmap": {
+          "visible": true,
+          "colorMode": "costmap"
+        },
+        "/plan": {
+          "visible": true,
+          "type": "line",
+          "lineWidth": 0.03,
+          "color": "#ff0000"
+        },
+        "/optimal_trajectory": {
+          "visible": true,
+          "type": "line",
+          "lineWidth": 0.05,
+          "color": "#00ff7f"
+        },
+        "/trajectories": {
+          "visible": false
+        },
+        "/particle_cloud": {
+          "visible": true,
+          "type": "arrow",
+          "color": "#00b400",
+          "arrowScale": [
+            0.3,
+            0.03,
+            0.03
+          ]
+        },
+        "/global_costmap/published_footprint": {
+          "visible": false,
+          "color": "#19ff00",
+          "lineWidth": 0.02
+        },
+        "/local_costmap/published_footprint": {
+          "visible": false,
+          "color": "#19ff00",
+          "lineWidth": 0.02
+        },
+        "/global_costmap/voxel_marked_cloud": {
+          "visible": false,
+          "colorMode": "flat",
+          "flatColor": "#7d7d7d",
+          "pointSize": 5
+        },
+        "/local_costmap/voxel_marked_cloud": {
+          "visible": false,
+          "colorMode": "rgb",
+          "pointSize": 3
+        },
+        "/l515/points": {
+          "visible": false,
+          "colorMode": "rgb",
+          "pointSize": 2,
+          "pointShape": "square"
+        },
+        "/l515/image": {
+          "visible": false
+        },
+        "/ackermann/odom": {
+          "visible": false,
+          "type": "arrow",
+          "color": "#ffc800",
+          "arrowScale": [
+            0.3,
+            0.05,
+            0.05
+          ]
+        },
+        "/px4_vehicle_odom": {
+          "visible": false,
+          "type": "arrow",
+          "color": "#ff7f00",
+          "arrowScale": [
+            0.3,
+            0.05,
+            0.05
+          ]
+        }
+      },
+      "layers": {
+        "9a2b1e40-urdf-0000-0000-000000000001": {
+          "visible": true,
+          "label": "Rover model (/robot_description)",
+          "order": 1,
+          "instanceId": "9a2b1e40-urdf-0000-0000-000000000001",
+          "layerId": "foxglove.Urdf",
+          "sourceType": "topic",
+          "topic": "/robot_description",
+          "url": "",
+          "filePath": "",
+          "parameter": "",
+          "framePrefix": "",
+          "displayMode": "visual",
+          "fallbackColor": "#cccccc",
+          "showAxis": false,
+          "axisScale": 1,
+          "showOutlines": true,
+          "opacity": 0.4
+        },
+        "9a2b1e40-grid-0000-0000-000000000002": {
+          "visible": true,
+          "label": "Grid (1 m)",
+          "order": 2,
+          "instanceId": "9a2b1e40-grid-0000-0000-000000000002",
+          "layerId": "foxglove.Grid",
+          "frameId": "",
+          "size": 10,
+          "divisions": 10,
+          "lineWidth": 1,
+          "color": "#a0a0a480",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "publish": {
+        "type": "pose",
+        "poseTopic": "/goal_pose",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26
+      },
+      "imageMode": {}
+    },
+    "Image!color": {
+      "foxglovePanelTitle": "L515 color (/l515/image)",
+      "cameraState": {
+        "perspective": true,
+        "distance": 20,
+        "phi": 60,
+        "thetaOffset": 45,
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "pose",
+        "poseTopic": "/goal_pose",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26
+      },
+      "imageMode": {
+        "imageTopic": "/l515/image",
+        "calibrationTopic": "/l515/camera_info",
+        "synchronize": false
+      }
+    },
+    "Image!depth": {
+      "foxglovePanelTitle": "L515 depth (/l515/depth_image, 0-5 m)",
+      "cameraState": {
+        "perspective": true,
+        "distance": 20,
+        "phi": 60,
+        "thetaOffset": 45,
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "pose",
+        "poseTopic": "/goal_pose",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26
+      },
+      "imageMode": {
+        "imageTopic": "/l515/depth_image",
+        "calibrationTopic": "/l515/camera_info",
+        "synchronize": false,
+        "colorMode": "colormap",
+        "colorMap": "turbo",
+        "minValue": 0,
+        "maxValue": 5
+      }
+    },
+    "Indicator!armed": {
+      "foxglovePanelTitle": "PX4 arming",
+      "path": "/fmu/out/vehicle_status_v2.arming_state",
+      "style": "background",
+      "fallbackColor": "#6b7280",
+      "fallbackLabel": "no PX4 data",
+      "rules": [
+        {
+          "operator": "=",
+          "rawValue": "2",
+          "color": "#2e9e4f",
+          "label": "ARMED"
+        },
+        {
+          "operator": "=",
+          "rawValue": "1",
+          "color": "#d99a00",
+          "label": "disarmed"
+        }
+      ]
+    },
+    "Indicator!navstate": {
+      "foxglovePanelTitle": "PX4 mode (nav_state)",
+      "path": "/fmu/out/vehicle_status_v2.nav_state",
+      "style": "background",
+      "fallbackColor": "#6b7280",
+      "fallbackLabel": "other / no data",
+      "rules": [
+        {
+          "operator": "=",
+          "rawValue": "23",
+          "color": "#2e9e4f",
+          "label": "external 1: Rover Speed Steering"
+        },
+        {
+          "operator": "=",
+          "rawValue": "24",
+          "color": "#2e9e4f",
+          "label": "external 2"
+        },
+        {
+          "operator": "=",
+          "rawValue": "4",
+          "color": "#3b82f6",
+          "label": "Hold (auto loiter)"
+        },
+        {
+          "operator": "=",
+          "rawValue": "0",
+          "color": "#d99a00",
+          "label": "Manual"
+        },
+        {
+          "operator": "=",
+          "rawValue": "14",
+          "color": "#3b82f6",
+          "label": "Offboard"
+        }
+      ]
+    },
+    "Indicator!preflight": {
+      "foxglovePanelTitle": "PX4 preflight",
+      "path": "/fmu/out/vehicle_status_v2.pre_flight_checks_pass",
+      "style": "background",
+      "fallbackColor": "#6b7280",
+      "fallbackLabel": "no PX4 data",
+      "rules": [
+        {
+          "operator": "=",
+          "rawValue": "true",
+          "color": "#2e9e4f",
+          "label": "checks pass"
+        },
+        {
+          "operator": "=",
+          "rawValue": "false",
+          "color": "#d6453d",
+          "label": "preflight FAIL"
+        }
+      ]
+    },
+    "Plot!speed": {
+      "foxglovePanelTitle": "Command vs odometry [m/s, rad/s]",
+      "paths": [
+        {
+          "value": "/cmd_vel.twist.linear.x",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "cmd_vel vx"
+        },
+        {
+          "value": "/ackermann/odom.twist.twist.linear.x",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "odom vx"
+        },
+        {
+          "value": "/cmd_vel.twist.angular.z",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "cmd_vel wz"
+        },
+        {
+          "value": "/ackermann/odom.twist.twist.angular.z",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "odom wz"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "followingViewWidth": 60
+    },
+    "RawMessages!status": {
+      "foxglovePanelTitle": "PX4 vehicle_status",
+      "topicPath": "/fmu/out/vehicle_status_v2",
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "diffEnabled": false,
+      "showFullMessageForDiff": false,
+      "expansion": "none"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "direction": "row",
+    "first": "3D!rover",
+    "second": {
+      "direction": "column",
+      "first": {
+        "direction": "row",
+        "first": "Image!color",
+        "second": "Image!depth",
+        "splitPercentage": 50
+      },
+      "second": {
+        "direction": "column",
+        "first": {
+          "direction": "row",
+          "first": "Indicator!armed",
+          "second": {
+            "direction": "row",
+            "first": "Indicator!navstate",
+            "second": "Indicator!preflight",
+            "splitPercentage": 60
+          },
+          "splitPercentage": 30
+        },
+        "second": {
+          "direction": "column",
+          "first": "Plot!speed",
+          "second": "RawMessages!status",
+          "splitPercentage": 60
+        },
+        "splitPercentage": 18
+      },
+      "splitPercentage": 38
+    },
+    "splitPercentage": 66
+  }
+}
