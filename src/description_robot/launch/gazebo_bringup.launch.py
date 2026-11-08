@@ -115,8 +115,10 @@ def generate_launch_description() -> LaunchDescription:
         PythonExpression(['"/', depth_camera, '/image@sensor_msgs/msg/Image[gz.msgs.Image"']),
         PythonExpression(['"/', depth_camera, '/imu/raw@sensor_msgs/msg/Imu[gz.msgs.IMU"']),
         '/ackermann/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
-        '/ackermann/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
-        '/model/ackermann/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
+        # The Gazebo odometry plugin's TF (odom_frame "$odom" -> base_link) is
+        # deliberately NOT bridged: no ROS node consumes it, and tools that read
+        # every TFMessage topic (Foxglove) would give base_link a second parent
+        # next to the odom -> base_link transform from the EKF / T265 relay.
         '/rplidar/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
     ]
 
@@ -136,7 +138,8 @@ def generate_launch_description() -> LaunchDescription:
         '/t265/fisheye2@sensor_msgs/msg/Image[gz.msgs.Image',
         '/t265/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
         '/t265/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
-        '/t265/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
+        # '/t265/tf' (odom -> base_link from the plugin) is not bridged either:
+        # the odom -> base_link transform comes from the odom_tf_relay on /tf.
     ]
 
     parameter_bridge = Node(
