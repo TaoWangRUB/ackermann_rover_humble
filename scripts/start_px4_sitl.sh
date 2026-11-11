@@ -6,7 +6,19 @@
 #   ./scripts/start_px4_sitl.sh --official    # official gz_rover_ackermann (PX4 spawns Gazebo itself)
 #   ./scripts/start_px4_sitl.sh --vio         # custom model + VIO-only EKF2 (no GPS)
 #   ./scripts/start_px4_sitl.sh --official --vio  # official model + VIO-only EKF2
+#   ./scripts/start_px4_sitl.sh --reversible-drive  # bidirectional wheel ESC (see below)
 #   ./scripts/start_px4_sitl.sh build         # rebuild PX4 inside Docker first
+#
+# --- Wheel ESC model ---
+# By default the simulated wheel motor behaves like the rover's unidirectional
+# ESC: throttle -1 = stop, +1 = full forward. This is what px4_bringup's
+# RoverManual sends (bidirectional_esc=false). The stock airframe instead maps
+# -1 to full reverse, so arming in RoverManual drove the sim rover backward.
+# --reversible-drive keeps the stock mapping (0 = stop, -1 = full reverse);
+# pass it together with start_ros2_nodes.sh --reversible-drive, and use it
+# when testing PX4's closed-loop rover modes (speed_*), which assume 0 = stop.
+# Both ways the throttle rate limits are disabled as on the rover
+# (RO_ACCEL_LIM/RO_DECEL_LIM/RO_JERK_LIM = -1).
 #
 # --- Default mode (custom model, standalone) ---
 # Prerequisites:
@@ -48,15 +60,41 @@ PX4_BUILD_DIR="/px4/build/px4_sitl_default"
 # --- Parse flags ---
 OFFICIAL_MODEL=0
 VIO_MODE=0
+REVERSIBLE_DRIVE=0
 POSITIONAL=()
 for arg in "$@"; do
   case "$arg" in
     --official) OFFICIAL_MODEL=1 ;;
     --vio)      VIO_MODE=1 ;;
+    --reversible-drive) REVERSIBLE_DRIVE=1 ;;
     *) POSITIONAL+=("$arg") ;;
   esac
 done
 set -- "${POSITIONAL[@]+"${POSITIONAL[@]}"}"
+
+# --- Wheel ESC model ---
+# Airframe 51000 maps the reversible wheel motor [-1, 1] onto
+# SIM_GZ_WH_MIN1..MAX1 = 70..130, and the Gazebo bridge sets wheel speed to
+# output - 100 (GZMixingInterfaceWheel.cpp). So -1 is full reverse. Raising
+# the minimum to 100 makes -1 = 0 rad/s, like PWM_MIN on the rover's
+# unidirectional ESC. Set it explicitly either way: SITL keeps parameters
+# across restarts, so a previous run's value would otherwise stick.
+if [[ "${REVERSIBLE_DRIVE}" == "1" ]]; then
+    WHEEL_MIN1=70
+    ESC_LABEL="bidirectional (0 = stop, -1 = full reverse)"
+else
+    WHEEL_MIN1=100
+    ESC_LABEL="unidirectional (-1 = stop, +1 = full forward)"
+fi
+# Throttle rate limits as on the rover (RO_ACCEL_LIM/RO_DECEL_LIM/RO_JERK_LIM
+# = -1, disabled; airframe 51000 sets 4/6/10). PX4 arms with the motor at 0
+# and the SITL limits then ramp it toward the setpoint: with the
+# unidirectional mapping above, 0 is half throttle, so the ramp jolted the
+# rover ~10 cm forward on every arm.
+SITL_PARAM_EXPORTS="export PX4_PARAM_SIM_GZ_WH_MIN1=${WHEEL_MIN1}
+      export PX4_PARAM_RO_ACCEL_LIM=-1
+      export PX4_PARAM_RO_DECEL_LIM=-1
+      export PX4_PARAM_RO_JERK_LIM=-1"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
@@ -84,6 +122,7 @@ if [[ "${OFFICIAL_MODEL}" == "1" ]]; then
     [[ "${VIO_MODE}" == "1" ]] && MODE_LABEL="${MODE_LABEL} [VIO]"
     echo "Starting PX4 SITL (official mode) inside Docker container..."
     echo "  Mode:          ${MODE_LABEL}"
+    echo "  Wheel ESC:     ${ESC_LABEL}"
     echo "  PX4 build dir: ${PX4_BUILD_DIR} (inside container)"
     echo ""
     if [[ "${VIO_MODE}" == "1" ]]; then
@@ -105,6 +144,9 @@ if [[ "${OFFICIAL_MODEL}" == "1" ]]; then
       export PX4_GZ_WORLD=${PX4_GZ_WORLD}
       export GZ_IP=127.0.0.1
       export GZ_DISTRO=harmonic
+      # Wheel ESC model + rover throttle limits (applied by rcS after the
+      # airframe defaults).
+      ${SITL_PARAM_EXPORTS}
 
       $([ "${VIO_MODE}" == "1" ] && echo '
       # --vio: PX4_PARAM_* env vars are applied by init.d-posix/rcS after param import
@@ -140,6 +182,7 @@ else
     echo "  Mode:          ${MODE_LABEL}"
     echo "  Airframe:      ${PX4_AUTOSTART}"
     echo "  World:         ${PX4_GZ_WORLD}"
+    echo "  Wheel ESC:     ${ESC_LABEL}"
     echo "  PX4 build dir: ${PX4_BUILD_DIR} (inside container)"
     echo ""
     if [[ "${VIO_MODE}" == "1" ]]; then
@@ -160,6 +203,9 @@ else
       export PX4_GZ_WORLD=${PX4_GZ_WORLD}
       export PX4_SIMULATOR=gz
       export GZ_DISTRO=harmonic
+      # Wheel ESC model + rover throttle limits (applied by rcS after the
+      # airframe defaults).
+      ${SITL_PARAM_EXPORTS}
 
       $([ "${VIO_MODE}" == "1" ] && echo '
       # --vio: PX4_PARAM_* env vars are applied by init.d-posix/rcS after param import
