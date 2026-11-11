@@ -229,7 +229,8 @@ ARGUMENTS = [
         default_value='false',
         choices=['true', 'false'],
         description='Use T265 as odometry source (skip RTAB-Map VO/ICP). '
-                    'Requires hw_enable_t265:=true.',
+                    'Requires hw_enable_t265:=true. In simulation this is the '
+                    'default when no other odometry source is selected.',
     ),
     DeclareLaunchArgument(
         'use_vins_odom',
@@ -283,10 +284,22 @@ def generate_launch_description() -> LaunchDescription:
     reversible_drive = LaunchConfiguration('reversible_drive')
     depth_camera = LaunchConfiguration('depth_camera')
     hw_enable_t265 = LaunchConfiguration('hw_enable_t265')
-    use_t265_odom = LaunchConfiguration('use_t265_odom')
     use_vins_odom = LaunchConfiguration('use_vins_odom')
     use_cuvslam_odom = LaunchConfiguration('use_cuvslam_odom')
     use_rgbd_odom = LaunchConfiguration('use_rgbd_odom')
+
+    # The robot_localization EKF that published /odometry/filtered is gone
+    # (2026-04), so with no odometry source selected nothing publishes the odom
+    # topic or the odom -> base_link TF, and Nav2 never activates. In simulation,
+    # fall back to the Gazebo T265 odometry, which Nav2 reads (/t265/odom_base)
+    # in any case. Hardware keeps the explicit choice.
+    use_t265_odom = PythonExpression([
+        '"true" if "', LaunchConfiguration('use_t265_odom'), '" == "true"'
+        ' or ("', use_gazebo, '" == "true"'
+        ' and "', use_vins_odom, '" != "true"'
+        ' and "', use_cuvslam_odom, '" != "true"'
+        ' and "', use_rgbd_odom, '" != "true") else "false"'
+    ])
 
     # Canonical odom topic — mirrors the priority logic in rtabmap_slam.launch.py.
     # Downstream readiness gates and VO bridge default use this single expression;
