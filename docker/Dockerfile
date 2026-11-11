@@ -76,6 +76,7 @@ RUN apt-get update && apt-get install -y \
     python3-vcstool \
     python3-rosdep \
     ros-$ROS_DISTRO-ros2controlcli \
+    ros-$ROS_DISTRO-gz-ros2-control \
     ros-$ROS_DISTRO-rtabmap-* \
     ros-$ROS_DISTRO-turtlebot3* \
     ros-$ROS_DISTRO-plotjuggler-ros \
