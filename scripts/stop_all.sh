@@ -78,6 +78,28 @@ else
         ' 2>/dev/null || true
     }
 
+    # PX4 SITL runs from the PX4-Autopilot build tree mounted at /px4, not from
+    # /workspace/install, so sweep() never matches it. Match the process name
+    # "px4" plus the /px4/build/ path: this exec's own bash cannot match, and a
+    # PX4 SITL run natively on the host (outside /px4) is left alone. SIGTERM
+    # first so PX4 can close its ulog, then SIGKILL whatever is left.
+    stop_px4_sitl() {
+        ${DC} exec -T ackermann_slam bash -c '
+            find_px4() {
+                ps -eo pid=,comm=,args= \
+                  | awk '"'"'$2 == "px4" && $3 ~ /^\/px4\/build\// { print $1 }'"'"'
+            }
+            PIDS=$(find_px4)
+            [ -n "$PIDS" ] || exit 0
+            kill -15 $PIDS 2>/dev/null || true
+            for i in $(seq 1 10); do
+                [ -z "$(find_px4)" ] && exit 0
+                sleep 0.5
+            done
+            kill -9 $(find_px4) 2>/dev/null || true
+        ' 2>/dev/null || true
+    }
+
     # Graceful shutdown: SIGTERM PX4 mode nodes one at a time so each
     # UnregisterExtComponent message can traverse the serial XRCE link
     # to PX4 without contention. Sending all SIGTERMs at once causes
@@ -97,6 +119,9 @@ else
             done
         done
     ' 2>/dev/null || true
+
+    # After the mode nodes have unregistered, before sweep() kills the agent.
+    stop_px4_sitl
 
     sweep
     sweep_python_helpers
@@ -119,6 +144,8 @@ else
                     print
                 }
               '
+          ps -eo pid=,comm=,args= \
+            | awk '\$2 == \"px4\" && \$3 ~ /^\/px4\/build\// { print }'
         } | wc -l
     " 2>/dev/null || echo "0")
 
@@ -137,6 +164,8 @@ else
                       print
                   }
                 '
+            ps -eo pid=,comm=,args= \
+              | awk '\$2 == \"px4\" && \$3 ~ /^\/px4\/build\// { print }'
         " 2>/dev/null || true
     fi
 fi
