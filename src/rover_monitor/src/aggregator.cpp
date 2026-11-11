@@ -222,7 +222,13 @@ std::vector<std::string> Aggregator::evaluate_alerts(
     if (!cam.connected) {
       alerts.push_back(prefix + "_DISCONNECTED");
     }
-    if (cam.connected && cam.frame_delta_ms > cam_stutter_delta_ms_) {
+    // Same rule as CamProbe's error_code 2: only a required stream that is
+    // flowing can stutter (stream_available is false for optional streams).
+    // An optional stream such as the T265 fisheye (tracking_expect_stream
+    // false) must not raise STUTTER just because its frames arrive slowly.
+    if (cam.connected && cam.stream_available &&
+      cam.frame_delta_ms > cam_stutter_delta_ms_)
+    {
       alerts.push_back(prefix + "_STUTTER");
     }
     if (cam.connected &&
