@@ -5,6 +5,10 @@
 # Usage:
 #   ./scripts/start_docker.sh
 #   ./scripts/start_docker.sh --dds-mode=local
+#   ./scripts/start_docker.sh --dds-mode=tailscale   # needs ROS_STATIC_PEERS, see .env
+#
+# The DDS mode is applied when the container is created. To change it, stop
+# the container first (docker compose ... stop ackermann_slam).
 set -euo pipefail
 
 ROS_DDS_MODE_OVERRIDE=""
