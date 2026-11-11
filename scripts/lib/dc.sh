@@ -32,6 +32,16 @@ if [[ -f "${_DC_ENV_FILE}" ]]; then
     set +a
 fi
 
+# Per-machine overrides (gitignored), e.g. ROS_DDS_MODE=tailscale and
+# ROS_STATIC_PEERS on one robot or laptop without touching the tracked .env.
+_DC_ENV_LOCAL_FILE="${PROJECT_DIR}/.env.local"
+if [[ -f "${_DC_ENV_LOCAL_FILE}" ]]; then
+    set -a
+    # shellcheck source=/dev/null
+    source "${_DC_ENV_LOCAL_FILE}"
+    set +a
+fi
+
 # ── runtime defaults (not in .env) ─────────────────────────────────────
 export ARCH="${ARCH:-$(uname -m)}"
 export USERNAME="${USERNAME:-$(id -un)}"
@@ -88,13 +98,42 @@ else
     return 1 2>/dev/null || exit 1
 fi
 
+# ── ROS 2 DDS over Tailscale ───────────────────────────────────────────
+# ROS_DDS_MODE=tailscale is resolved here on the host, because the entrypoint
+# baked into the image only knows eth+shm, eth-only and local. The container
+# uses host networking, so the host's tailscale0 address is the container's
+# too. The eth+shm profile whitelists ROS_ETH_INTERFACE_IP, so pointing it at
+# tailscale0 sends DDS through the tunnel, with SHM for same-machine traffic.
+# Tailscale carries no multicast, so list the other machine's Tailscale IP in
+# ROS_STATIC_PEERS (semicolon-separated). Both reach the container through the
+# environment block of docker-compose.yml. The address is captured when the
+# container is created: recreate it after switching Tailscale profiles.
+dc_resolve_dds_mode() {
+    [[ "${ROS_DDS_MODE:-}" == "tailscale" ]] || return 0
+    local ts_ip
+    ts_ip="$(ip -4 -o addr show dev tailscale0 2>/dev/null \
+        | awk '{ split($4, a, "/"); print a[1]; exit }')"
+    if [[ -z "${ts_ip}" ]]; then
+        echo "ROS_DDS_MODE=tailscale, but tailscale0 has no IPv4 address. Is Tailscale up on the right profile?" >&2
+        return 1
+    fi
+    if [[ -z "${ROS_STATIC_PEERS:-}" ]]; then
+        echo "WARNING: ROS_DDS_MODE=tailscale without ROS_STATIC_PEERS; no other machine will be discovered." >&2
+    fi
+    export ROS_DDS_MODE="eth+shm"
+    export ROS_ETH_INTERFACE_IP="${ts_ip}"
+    echo "DDS over Tailscale: whitelisting tailscale0 ${ts_ip}, static peers '${ROS_STATIC_PEERS:-}'." >&2
+}
+
 # ── wrappers ───────────────────────────────────────────────────────────
 # dcomp  — run docker compose (returns to caller; safe for multi-call scripts)
 # xdcomp — exec docker compose (replaces current process; use as last command)
 #           Needed because `exec` only works with external commands, not functions.
 dcomp() {
+    dc_resolve_dds_mode || return 1
     "${DC_CMD[@]}" -f "${COMPOSE_FILE}" "$@"
 }
 xdcomp() {
+    dc_resolve_dds_mode || return 1
     exec "${DC_CMD[@]}" -f "${COMPOSE_FILE}" "$@"
 }

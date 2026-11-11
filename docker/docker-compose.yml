@@ -41,6 +41,13 @@ services:
       - CUDA_HOME=/usr/local/cuda
       - CUDA_PATH=/usr/local/cuda
       - LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/targets/${ARCH-x86_64}-linux/lib
+      # ROS 2 DDS transport. scripts/lib/dc.sh exports these from .env,
+      # .env.local and script flags such as start_docker.sh --dds-mode, and
+      # resolves ROS_DDS_MODE=tailscale. env_file alone cannot carry those
+      # overrides. A direct `docker compose` call without dc.sh gets eth+shm.
+      - ROS_DDS_MODE=${ROS_DDS_MODE:-eth+shm}
+      - ROS_ETH_INTERFACE_IP=${ROS_ETH_INTERFACE_IP:-}
+      - ROS_STATIC_PEERS=${ROS_STATIC_PEERS:-}
 
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
