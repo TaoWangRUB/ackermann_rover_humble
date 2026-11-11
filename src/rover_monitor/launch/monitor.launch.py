@@ -21,13 +21,29 @@ def _build_container(context):
     depth_camera = LaunchConfiguration('depth_camera').perform(context)
     tracking_camera = LaunchConfiguration('tracking_camera').perform(context)
     tracking_expect_stream = LaunchConfiguration('tracking_expect_stream').perform(context)
+    use_gazebo = LaunchConfiguration('use_gazebo').perform(context).lower() == 'true'
 
-    cam_topic_overrides = {
-        'probes.cam.camera_id': depth_camera,
-        'probes.cam.color_topic': '/{}/color/image_raw'.format(depth_camera),
-        'probes.cam.depth_topic': '/{}/depth/image_rect_raw'.format(depth_camera),
-        'probes.cam.imu_topic': '/{}/imu'.format(depth_camera),
-    }
+    # ros2 launch rejects an empty value ("tracking_camera:="), so 'none'
+    # also disables the tracking probe.
+    if tracking_camera.lower() == 'none':
+        tracking_camera = ''
+
+    if use_gazebo:
+        # Gazebo bridge names (description_robot/config/gz_ros_bridge.yaml),
+        # the same ones robot_bringup feeds to RTAB-Map in simulation.
+        cam_topic_overrides = {
+            'probes.cam.camera_id': depth_camera,
+            'probes.cam.color_topic': '/{}/image'.format(depth_camera),
+            'probes.cam.depth_topic': '/{}/depth_image'.format(depth_camera),
+            'probes.cam.imu_topic': '/{}/imu/raw'.format(depth_camera),
+        }
+    else:
+        cam_topic_overrides = {
+            'probes.cam.camera_id': depth_camera,
+            'probes.cam.color_topic': '/{}/color/image_raw'.format(depth_camera),
+            'probes.cam.depth_topic': '/{}/depth/image_rect_raw'.format(depth_camera),
+            'probes.cam.imu_topic': '/{}/imu'.format(depth_camera),
+        }
 
     tracking_topic_overrides = {
         'probes.cam.camera_id': tracking_camera,
@@ -166,10 +182,16 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'tracking_camera',
             default_value='t265',
-            description='Tracking camera name — sets cam topic prefix (t265). Empty to disable.'),
+            description='Tracking camera name — sets cam topic prefix (t265). '
+                        '"none" (or empty) disables the tracking probe.'),
         DeclareLaunchArgument(
             'tracking_expect_stream',
             default_value='false',
             description='Whether the tracking camera is expected to publish fisheye image frames.'),
+        DeclareLaunchArgument(
+            'use_gazebo',
+            default_value='false',
+            description='Probe the Gazebo bridge topic names for the depth camera '
+                        '(/<cam>/image, /<cam>/depth_image, /<cam>/imu/raw).'),
         OpaqueFunction(function=_build_container),
     ])
