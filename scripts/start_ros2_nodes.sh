@@ -39,7 +39,10 @@
 #                            --rgbd-odom    → /cuvslam_rgbd_odom
 #                            --vins-odom    → /vins_odom
 #                            --t265-odom    → /t265/odom_base
-#                            (none)         → /odometry/filtered
+#                            (none, sim)    → /t265/odom_base (robot_bringup falls back
+#                                             to the Gazebo T265 odometry)
+#                            (none, --hw)   → /odometry/filtered, which nothing publishes
+#                                             since the EKF removal: pass a source flag
 #                          Explicit --odom-topic=X overrides the auto-resolve.
 #   --controller=TYPE  Nav2 path controller: mppi (default) or rpp (lightweight)
 #   --reversible-drive Bidirectional ESC: throttle [-1,1] and allow reverse in Nav2 (default: false)
@@ -297,7 +300,10 @@ if [[ "${PX4}" == "true" ]]; then
 fi
 
 # Auto-resolve ODOM_TOPIC from odom-source flags (same priority as rtabmap_slam.launch.py).
-# Priority: cuVSLAM > cuVSLAM RGBD > VINS > T265 > /odometry/filtered (default).
+# Priority: cuVSLAM > cuVSLAM RGBD > VINS > T265 > fallback.
+# Fallback: in simulation robot_bringup uses the Gazebo T265 odometry when no
+# source is selected, so the bridge reads /t265/odom_base. In hardware nothing
+# publishes /odometry/filtered any more (the EKF was removed), so warn.
 # Explicit --odom-topic=X overrides this entirely.
 if [[ "${ODOM_TOPIC}" == "/odometry/filtered" ]]; then
     if [[ "${CUVSLAM_ODOM}" == "true" ]]; then
@@ -306,8 +312,11 @@ if [[ "${ODOM_TOPIC}" == "/odometry/filtered" ]]; then
         ODOM_TOPIC="/cuvslam_rgbd_odom"
     elif [[ "${VINS_ODOM}" == "true" ]]; then
         ODOM_TOPIC="/vins_odom"
-    elif [[ "${HW_T265_ODOM}" == "true" ]]; then
+    elif [[ "${HW_T265_ODOM}" == "true" || "${HW}" == "false" ]]; then
         ODOM_TOPIC="/t265/odom_base"
+    elif [[ "${VO_BRIDGE}" == "true" ]]; then
+        echo "WARNING: no odometry source selected (--t265-odom, --vins-odom, --cuvslam-odom, --rgbd-odom)." >&2
+        echo "         The VO bridge reads /odometry/filtered, which nothing publishes since the EKF was removed." >&2
     fi
 fi
 
@@ -365,7 +374,12 @@ if [[ "${HW}" == "true" ]]; then
 else
     echo "  Mode:         simulation (Gazebo)"
     echo "  Depth camera: ${DEPTH_CAMERA}"
-    echo "  T265 odom:    ${HW_T265_ODOM}"
+    if [[ "${HW_T265_ODOM}" == "false" && "${VINS_ODOM}" == "false" \
+          && "${CUVSLAM_ODOM}" == "false" && "${RGBD_ODOM}" == "false" ]]; then
+        echo "  T265 odom:    true (sim default: no other odometry source selected)"
+    else
+        echo "  T265 odom:    ${HW_T265_ODOM}"
+    fi
     echo "  PX4 SITL:     ${PX4}"
 fi
 echo "  VINS odom:    ${VINS_ODOM}"

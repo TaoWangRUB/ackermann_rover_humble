@@ -54,7 +54,9 @@ def generate_launch_description():
 
     odom_topic_arg = DeclareLaunchArgument(
         'odom_topic',
-        default_value='/odometry/filtered',
+        # T265 odometry: the default source in simulation and on the rover.
+        # The EKF behind /odometry/filtered was removed in 2026-04.
+        default_value='/t265/odom_base',
         description='Odometry topic for the VO bridge (ENU/FLU nav_msgs/Odometry)'
     )
 
