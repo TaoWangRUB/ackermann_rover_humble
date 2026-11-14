@@ -159,6 +159,16 @@
 # USB_MAV_MODE: 2 = onboard MAVLink mode for the USB CDC link.
 1	1	USB_MAV_MODE	2	6
 
+# ── Battery (4S LiPo, analog power module on POWER1) ────────────────────────
+# BAT1_N_CELLS: the rover runs a 4S pack.
+1	1	BAT1_N_CELLS	4	6
+
+# BAT1_V_DIV: voltage divider of the rover's power module. The fmu-v3 default
+# (10.178, for the 3DR-style module) read 8.07 V while the PDM showed 14.7 V:
+# 10.178 x 14.7 / 8.07 = 18.54 (2026-11-14). Recheck with a multimeter.
+# BAT1_A_PER_V is still the fmu-v3 default; current is not calibrated.
+1	1	BAT1_V_DIV	18.54	9
+
 # ── Safety ───────────────────────────────────────────────────────────────────
 # RC + MAVLink joystick (companion computer + RC transmitter)
 1	1	COM_RC_IN_MODE	3	6
