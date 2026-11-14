@@ -85,17 +85,21 @@ if [[ -z "${AIRFRAME_PARAM}" ]]; then
 fi
 
 # ── ESC-dependent PWM values ──────────────────────────────────────────────────
-# PX4 "Throttle" maps [-1, 1] → [PWM_MIN, PWM_MAX].
+# PX4 "Throttle" maps [-1, 1] → [PWM_MIN, PWM_MAX] (Motor 1 reversible, CA_R_REV=1).
+# PWM_MAIN_DIS1 is also the output on disarm, E-STOP and failsafe, so it must be
+# the ESC's stop value: below the stop point a reversible ESC drives backward.
 # Unidirectional: MIN=1000 (=DIS) so throttle -1 → ESC stop, +1 → full fwd
-# Bidirectional:  MIN=1100, MAX=1900, center 1500 = ESC stop
+# Bidirectional:  MIN=1100, MAX=1900, DIS=1500, center 1500 = ESC stop
 if [[ "${REVERSIBLE_DRIVE}" == true ]]; then
     PARAMS+=("PWM_MAIN_MIN1 1100 int")
     PARAMS+=("PWM_MAIN_MAX1 1900 int")
-    echo "ESC mode: bidirectional (PWM_MIN=1100, PWM_MAX=1900, center=1500=stop)"
+    PARAMS+=("PWM_MAIN_DIS1 1500 int")
+    echo "ESC mode: bidirectional (PWM_MIN=1100, PWM_MAX=1900, PWM_DIS=1500=center=stop)"
 else
     PARAMS+=("PWM_MAIN_MIN1 1000 int")
     PARAMS+=("PWM_MAIN_MAX1 2000 int")
-    echo "ESC mode: unidirectional (PWM_MIN=1000=DIS=stop, PWM_MAX=1900)"
+    PARAMS+=("PWM_MAIN_DIS1 1000 int")
+    echo "ESC mode: unidirectional (PWM_MIN=1000=DIS=stop, PWM_MAX=2000)"
 fi
 
 echo "Loaded ${#PARAMS[@]} parameters (+1 airframe) from ${PARAMS_FILE##*/}"

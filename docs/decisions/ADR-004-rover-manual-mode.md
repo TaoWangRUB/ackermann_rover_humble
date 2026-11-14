@@ -2,7 +2,7 @@
 title: "ADR-004: RoverManualMode — Open-Loop Throttle/Steering via px4-ros2-interface-lib"
 status: Accepted
 owner: taowang
-last_updated: 2026-03-16
+last_updated: 2026-11-14
 doc_type: ADR
 ros_distro: humble
 ---
@@ -107,6 +107,22 @@ loop, which re-registers without restarting the OS process.
 Set via launch arg (preferred): `reversible_drive:=true/false` in `px4_bringup.launch.py`.
 The same arg is accepted by `nav2_bringup.launch.py` to align Nav2's `vx_min` and
 `min_velocity` with the ESC capability.
+
+The flight controller must carry the matching PWM profile, uploaded with
+`scripts/upload_params.sh` (unidirectional) or `scripts/upload_params.sh --reversible-drive`
+(bidirectional). Both rely on `CA_R_REV=1` (Motor 1 reversible):
+
+| Profile | `PWM_MAIN_MIN1` | `PWM_MAIN_MAX1` | `PWM_MAIN_DIS1` |
+|---|---|---|---|
+| Unidirectional | 1000 | 2000 | 1000 |
+| Bidirectional | 1100 | 1900 | 1500 |
+
+`PWM_MAIN_DIS1` is the throttle output on disarm, E-STOP and failsafe (with
+`PWM_MAIN_FAIL1` at its default -1), so it must be the ESC's stop value. On
+2026-11-14 the rover had the bidirectional range with `PWM_MAIN_DIS1 = 1000`: with a
+centre-stop ESC that is full reverse, and the wheels kept running backward after
+disarm until the battery was cut. `scripts/esc_bench_test.py` checks the setting on
+the bench, wheels off the ground.
 
 ### Retry loop rationale (`rover_manual_main.cpp`)
 

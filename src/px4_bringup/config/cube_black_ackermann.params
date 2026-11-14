@@ -49,13 +49,22 @@
 # ── PWM Actuator Mapping (MAIN outputs) ─────────────────────────────────────
 # MAIN OUT 1 → Throttle (Motor 1)
 #
-# PX4 "Throttle" output maps [-1, 1] → [PWM_MIN, PWM_MAX].
+# CA_R_REV=1 marks Motor 1 as reversible, so PX4's "Throttle" output maps
+# [-1, 1] linearly onto [PWM_MIN, PWM_MAX]. Both ESC profiles below rely on it.
+# It is also the airframe 51000 default; set here so --verify-only checks it.
 # rover_manual_mode remaps cmd_vel to this range based on bidirectional_esc param.
-# PWM values are selected by upload_params.sh --reversible-drive flag:
-#   Unidirectional (default): MIN=DIS=1000 so throttle -1 → ESC stop
-#   Bidirectional:            MIN=1100, center (1500) = ESC stop
+#
+# PWM_MAIN_MIN1, PWM_MAIN_MAX1 and PWM_MAIN_DIS1 depend on the ESC, so they are
+# not in this file: upload_params.sh adds them (--reversible-drive flag):
+#   Unidirectional (default): MIN=DIS=1000, MAX=2000 so throttle -1 → ESC stop
+#   Bidirectional:            MIN=1100, MAX=1900, DIS=1500, center = ESC stop
+# PWM_MAIN_DIS1 is also the output on disarm, E-STOP and failsafe
+# (PWM_MAIN_FAIL1 left at -1), so it must be the ESC's stop value. A value below
+# the stop point drives a reversible ESC backward while the rover is disarmed
+# (seen on the rover on 2026-11-14). When loading this file through QGC, set
+# the three values by hand for your ESC.
+1	1	CA_R_REV	1	6
 1	1	PWM_MAIN_FUNC1	101	6
-1	1	PWM_MAIN_DIS1	1000	6
 
 # MAIN OUT 2 → Steering (Servo 1)
 1	1	PWM_MAIN_FUNC2	201	6
