@@ -422,6 +422,11 @@ void TelemetryPublisher::dispatch_command(const std::string & cmd_id, int cmd_ty
   }
 }
 
+// PX4 refuses a plain disarm while it believes the vehicle is not landed (the
+// rover logs "Takeoff detected" on arming). param2 = 21196 forces the disarm,
+// which is what a ground rover's Disarm and E-STOP must always do.
+static constexpr float kForceDisarmMagic = 21196.0f;
+
 void TelemetryPublisher::handle_arm(const std::string & cmd_id)
 {
   RCLCPP_INFO(this->get_logger(), "ARM command: cmd_id=%s", cmd_id.c_str());
@@ -437,7 +442,7 @@ void TelemetryPublisher::handle_disarm(const std::string & cmd_id)
   RCLCPP_INFO(this->get_logger(), "DISARM command: cmd_id=%s", cmd_id.c_str());
   publish_vehicle_command(
     px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM,
-    0.0f);  // param1=0 -> disarm
+    0.0f, kForceDisarmMagic);  // param1=0 -> disarm, forced (see kForceDisarmMagic)
   send_ack(cmd_id, rover_monitor_proto::CMD_DISARM,
     rover_monitor_proto::ACK_ACCEPTED, "Disarm command sent to PX4");
 }
@@ -456,7 +461,7 @@ void TelemetryPublisher::handle_estop(const std::string & cmd_id)
   // 2. Disarm
   publish_vehicle_command(
     px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM,
-    0.0f);
+    0.0f, kForceDisarmMagic);
 
   send_ack(cmd_id, rover_monitor_proto::CMD_ESTOP,
     rover_monitor_proto::ACK_COMPLETED, "E-stop executed: zero twist + disarm");
