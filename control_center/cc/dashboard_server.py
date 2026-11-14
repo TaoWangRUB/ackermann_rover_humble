@@ -132,10 +132,13 @@ class DashboardServer:
         import os
         static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
         if os.path.isdir(static_dir):
-            # Serve index.html for SPA root
+            # Serve index.html for SPA root. no-cache makes browsers revalidate it on
+            # every load (ETag), so a rebuilt UI shows up at once; the hashed files
+            # under /assets can stay cached.
             @self._app.get("/")
             async def serve_root():
-                return FileResponse(os.path.join(static_dir, "index.html"))
+                return FileResponse(os.path.join(static_dir, "index.html"),
+                                    headers={"Cache-Control": "no-cache"})
 
             # Serve static assets (JS, CSS, etc.)
             self._app.mount("/assets", StaticFiles(directory=os.path.join(static_dir, "assets")), name="assets")
