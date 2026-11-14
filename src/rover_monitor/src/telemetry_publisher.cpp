@@ -70,6 +70,8 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   this->declare_parameter("publisher.keep_alive_s", 15);
   this->declare_parameter("publisher.connect_timeout_s", 5);
   this->declare_parameter("publisher.heartbeat_interval_s", 1.0);
+  this->declare_parameter("publisher.disarm_retry_period_s", 0.1);
+  this->declare_parameter("publisher.disarm_timeout_s", 3.0);
 
   broker_host_ = this->get_parameter("publisher.broker_host").as_string();
   broker_port_ = this->get_parameter("publisher.broker_port").as_int();
@@ -82,6 +84,8 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   keep_alive_s_ = this->get_parameter("publisher.keep_alive_s").as_int();
   connect_timeout_s_ = this->get_parameter("publisher.connect_timeout_s").as_int();
   heartbeat_interval_s_ = this->get_parameter("publisher.heartbeat_interval_s").as_double();
+  disarm_retry_period_s_ = this->get_parameter("publisher.disarm_retry_period_s").as_double();
+  disarm_timeout_s_ = this->get_parameter("publisher.disarm_timeout_s").as_double();
 
   // ROS subscriber for health telemetry
   rclcpp::SubscriptionOptions sub_opts;
@@ -94,6 +98,23 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   // PX4 vehicle command publisher
   vehicle_cmd_pub_ = this->create_publisher<px4_msgs::msg::VehicleCommand>(
     versioned_px4_topic<px4_msgs::msg::VehicleCommand>("/fmu/in/vehicle_command"), 10);
+
+  // PX4 arming state, to confirm Disarm and E-STOP. Same topics and QoS as
+  // px4_probe: the versioned name on current PX4, the plain one on older builds.
+  rclcpp::QoS px4_status_qos(10);
+  px4_status_qos.best_effort();
+  std::vector<std::string> status_topics{
+    versioned_px4_topic<px4_msgs::msg::VehicleStatus>("/fmu/out/vehicle_status")};
+  if (status_topics.front() != "/fmu/out/vehicle_status") {
+    status_topics.emplace_back("/fmu/out/vehicle_status");
+  }
+  for (const auto & topic : status_topics) {
+    vehicle_status_subs_.push_back(
+      this->create_subscription<px4_msgs::msg::VehicleStatus>(
+        topic, px4_status_qos,
+        std::bind(&TelemetryPublisher::on_vehicle_status, this, std::placeholders::_1),
+        sub_opts));
+  }
 
   // PX4 ext-component-registration snoop. The QoS matches the px4_ros2 lib's
   // own subscription so we co-exist with the rover_*_mode nodes.
@@ -205,6 +226,12 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
         cmds.pop();
       }
     }, cb_group_);
+
+  // Disarm confirmation timer: re-sends the forced disarm while one is pending.
+  disarm_timer_ = this->create_wall_timer(
+    std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::duration<double>(disarm_retry_period_s_)),
+    std::bind(&TelemetryPublisher::on_disarm_timer, this), cb_group_);
 
   // Periodic heartbeat timer — publishes cached health at a low rate for dashboards
   heartbeat_timer_ = this->create_wall_timer(
@@ -430,6 +457,12 @@ static constexpr float kForceDisarmMagic = 21196.0f;
 void TelemetryPublisher::handle_arm(const std::string & cmd_id)
 {
   RCLCPP_INFO(this->get_logger(), "ARM command: cmd_id=%s", cmd_id.c_str());
+  if (pending_disarm_) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_ARM, rover_monitor_proto::ACK_REJECTED,
+      "Disarm in progress: arm again once PX4 has confirmed it");
+    return;
+  }
+  estop_latched_ = false;
   publish_vehicle_command(
     px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM,
     1.0f);  // param1=1 -> arm
@@ -440,31 +473,94 @@ void TelemetryPublisher::handle_arm(const std::string & cmd_id)
 void TelemetryPublisher::handle_disarm(const std::string & cmd_id)
 {
   RCLCPP_INFO(this->get_logger(), "DISARM command: cmd_id=%s", cmd_id.c_str());
-  publish_vehicle_command(
-    px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM,
-    0.0f, kForceDisarmMagic);  // param1=0 -> disarm, forced (see kForceDisarmMagic)
-  send_ack(cmd_id, rover_monitor_proto::CMD_DISARM,
-    rover_monitor_proto::ACK_ACCEPTED, "Disarm command sent to PX4");
+  start_disarm(cmd_id, rover_monitor_proto::CMD_DISARM);
 }
 
 void TelemetryPublisher::handle_estop(const std::string & cmd_id)
 {
   RCLCPP_WARN(this->get_logger(), "E-STOP command: cmd_id=%s", cmd_id.c_str());
+  estop_latched_ = true;
+  start_disarm(cmd_id, rover_monitor_proto::CMD_ESTOP);
+}
 
-  // 1. Publish zero twist to stop movement
-  auto twist = geometry_msgs::msg::TwistStamped();
-  twist.header.stamp = this->now();
-  twist.header.frame_id = "base_link";
-  // All velocities default to 0
-  twist_pub_->publish(twist);
+void TelemetryPublisher::start_disarm(const std::string & cmd_id, int cmd_type)
+{
+  // A request while one is pending joins it and gets the same answer. The
+  // window is not restarted, so every request is answered within
+  // disarm_timeout_s of the first, inside the Control Center's ACK timeout.
+  if (!pending_disarm_) {
+    pending_disarm_.emplace();
+    pending_disarm_->started = std::chrono::steady_clock::now();
+  }
+  pending_disarm_->cmds.emplace_back(cmd_id, cmd_type);
+  send_disarm_attempt();
+}
 
-  // 2. Disarm
+void TelemetryPublisher::send_disarm_attempt()
+{
+  // Hold /cmd_vel at zero too, so RoverManual sends stop throttle even before
+  // PX4 disarms.
+  publish_zero_twist();
   publish_vehicle_command(
     px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM,
-    0.0f, kForceDisarmMagic);
+    0.0f, kForceDisarmMagic);  // param1=0 -> disarm, forced (see kForceDisarmMagic)
+  ++pending_disarm_->sends;
+}
 
-  send_ack(cmd_id, rover_monitor_proto::CMD_ESTOP,
-    rover_monitor_proto::ACK_COMPLETED, "E-stop executed: zero twist + disarm");
+void TelemetryPublisher::on_disarm_timer()
+{
+  if (!pending_disarm_) {
+    return;
+  }
+  const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+    std::chrono::steady_clock::now() - pending_disarm_->started).count();
+  // Only a status message received after the latest request counts.
+  const bool fresh_status = px4_status_time_ > pending_disarm_->started;
+  const std::string sent = std::to_string(pending_disarm_->sends) +
+    (pending_disarm_->sends == 1 ? " disarm command sent" : " disarm commands sent");
+
+  if (fresh_status && !px4_armed_) {
+    finish_disarm(rover_monitor_proto::ACK_COMPLETED,
+      "PX4 confirmed disarmed (" + sent + ", " + std::to_string(elapsed_ms) + " ms)");
+    return;
+  }
+  const auto timeout_ms = static_cast<int64_t>(disarm_timeout_s_ * 1000.0);
+  if (elapsed_ms >= timeout_ms) {
+    finish_disarm(rover_monitor_proto::ACK_FAILED, fresh_status ?
+      "PX4 still armed after " + std::to_string(timeout_ms) + " ms (" + sent + ")" :
+      "No status from PX4 for " + std::to_string(timeout_ms) + " ms (" + sent +
+      "): arming state unknown");
+    return;
+  }
+  send_disarm_attempt();
+}
+
+void TelemetryPublisher::finish_disarm(int status, const std::string & message)
+{
+  if (status == rover_monitor_proto::ACK_COMPLETED) {
+    RCLCPP_INFO(this->get_logger(), "Disarm confirmed: %s", message.c_str());
+  } else {
+    RCLCPP_ERROR(this->get_logger(), "Disarm NOT confirmed: %s", message.c_str());
+  }
+  for (const auto & [cmd_id, cmd_type] : pending_disarm_->cmds) {
+    send_ack(cmd_id, cmd_type, status, message);
+  }
+  pending_disarm_.reset();
+}
+
+void TelemetryPublisher::on_vehicle_status(
+  px4_msgs::msg::VehicleStatus::ConstSharedPtr msg)
+{
+  px4_armed_ = msg->arming_state == px4_msgs::msg::VehicleStatus::ARMING_STATE_ARMED;
+  px4_status_time_ = std::chrono::steady_clock::now();
+}
+
+void TelemetryPublisher::publish_zero_twist()
+{
+  auto twist = geometry_msgs::msg::TwistStamped();  // all velocities 0
+  twist.header.stamp = this->now();
+  twist.header.frame_id = "base_link";
+  twist_pub_->publish(twist);
 }
 
 void TelemetryPublisher::handle_nav_goal(const std::string & cmd_id,
@@ -986,6 +1082,14 @@ void TelemetryPublisher::handle_drive(const std::string & cmd_id,
   if (!cmd.has_drive()) {
     send_ack(cmd_id, rover_monitor_proto::CMD_DRIVE,
       rover_monitor_proto::ACK_REJECTED, "Missing drive field");
+    return;
+  }
+
+  if (estop_latched_ || pending_disarm_) {
+    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+      "Drive command ignored: %s", estop_latched_ ?
+      "E-STOP is active (arm from the Control Center to drive again)" :
+      "disarm in progress");
     return;
   }
 

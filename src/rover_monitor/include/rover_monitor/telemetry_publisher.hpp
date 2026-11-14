@@ -9,9 +9,13 @@
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <action_msgs/msg/goal_status_array.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
+#include <px4_msgs/msg/vehicle_status.hpp>
 #include <px4_msgs/msg/register_ext_component_reply.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <array>
+#include <optional>
+#include <utility>
+#include <vector>
 
 #include <mqtt/async_client.h>
 
@@ -75,6 +79,18 @@ private:
   void publish_vehicle_command(uint32_t command, float param1 = 0.0f,
     float param2 = 0.0f);
 
+  // Disarm / E-STOP with confirmation. A single VehicleCommand can be lost on
+  // the serial XRCE-DDS link (seen on the rover on 2026-11-14: the Control
+  // Center showed "accepted" while PX4 stayed armed), so the forced disarm is
+  // re-sent every disarm_retry_period_s until PX4's own vehicle_status reports
+  // disarmed, or until disarm_timeout_s. The ACK then reports what PX4 did.
+  void start_disarm(const std::string & cmd_id, int cmd_type);
+  void send_disarm_attempt();
+  void on_disarm_timer();
+  void finish_disarm(int status, const std::string & message);
+  void on_vehicle_status(px4_msgs::msg::VehicleStatus::ConstSharedPtr msg);
+  void publish_zero_twist();
+
   // Snoop PX4 mode registration replies to learn name → nav_state ID.
   // Each rover mode (rover_speed_steering, rover_speed_attitude, rover_manual)
   // registers itself with PX4 at startup; the FMU assigns a runtime nav_state
@@ -123,6 +139,26 @@ private:
 
   // E-stop twist publisher
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_pub_;
+
+  // Disarm confirmation (see start_disarm). All of this runs in cb_group_
+  // (mutually exclusive), like the command handlers, so it needs no lock.
+  struct PendingDisarm
+  {
+    std::vector<std::pair<std::string, int>> cmds;  // cmd_id, cmd_type awaiting the result
+    std::chrono::steady_clock::time_point started;  // first request; later ones join, no restart
+    int sends{0};
+  };
+  std::optional<PendingDisarm> pending_disarm_;
+  rclcpp::TimerBase::SharedPtr disarm_timer_;
+  std::vector<rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr>
+  vehicle_status_subs_;
+  bool px4_armed_{false};
+  std::chrono::steady_clock::time_point px4_status_time_{};
+  // E-STOP ignores drive commands until the next Arm command from the
+  // Control Center, so a drive slider still sending cannot restart the rover.
+  bool estop_latched_{false};
+  double disarm_retry_period_s_{0.1};
+  double disarm_timeout_s_{3.0};
 
   // Record-control publisher — bridges MQTT rover/cmd/record to record_bag.sh
   // (which subscribes to /record/cmd as a String: "start" | "stop" | "toggle").
