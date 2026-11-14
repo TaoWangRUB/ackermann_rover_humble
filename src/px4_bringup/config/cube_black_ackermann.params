@@ -109,13 +109,16 @@
 # TELEM2 baud rate: 921600 for DDS throughput
 1	1	SER_TEL2_BAUD	921600	6
 
-# UXRCE_DDS_FLCTRL: enable CRTSCTS hardware flow control on the XRCE UART.
-# Without this, 4 simultaneous arming_check_reply bursts overflow CH340G's
-# small RX FIFO at 921600 baud → ~8% reply loss → PX4 flags slots invalid
-# and modes age out of QGC. Requires RTS/CTS to be physically wired on
-# TELEM2 (pins 4=CTS, 5=RTS) and the MicroXRCEAgent to also set CRTSCTS.
-# Reboot required to take effect. See Auterion/px4-ros2-interface-lib#165.
-1	1	UXRCE_DDS_FLCTRL	1	1
+# UXRCE_DDS_FLCTRL: CRTSCTS hardware flow control on the XRCE UART: off, as on
+# the rover. It only matters when several rover modes register at once: their
+# arming_check_reply bursts overflow the UART at 921600 baud, PX4 flags the
+# slots invalid and the modes age out of QGC (Auterion/px4-ros2-interface-lib#165).
+# The rover session registers one mode. Turning it on needs RTS/CTS wired
+# through on TELEM2 (pins 4=CTS, 5=RTS) and the MicroXRCEAgent opening the port
+# with CRTSCTS; otherwise PX4 waits for CTS and the link stalls. With the CH340
+# adapter it barely helped (7.9% -> 5.6% loss); an FT232 with CRTSCTS removed
+# the loss. Reboot required to take effect.
+1	1	UXRCE_DDS_FLCTRL	0	6
 
 # ── RAM Saving (Cube Black has only 231 KB) ─────────────────────────────────
 # Disable GPS serial port — module never starts, frees ~6 KB
