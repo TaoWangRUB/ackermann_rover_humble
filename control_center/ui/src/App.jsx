@@ -159,10 +159,11 @@ const useCommands = () => useContext(CommandContext);
 function useToasts() {
   const [toasts, setToasts] = useState([]);
   const dismiss = useCallback((id) => setToasts((list) => list.filter((t) => t.id !== id)), []);
-  const notify = useCallback((text, tone = 'crit') => {
+  // sticky: stays until dismissed, for results the operator must act on.
+  const notify = useCallback((text, tone = 'crit', sticky = false) => {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     setToasts((list) => [...list.slice(-3), { id, text, tone }]);
-    setTimeout(() => dismiss(id), 7000);
+    if (!sticky) setTimeout(() => dismiss(id), 7000);
   }, [dismiss]);
   return { toasts, notify, dismiss };
 }
@@ -291,7 +292,7 @@ function TopBar({ link, health, px4, extMode, theme, cycleTheme }) {
           <button
             type="button"
             className="btn btn-warn btn-sm"
-            onClick={async () => { if (await send('disarm')) notify('Disarm sent to the rover'); }}
+            onClick={async () => { if (await send('disarm')) notify('Disarm sent: waiting for PX4 to confirm', 'warn'); }}
             title="Disarm the motor: always allowed"
           >
             Disarm
@@ -299,7 +300,7 @@ function TopBar({ link, health, px4, extMode, theme, cycleTheme }) {
           <button
             type="button"
             className="estop"
-            onClick={async () => { if (await send('estop')) notify('E-STOP sent: zero speed and forced disarm'); }}
+            onClick={async () => { if (await send('estop')) notify('E-STOP sent: zero speed, waiting for PX4 to confirm the disarm', 'warn'); }}
             title="Emergency stop: always allowed"
           >
             E-STOP
@@ -823,9 +824,8 @@ function ackTone(status) {
   return 'idle';
 }
 
-function CommandLogCard() {
+function CommandLogCard({ ackData }) {
   const [log, setLog] = useState([]);
-  const ackData = useWebSocket('/ws/cmd_ack');
 
   useEffect(() => {
     fetch('/api/command/history')
@@ -875,12 +875,29 @@ function CommandLogCard() {
 
 // ── App ──────────────────────────────────────────────────────────────
 
+// The rover answers Disarm and E-STOP once PX4 itself reports disarmed (it
+// repeats the disarm until then), or with a failure after about 3 s.
+const DISARM_COMMANDS = { disarm: 'Disarm', estop: 'E-STOP' };
+
 export default function App() {
   const health = useWebSocket('/ws/health', '/api/health/history');
+  const ackData = useWebSocket('/ws/cmd_ack');
   const link = useLinkState(health);
   const [theme, cycleTheme] = useTheme();
   const { toasts, notify, dismiss } = useToasts();
   const [hwMode, setHwMode] = useState({});
+
+  useEffect(() => {
+    const entry = normalizeCommandLogEntry(ackData);
+    const name = entry && DISARM_COMMANDS[entry.cmdType];
+    if (!name) return;
+    if (entry.ackStatus === 'ACK_COMPLETED') {
+      notify(`${name}: ${entry.message}`, 'ok');
+    } else if (/REJECTED|FAILED/.test(entry.ackStatus)) {
+      const why = entry.message === 'ACK timeout' ? 'no answer from the rover' : entry.message;
+      notify(`${name} NOT confirmed: ${why}. If the motor may still be live, cut its power.`, 'crit', true);
+    }
+  }, [ackData, notify]);
 
   useEffect(() => {
     const fetchHwMode = () => {
@@ -934,7 +951,7 @@ export default function App() {
           <DriveCard canDrive={armed && link.live} />
           <NavigationCard nav2={health?.nav2} slamLatencyMs={health?.slamLatencyMs} armed={armed} stale={stale} />
           <RecordingCard diskFreeGb={health?.jetson?.diskFreeGb} />
-          <CommandLogCard />
+          <CommandLogCard ackData={ackData} />
         </div>
       </main>
       <Toasts toasts={toasts} dismiss={dismiss} />
