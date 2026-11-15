@@ -1,8 +1,11 @@
 [Unit]
-Description=Rover 6/9: PX4 link (Micro XRCE-DDS agent on the serial adapter, after the cameras settled the USB bus)
+Description=Rover: PX4 link (Micro XRCE-DDS agent on the serial adapter; independent of the cameras)
 PartOf=rover-stack.target
 Requires=rover-container.service rover-usb.service
-After=rover-usb.service rover-t265.service rover-d435i.service
+# Not ordered after the cameras: a failing camera must not hold up the PX4
+# link. ExecStartPre re-enumerates the adapter, so a camera reset that
+# disturbed it is cleared before the agent opens it.
+After=rover-usb.service
 StartLimitIntervalSec=900
 StartLimitBurst=4
 

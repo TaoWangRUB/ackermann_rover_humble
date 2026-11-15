@@ -2,8 +2,8 @@
 Description=Rover: rover_monitor health + Control Center telemetry/commands over MQTT
 PartOf=rover-stack.target
 Requires=rover-container.service
-Wants=rover-t265.service rover-d435i.service
-After=rover-container.service rover-t265.service rover-d435i.service
+# Starts right away: it is how the Control Center sees which part is missing.
+After=rover-container.service
 StartLimitIntervalSec=900
 StartLimitBurst=4
 

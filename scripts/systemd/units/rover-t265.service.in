@@ -4,15 +4,17 @@ PartOf=rover-stack.target
 Requires=rover-container.service rover-usb.service
 Wants=rover-base.service
 After=rover-usb.service rover-base.service
+# Two attempts, then the D435i and the rest go on without it (each attempt
+# resets the T265, which disturbs the D435i on the shared hub).
 StartLimitIntervalSec=900
-StartLimitBurst=4
+StartLimitBurst=2
 
 [Service]
 User=@USER@
 Group=@GROUP@
 WorkingDirectory=@REPO@
 ExecStart=@REPO@/scripts/rover_units/unit_exec.sh t265 -- ros2 launch realsense_camera_bringup realsense_camera.launch.py enable_d435i:=false enable_l515:=false enable_t265:=true t265_enable_fisheye:=false t265_relay_publish_tf:=true t265_enable_hardware_reset:=true
-ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /t265/odom nav_msgs/msg/Odometry --timeout 120
+ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /t265/odom nav_msgs/msg/Odometry --timeout 90
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /t265/odom_base nav_msgs/msg/Odometry --timeout 30
 # ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh t265

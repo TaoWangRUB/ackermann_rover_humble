@@ -2,7 +2,7 @@
 Description=Rover 7/9: MAVLink USB bridge to UDP 14550/14551 (+ PX4 hardware monitor to MQTT)
 PartOf=rover-stack.target
 Requires=rover-usb.service
-After=rover-usb.service rover-xrce.service
+After=rover-usb.service
 StartLimitIntervalSec=900
 StartLimitBurst=4
 
