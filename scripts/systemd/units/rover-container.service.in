@@ -1,6 +1,8 @@
 [Unit]
 Description=Rover 1/9: dev container up, entrypoint finished
 PartOf=rover-stack.target
+StartLimitIntervalSec=900
+StartLimitBurst=5
 Requires=docker.service
 After=docker.service network-online.target tailscaled.service
 Wants=network-online.target
@@ -8,6 +10,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+Restart=on-failure
+RestartSec=10
 User=@USER@
 Group=@GROUP@
 WorkingDirectory=@REPO@

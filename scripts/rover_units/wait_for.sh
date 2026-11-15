@@ -39,8 +39,11 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
-deadline=$(( $(date +%s) + timeout_s ))
-remaining() { echo $(( deadline - $(date +%s) )); }
+# Seconds since boot: unlike the wall clock it never jumps (at boot NTP moved
+# the Xavier's clock ~7 min forward and the container gate timed out after 9 s).
+uptime_s() { cut -d. -f1 /proc/uptime; }
+deadline=$(( $(uptime_s) + timeout_s ))
+remaining() { echo $(( deadline - $(uptime_s) )); }
 log() { echo "[wait_for ${check}] $*"; }
 
 # Run a command in the container with the same environment as the components.
@@ -61,10 +64,10 @@ container)
         if [[ -z "${cid}" ]] || [[ "$(docker inspect -f '{{.State.Running}}' "${cid}" 2>/dev/null)" != true ]]; then
             # Retried: at boot dcomp refuses to run until tailscale0 has its
             # address (ROS_DDS_MODE=tailscale), and Docker may still be starting.
-            if (( $(date +%s) - last_up >= 10 )); then
+            if (( $(uptime_s) - last_up >= 10 )); then
                 log "container not running: starting it"
                 dcomp up -d ackermann_slam || true
-                last_up=$(date +%s)
+                last_up=$(uptime_s)
             fi
             sleep 2
             continue
