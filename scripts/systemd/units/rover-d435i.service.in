@@ -13,7 +13,9 @@ Group=@GROUP@
 WorkingDirectory=@REPO@
 ExecStart=@REPO@/scripts/rover_units/unit_exec.sh d435i -- ros2 launch realsense_camera_bringup realsense_camera.launch.py enable_d435i:=true enable_l515:=false enable_t265:=false d435i_enable_hardware_reset:=false d435i_startup_delay_s:=0.0
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /d435i/color/image_raw sensor_msgs/msg/Image --timeout 90
+# ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh d435i
+ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh d435i
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=180

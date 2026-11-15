@@ -15,9 +15,11 @@ EnvironmentFile=-/etc/default/rover-stack
 # Root (+): re-enumerate the CH340 so a wedged adapter starts clean.
 ExecStartPre=+@REPO@/scripts/rover_units/usb_reset.sh ${ROVER_XRCE_USB_ID}
 ExecStartPre=@REPO@/scripts/rover_units/wait_for.sh dev ${ROVER_XRCE_DEVICE} --timeout 20
-ExecStart=@REPO@/scripts/rover_units/unit_exec.sh xrce -- /opt/microxrce/bin/MicroXRCEAgent serial --dev ${ROVER_XRCE_DEVICE} -b ${ROVER_XRCE_BAUD}
+ExecStart=@REPO@/scripts/rover_units/unit_exec.sh xrce -- env LD_LIBRARY_PATH=/opt/microxrce/lib /opt/microxrce/bin/MicroXRCEAgent serial --dev ${ROVER_XRCE_DEVICE} -b ${ROVER_XRCE_BAUD}
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /fmu/out/vehicle_status_v2 px4_msgs/msg/VehicleStatus --timeout 60
+# ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh xrce 10
+ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh xrce 10
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=150

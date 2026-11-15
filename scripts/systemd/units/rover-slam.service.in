@@ -14,7 +14,9 @@ Environment=ROVER_RTABMAP_DELETE_DB=true ROVER_REVERSIBLE_DRIVE=true
 EnvironmentFile=-/etc/default/rover-stack
 ExecStart=@REPO@/scripts/rover_units/unit_exec.sh slam -- ros2 launch robot_bringup robot_bringup.launch.py use_gazebo:=false use_sim_time:=false depth_camera:=d435i hw_enable_t265:=true use_t265_odom:=true hw_cameras:=false hw_base:=false rtabmap:=true localization:=false delete_db_on_start:=${ROVER_RTABMAP_DELETE_DB} nav2:=false rviz:=false rtabmap_viz:=false rtabmap_vis_estimation_type:=1 rtabmap_vis_max_depth:=4.0 rtabmap_vis_min_inliers:=10 rtabmap_kp_detector_strategy:=6 jetson_profile:=true reversible_drive:=${ROVER_REVERSIBLE_DRIVE}
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /map nav_msgs/msg/OccupancyGrid --latched --timeout 150
+# ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh slam
+ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh slam
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=240

@@ -14,7 +14,9 @@ Environment=ROVER_NAV2_CONTROLLER=mppi ROVER_REVERSIBLE_DRIVE=true
 EnvironmentFile=-/etc/default/rover-stack
 ExecStart=@REPO@/scripts/rover_units/unit_exec.sh nav2 -- ros2 launch robot_bringup robot_bringup.launch.py use_gazebo:=false use_sim_time:=false depth_camera:=d435i hw_enable_t265:=true use_t265_odom:=true hw_cameras:=false hw_base:=false rtabmap:=false nav2:=true nav2_controller:=${ROVER_NAV2_CONTROLLER} rviz:=false jetson_profile:=true reversible_drive:=${ROVER_REVERSIBLE_DRIVE}
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh nav2 --timeout 240
+# ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh nav2
+ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh nav2
 Restart=on-failure
 RestartSec=15
 TimeoutStartSec=300

@@ -17,7 +17,9 @@ ExecStart=@REPO@/scripts/rover_units/unit_exec.sh px4 -- ros2 launch px4_bringup
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /fmu/in/vehicle_visual_odometry px4_msgs/msg/VehicleOdometry --timeout 60
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /px4_modes/announce std_msgs/msg/String --latched --timeout 90
 # SIGINT lets RoverManual unregister from PX4 (else it keeps its External slot).
+# ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh px4 20
+ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh px4 20
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=200

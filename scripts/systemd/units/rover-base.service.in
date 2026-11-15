@@ -12,7 +12,9 @@ Group=@GROUP@
 WorkingDirectory=@REPO@
 ExecStart=@REPO@/scripts/rover_units/unit_exec.sh base -- ros2 launch robot_bringup robot_bringup.launch.py use_gazebo:=false use_sim_time:=false depth_camera:=d435i hw_enable_t265:=true use_t265_odom:=true hw_cameras:=false rtabmap:=false nav2:=false rviz:=false
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /robot_description std_msgs/msg/String --latched --timeout 60
+# ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh base
+ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh base
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=120
