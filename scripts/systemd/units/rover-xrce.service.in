@@ -19,7 +19,7 @@ EnvironmentFile=-/etc/default/rover-stack
 ExecStartPre=+@REPO@/scripts/rover_units/usb_reset.sh ${ROVER_XRCE_USB_ID}
 ExecStartPre=@REPO@/scripts/rover_units/wait_for.sh dev ${ROVER_XRCE_DEVICE} --timeout 20
 ExecStart=@REPO@/scripts/rover_units/unit_exec.sh xrce -- env LD_LIBRARY_PATH=/opt/microxrce/lib /opt/microxrce/bin/MicroXRCEAgent serial --dev ${ROVER_XRCE_DEVICE} -b ${ROVER_XRCE_BAUD}
-ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /fmu/out/vehicle_status_v2 px4_msgs/msg/VehicleStatus --timeout 60
+ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /fmu/out/vehicle_status_v2 px4_msgs/msg/VehicleStatus --timeout 120
 # ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh xrce 10
 ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh xrce 10
@@ -27,7 +27,7 @@ ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh xrce 10
 SuccessExitStatus=130 143
 Restart=on-failure
 RestartSec=5
-TimeoutStartSec=150
+TimeoutStartSec=210
 TimeoutStopSec=40
 
 [Install]

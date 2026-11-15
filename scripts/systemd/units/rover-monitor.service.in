@@ -14,7 +14,7 @@ WorkingDirectory=@REPO@
 Environment=ROVER_BROKER_HOST=192.168.0.225
 EnvironmentFile=-/etc/default/rover-stack
 ExecStart=@REPO@/scripts/rover_units/unit_exec.sh monitor -- ros2 launch rover_monitor monitor.launch.py use_sim_time:=false depth_camera:=d435i tracking_expect_stream:=false enable_telemetry:=true publisher_config_file:=/workspace/src/rover_monitor/config/publisher.yaml broker_host:=${ROVER_BROKER_HOST}
-ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /monitor/health rover_monitor/msg/RoverHealth --timeout 60
+ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /monitor/health rover_monitor/msg/RoverHealth --timeout 120
 # ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh monitor
 ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh monitor
@@ -22,7 +22,7 @@ ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh monitor
 SuccessExitStatus=130 143
 Restart=on-failure
 RestartSec=10
-TimeoutStartSec=120
+TimeoutStartSec=180
 TimeoutStopSec=60
 
 [Install]
