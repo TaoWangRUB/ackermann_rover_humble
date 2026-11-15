@@ -442,19 +442,17 @@ fi
 
   # SIGTERM the current recorder and wait up to 30s for it to finalize the
   # MCAP + metadata.yaml. Escalates to SIGKILL as a last resort. No-op if
-  # no recorder is running.
+  # no recorder is running. Waits with 'wait', not a kill -0 poll: inside a
+  # signal trap (Ctrl-C, unit stop) bash does not reap the exited recorder,
+  # so kill -0 kept succeeding on the zombie for the whole 30s.
   stop_segment() {
     if [ -n \"\$REC_PID\" ] && kill -0 \$REC_PID 2>/dev/null; then
       kill -TERM \$REC_PID 2>/dev/null || true
-      for _ in \$(seq 1 60); do
-        kill -0 \$REC_PID 2>/dev/null || break
-        sleep 0.5
-      done
-      if kill -0 \$REC_PID 2>/dev/null; then
-        echo 'Recorder still alive after 30s, sending SIGKILL' >&2
-        kill -KILL \$REC_PID 2>/dev/null || true
-      fi
+      ( sleep 30; kill -KILL \$REC_PID 2>/dev/null \\
+          && echo 'Recorder still alive after 30s, sent SIGKILL' >&2 ) &
+      local watchdog=\$!
       wait \$REC_PID 2>/dev/null || true
+      kill \$watchdog 2>/dev/null || true
     fi
     REC_PID=''
   }
