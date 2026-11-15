@@ -32,6 +32,7 @@ TMUX_TEMPLATE="${SCRIPT_DIR}/systemd/rover-stack.service.in"
 UNITS_DIR="${SCRIPT_DIR}/systemd/units"
 SYSTEMD_DIR="/etc/systemd/system"
 DEFAULTS_PATH="/etc/default/rover-stack"
+LOGIND_DROPIN="/etc/systemd/logind.conf.d/10-rover-keep-ipc.conf"
 DEFAULT_ARGS="--t265-odom --nav2 --with-telemetry"
 DEFAULT_BROKER_HOST="192.168.0.225"
 SESSION="jetson"
@@ -96,8 +97,10 @@ remove_units_mode() {
 if [[ "${ACTION}" == "uninstall" ]]; then
     remove_units_mode
     remove_tmux_mode
+    as_root rm -f "${LOGIND_DROPIN}"
     as_root systemctl daemon-reload
-    echo "Removed the rover units (both modes). ${DEFAULTS_PATH} was kept."
+    echo "Removed the rover units (both modes) and ${LOGIND_DROPIN}. ${DEFAULTS_PATH} was kept;"
+    echo "lingering for ${SERVICE_USER} was left on (loginctl disable-linger ${SERVICE_USER} turns it off)."
     exit 0
 fi
 
@@ -133,6 +136,19 @@ else
     echo "Kept ${DEFAULTS_PATH}:"
     grep -E '^ROVER_' "${DEFAULTS_PATH}" | sed 's/^/  /'
 fi
+
+# ── Keep the stack's shared memory ───────────────────────────────────
+# systemd-logind deletes all of a user's /dev/shm objects when that user's
+# last login session ends (RemoveIPC=yes, Ubuntu's default). The stack runs as
+# that user but outside any session, and Fast DDS moves camera data through
+# /dev/shm segments: every SSH logout wiped them, the cameras kept running and
+# no subscriber got data any more (found 2026-11-15). Lingering keeps the user
+# logged in (effective now); the drop-in turns the removal off (next boot).
+as_root loginctl enable-linger "${SERVICE_USER}"
+as_root mkdir -p "${LOGIND_DROPIN%/*}"
+printf '# Written by scripts/install_rover_service.sh: keep the rover stack'"'"'s Fast DDS\n# shared memory (/dev/shm) when the last login session of its user ends.\n[Login]\nRemoveIPC=no\n' \
+    | as_root tee "${LOGIND_DROPIN}" >/dev/null
+echo "Lingering on for ${SERVICE_USER}; ${LOGIND_DROPIN} sets RemoveIPC=no (applies after the next boot)."
 
 # ── Units ────────────────────────────────────────────────────────────
 if [[ "${MODE}" == units ]]; then
