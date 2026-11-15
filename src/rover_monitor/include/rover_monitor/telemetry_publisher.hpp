@@ -9,6 +9,7 @@
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <action_msgs/msg/goal_status_array.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
+#include <px4_msgs/msg/vehicle_command_ack.hpp>
 #include <px4_msgs/msg/vehicle_status.hpp>
 #include <px4_msgs/msg/register_ext_component_reply.hpp>
 #include <std_msgs/msg/string.hpp>
@@ -71,13 +72,26 @@ private:
   void handle_record(const std::string & cmd_id, const std::string & payload);
   void handle_register_mode(const std::string & cmd_id, const std::string & payload);
   void handle_unregister_mode(const std::string & cmd_id, const std::string & payload);
+  void handle_set_ekf_origin(const std::string & cmd_id, const std::string & payload);
+
+  // EKF global origin. The rover has no GPS, so PX4 has no global position
+  // and cannot run Hold (its RC-loss failsafe then falls back to Land and
+  // disarms). rover_monitor sends a fixed origin (publisher.ekf_origin.*, or
+  // one set from the Control Center) whenever PX4 connects without one,
+  // re-sending every retry period until EKF2 acknowledges it. PX4 keeps the
+  // origin until it reboots; a gap in vehicle_status marks it as lost.
+  void send_ekf_origin();
+  void on_ekf_origin_timer();
+  void on_vehicle_command_ack(px4_msgs::msg::VehicleCommandAck::ConstSharedPtr msg);
+  void finish_ekf_origin_request(int status, const std::string & message);
 
   // Dedup
   bool is_duplicate(const std::string & cmd_id);
 
   // Publish a VehicleCommand to PX4
   void publish_vehicle_command(uint32_t command, float param1 = 0.0f,
-    float param2 = 0.0f);
+    float param2 = 0.0f, double param5 = 0.0, double param6 = 0.0,
+    float param7 = 0.0f);
 
   // Disarm / E-STOP with confirmation. A single VehicleCommand can be lost on
   // the serial XRCE-DDS link (seen on the rover on 2026-11-14: the Control
@@ -159,6 +173,22 @@ private:
   bool estop_latched_{false};
   double disarm_retry_period_s_{0.1};
   double disarm_timeout_s_{3.0};
+
+  // EKF global origin (see send_ekf_origin). Runs in cb_group_, no lock.
+  bool ekf_origin_auto_set_{true};
+  double ekf_origin_lat_deg_{0.0};
+  double ekf_origin_lon_deg_{0.0};
+  float ekf_origin_alt_m_{0.0f};
+  double ekf_origin_retry_period_s_{2.0};
+  double ekf_origin_timeout_s_{5.0};
+  bool ekf_origin_set_{false};  // EKF2 acknowledged the current origin
+  std::chrono::steady_clock::time_point ekf_origin_last_send_{};
+  // Control Center request waiting for EKF2's ACK (empty when none).
+  std::string ekf_origin_cmd_id_;
+  std::chrono::steady_clock::time_point ekf_origin_cmd_started_{};
+  rclcpp::TimerBase::SharedPtr ekf_origin_timer_;
+  std::vector<rclcpp::Subscription<px4_msgs::msg::VehicleCommandAck>::SharedPtr>
+  vehicle_command_ack_subs_;
 
   // Record-control publisher — bridges MQTT rover/cmd/record to record_bag.sh
   // (which subscribes to /record/cmd as a String: "start" | "stop" | "toggle").

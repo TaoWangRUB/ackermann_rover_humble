@@ -29,6 +29,16 @@ influxdb:
   flush_interval_ms: 2000
   max_retries: 3
 
+# EKF global origin offered in the dashboard ("EKF origin" card). The rover has
+# no GPS: PX4 needs this origin for a global position, which Hold needs.
+# rover_monitor sets its own default (publisher.ekf_origin in
+# src/rover_monitor/config/publisher.yaml) when PX4 connects; keep both equal.
+# Default = the SITL origin (scripts/start_px4_sitl.sh).
+ekf_origin:
+  latitude_deg: 51.4934
+  longitude_deg: 7.4120
+  altitude_m: 100.0
+
 cmd_gateway:
   ack_timeout_s: 5.0
   publish_qos: 2
@@ -39,6 +49,7 @@ cmd_gateway:
     mode: "rover/cmd/mode"
     estop: "rover/cmd/estop"
     cancel_goal: "rover/cmd/cancel_goal"
+    ekf_origin: "rover/cmd/ekf_origin"
     ack: "rover/cmd/ack"
 
 notifier:

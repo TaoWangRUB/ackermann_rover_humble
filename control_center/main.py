@@ -50,7 +50,8 @@ async def main() -> None:
     safety = SafetyGate(cache, cfg.get("cmd_gateway", {}))
     gateway = CommandGateway(bus, mqtt_rx, safety, cfg.get("cmd_gateway", {}))
     ack_tracker = AckTracker(bus, cfg.get("cmd_gateway", {}))
-    dashboard = DashboardServer(bus, cache, gateway, ack_tracker, cfg.get("dashboard", {}))
+    dashboard_cfg = {**cfg.get("dashboard", {}), "ekf_origin": cfg.get("ekf_origin", {})}
+    dashboard = DashboardServer(bus, cache, gateway, ack_tracker, dashboard_cfg)
 
     # Graceful shutdown
     loop = asyncio.get_running_loop()

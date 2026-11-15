@@ -31,6 +31,12 @@ message Px4Status {
   int64 timestamp = 12;
   float cpu_load_pct = 13;
   float ram_usage_pct = 14;
+  // EKF global origin. The rover has no GPS, so PX4 only has a global position
+  // (needed by Hold, RTL and missions) once rover_monitor has set this origin.
+  bool ekf_origin_set = 15;        // PX4 acknowledged the origin below
+  double ekf_origin_lat_deg = 16;  // origin rover_monitor sends (default or Control Center)
+  double ekf_origin_lon_deg = 17;
+  float ekf_origin_alt_m = 18;     // AMSL
 }
 
 message JetsonStatus {
@@ -99,6 +105,7 @@ enum CommandType {
   CMD_RECORD = 9;
   CMD_REGISTER_MODE = 10;
   CMD_UNREGISTER_MODE = 11;
+  CMD_SET_EKF_ORIGIN = 12;
 }
 
 message DriveCmd {
@@ -138,6 +145,12 @@ message UnregisterMode {
   string mode_name = 1;
 }
 
+message SetEkfOrigin {
+  double latitude_deg = 1;   // WGS-84
+  double longitude_deg = 2;  // WGS-84
+  float altitude_m = 3;      // AMSL
+}
+
 message SetParam {
   string param_name = 1;
   string param_value = 2;
@@ -155,6 +168,7 @@ message RoverCommand {
   RecordCmd record = 9;
   RegisterMode register_mode = 10;
   UnregisterMode unregister_mode = 11;
+  SetEkfOrigin set_ekf_origin = 12;
 }
 
 message CommandAck {

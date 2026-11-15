@@ -39,6 +39,13 @@ class DashboardServer:
         self._host = cfg.get("host", "0.0.0.0")
         self._port = cfg.get("port", 8080)
         self._ws_rate_hz = cfg.get("ws_health_rate_hz", 2.0)
+        # Default EKF origin offered in the UI (config: ekf_origin).
+        origin = cfg.get("ekf_origin", {}) or {}
+        self._ekf_origin_default = {
+            "latitude_deg": float(origin.get("latitude_deg", 51.4934)),
+            "longitude_deg": float(origin.get("longitude_deg", 7.4120)),
+            "altitude_m": float(origin.get("altitude_m", 100.0)),
+        }
 
         self._app: Any = None
         self._server: Any = None
@@ -101,6 +108,10 @@ class DashboardServer:
         @self._app.get("/api/command/history")
         async def get_command_history() -> list:
             return self._ack_tracker.get_history()
+
+        @self._app.get("/api/ekf_origin/default")
+        async def get_ekf_origin_default() -> dict:
+            return self._ekf_origin_default
 
         @self._app.get("/api/hw_mode")
         async def get_hw_mode() -> dict:

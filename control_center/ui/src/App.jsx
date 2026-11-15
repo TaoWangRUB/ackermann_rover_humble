@@ -476,6 +476,86 @@ function VehicleCard({ px4, hwMode, stale }) {
   );
 }
 
+function OriginCard({ px4, live, stale }) {
+  const { send, notify } = useCommands();
+  const [lat, setLat] = useState('');
+  const [lon, setLon] = useState('');
+  const [alt, setAlt] = useState('');
+  const [defaults, setDefaults] = useState(null);
+
+  // Default origin from the Control Center config (ekf_origin).
+  useEffect(() => {
+    fetch('/api/ekf_origin/default')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setDefaults(d);
+        setLat((v) => (v === '' ? String(d.latitude_deg) : v));
+        setLon((v) => (v === '' ? String(d.longitude_deg) : v));
+        setAlt((v) => (v === '' ? String(d.altitude_m) : v));
+      })
+      .catch(() => {});
+  }, []);
+
+  const useDefault = () => {
+    if (!defaults) return;
+    setLat(String(defaults.latitude_deg));
+    setLon(String(defaults.longitude_deg));
+    setAlt(String(defaults.altitude_m));
+  };
+
+  const setOrigin = () => {
+    const la = Number(lat);
+    const lo = Number(lon);
+    const al = Number(alt || 0);
+    if (lat === '' || lon === '' || !Number.isFinite(la) || !Number.isFinite(lo) || !Number.isFinite(al)) {
+      notify('Enter latitude, longitude and altitude as numbers.', 'warn');
+      return;
+    }
+    if (la < -90 || la > 90 || lo < -180 || lo > 180) {
+      notify('Latitude must be -90..90 and longitude -180..180.', 'warn');
+      return;
+    }
+    send('set_ekf_origin', { latitude_deg: la, longitude_deg: lo, altitude_m: al });
+  };
+
+  // Telemetry from an older rover_monitor has no origin fields at all.
+  const known = px4.ekfOriginLatDeg != null || px4.ekfOriginLonDeg != null;
+  const originSet = !!px4.ekfOriginSet;
+  const canSet = live && !!px4.connected && !px4.armed;
+  return (
+    <Card title="EKF origin" tag={known ? (originSet ? 'SET' : 'NOT SET') : null} tagTone={originSet ? 'ok' : 'warn'} stale={stale}>
+      <div className="kv">
+        <Row label="PX4 has the origin" value={known ? yesNo(originSet) : '–'} tone={known ? (originSet ? 'ok' : 'warn') : 'idle'} />
+        <Row label="Rover origin" value={known ? `${num(px4.ekfOriginLatDeg ?? 0, 5)}, ${num(px4.ekfOriginLonDeg ?? 0, 5)}` : '–'} />
+        <Row label="Altitude" value={known ? num(px4.ekfOriginAltM ?? 0, 1) : '–'} unit="m" />
+      </div>
+      <p className="note">
+        No GPS on the rover: PX4 needs this point for Hold and RTL. The rover sets its default when PX4 connects; change it here only while disarmed.
+      </p>
+      <div className="fields">
+        <div className="field">
+          <label className="label" htmlFor="origin-lat">Latitude (°)</label>
+          <input id="origin-lat" type="number" step="any" value={lat} onChange={(e) => setLat(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="label" htmlFor="origin-lon">Longitude (°)</label>
+          <input id="origin-lon" type="number" step="any" value={lon} onChange={(e) => setLon(e.target.value)} />
+        </div>
+        <div className="field">
+          <label className="label" htmlFor="origin-alt">Altitude (m)</label>
+          <input id="origin-alt" type="number" step="any" value={alt} onChange={(e) => setAlt(e.target.value)} />
+        </div>
+      </div>
+      <div className="btn-row">
+        <button type="button" className="btn btn-primary" disabled={!canSet} onClick={setOrigin}>Set origin</button>
+        <button type="button" className="btn" disabled={!defaults} onClick={useDefault}>Use default</button>
+      </div>
+      {px4.armed && <p className="note">Disarm to change the origin.</p>}
+    </Card>
+  );
+}
+
 function CamerasCard({ cameras, hwMode, stale }) {
   const list = cameras || [];
   return (
@@ -950,6 +1030,7 @@ export default function App() {
           <ModesCard px4={px4} extMode={extMode} />
           <DriveCard canDrive={armed && link.live} />
           <NavigationCard nav2={health?.nav2} slamLatencyMs={health?.slamLatencyMs} armed={armed} stale={stale} />
+          <OriginCard px4={px4} live={link.live} stale={stale} />
           <RecordingCard diskFreeGb={health?.jetson?.diskFreeGb} />
           <CommandLogCard ackData={ackData} />
         </div>

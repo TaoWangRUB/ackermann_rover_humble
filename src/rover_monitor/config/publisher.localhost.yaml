@@ -13,3 +13,15 @@
       connect_timeout_s: 5
       heartbeat_interval_s: 1.0
       serialization: "protobuf"
+      # EKF global origin. The rover has no GPS, so PX4 has no global position
+      # and cannot run Hold (RC loss then falls back to Land + disarm) until
+      # this origin is set. rover_monitor sends it whenever PX4 connects
+      # without one; the Control Center can change it (disarmed only).
+      # Default = the SITL origin (start_px4_sitl.sh).
+      ekf_origin:
+        auto_set: true
+        latitude_deg: 51.4934
+        longitude_deg: 7.4120
+        altitude_m: 100.0
+        retry_period_s: 2.0
+        timeout_s: 5.0

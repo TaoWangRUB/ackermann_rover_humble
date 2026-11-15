@@ -41,6 +41,8 @@ class SafetyGate:
             return await self._check_drive(health_data, health_stale)
         elif cmd_type in ("register_mode", "unregister_mode"):
             return await self._check_set_mode(health_data, health_stale)
+        elif cmd_type == "set_ekf_origin":
+            return await self._check_set_ekf_origin(health_data, health_stale)
 
         return False, f"Unknown command type: {cmd_type}"
 
@@ -75,6 +77,18 @@ class SafetyGate:
             return False, "PX4 not connected — cannot change mode"
 
         return True, "Set mode preconditions met"
+
+    async def _check_set_ekf_origin(self, health: Any, stale: bool) -> tuple[bool, str]:
+        if stale or health is None:
+            return False, "Telemetry stale — cannot set the EKF origin"
+
+        if not health.px4.connected:
+            return False, "PX4 not connected — cannot set the EKF origin"
+        # Moving the origin re-references PX4's global position mid-drive.
+        if health.px4.armed:
+            return False, "Armed — disarm before changing the EKF origin"
+
+        return True, "EKF origin preconditions met"
 
     async def _check_drive(self, health: Any, stale: bool) -> tuple[bool, str]:
         px4, px4_stale = await self._cache.get_effective_px4()

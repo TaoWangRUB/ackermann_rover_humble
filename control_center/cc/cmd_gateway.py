@@ -27,6 +27,7 @@ CMD_TYPE_MAP = {
     "record": 9,    # CMD_RECORD
     "register_mode": 10,    # CMD_REGISTER_MODE
     "unregister_mode": 11,  # CMD_UNREGISTER_MODE
+    "set_ekf_origin": 12,   # CMD_SET_EKF_ORIGIN
 }
 
 TOPIC_MAP = {
@@ -40,7 +41,25 @@ TOPIC_MAP = {
     "record": "rover/cmd/record",
     "register_mode": "rover/cmd/register_mode",
     "unregister_mode": "rover/cmd/unregister_mode",
+    "set_ekf_origin": "rover/cmd/ekf_origin",
 }
+
+
+def parse_ekf_origin(params: dict[str, Any]) -> tuple[float, float, float]:
+    """Return (lat, lon, alt) from command params, or raise ValueError."""
+    try:
+        lat = float(params["latitude_deg"])
+        lon = float(params["longitude_deg"])
+        alt = float(params.get("altitude_m", 0.0))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"EKF origin needs numeric latitude_deg, longitude_deg, altitude_m: {exc}")
+    if not -90.0 <= lat <= 90.0:
+        raise ValueError(f"latitude_deg out of range [-90, 90]: {lat}")
+    if not -180.0 <= lon <= 180.0:
+        raise ValueError(f"longitude_deg out of range [-180, 180]: {lon}")
+    if not -500.0 <= alt <= 9000.0:
+        raise ValueError(f"altitude_m out of range [-500, 9000]: {alt}")
+    return lat, lon, alt
 
 
 class CommandGateway:
@@ -71,6 +90,8 @@ class CommandGateway:
             "record": "record",
             "register_mode": "register_mode",
             "unregister_mode": "unregister_mode",
+            "ekf_origin": "set_ekf_origin",
+            "set_ekf_origin": "set_ekf_origin",
         }
 
         for key, value in configured_topics.items():
@@ -127,6 +148,11 @@ class CommandGateway:
             cmd.register_mode.mode_name = params.get("mode_name", "")
         elif cmd_type == "unregister_mode":
             cmd.unregister_mode.mode_name = params.get("mode_name", "")
+        elif cmd_type == "set_ekf_origin":
+            lat, lon, alt = parse_ekf_origin(params)
+            cmd.set_ekf_origin.latitude_deg = lat
+            cmd.set_ekf_origin.longitude_deg = lon
+            cmd.set_ekf_origin.altitude_m = alt
 
         # Serialize and publish
         payload = cmd.SerializeToString()

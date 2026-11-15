@@ -72,6 +72,14 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   this->declare_parameter("publisher.heartbeat_interval_s", 1.0);
   this->declare_parameter("publisher.disarm_retry_period_s", 0.1);
   this->declare_parameter("publisher.disarm_timeout_s", 3.0);
+  // EKF global origin, sent to PX4 because the rover has no GPS (see
+  // send_ekf_origin). The default is the same point the SITL setup uses.
+  this->declare_parameter("publisher.ekf_origin.auto_set", true);
+  this->declare_parameter("publisher.ekf_origin.latitude_deg", 51.4934);
+  this->declare_parameter("publisher.ekf_origin.longitude_deg", 7.4120);
+  this->declare_parameter("publisher.ekf_origin.altitude_m", 100.0);
+  this->declare_parameter("publisher.ekf_origin.retry_period_s", 2.0);
+  this->declare_parameter("publisher.ekf_origin.timeout_s", 5.0);
 
   broker_host_ = this->get_parameter("publisher.broker_host").as_string();
   broker_port_ = this->get_parameter("publisher.broker_port").as_int();
@@ -86,6 +94,14 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
   heartbeat_interval_s_ = this->get_parameter("publisher.heartbeat_interval_s").as_double();
   disarm_retry_period_s_ = this->get_parameter("publisher.disarm_retry_period_s").as_double();
   disarm_timeout_s_ = this->get_parameter("publisher.disarm_timeout_s").as_double();
+  ekf_origin_auto_set_ = this->get_parameter("publisher.ekf_origin.auto_set").as_bool();
+  ekf_origin_lat_deg_ = this->get_parameter("publisher.ekf_origin.latitude_deg").as_double();
+  ekf_origin_lon_deg_ = this->get_parameter("publisher.ekf_origin.longitude_deg").as_double();
+  ekf_origin_alt_m_ = static_cast<float>(
+    this->get_parameter("publisher.ekf_origin.altitude_m").as_double());
+  ekf_origin_retry_period_s_ =
+    this->get_parameter("publisher.ekf_origin.retry_period_s").as_double();
+  ekf_origin_timeout_s_ = this->get_parameter("publisher.ekf_origin.timeout_s").as_double();
 
   // ROS subscriber for health telemetry
   rclcpp::SubscriptionOptions sub_opts;
@@ -113,6 +129,20 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
       this->create_subscription<px4_msgs::msg::VehicleStatus>(
         topic, px4_status_qos,
         std::bind(&TelemetryPublisher::on_vehicle_status, this, std::placeholders::_1),
+        sub_opts));
+  }
+
+  // EKF2's answer to the EKF origin command (see send_ekf_origin).
+  std::vector<std::string> ack_topics{
+    versioned_px4_topic<px4_msgs::msg::VehicleCommandAck>("/fmu/out/vehicle_command_ack")};
+  if (ack_topics.front() != "/fmu/out/vehicle_command_ack") {
+    ack_topics.emplace_back("/fmu/out/vehicle_command_ack");
+  }
+  for (const auto & topic : ack_topics) {
+    vehicle_command_ack_subs_.push_back(
+      this->create_subscription<px4_msgs::msg::VehicleCommandAck>(
+        topic, px4_status_qos,
+        std::bind(&TelemetryPublisher::on_vehicle_command_ack, this, std::placeholders::_1),
         sub_opts));
   }
 
@@ -233,6 +263,15 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
       std::chrono::duration<double>(disarm_retry_period_s_)),
     std::bind(&TelemetryPublisher::on_disarm_timer, this), cb_group_);
 
+  // EKF origin: sends the origin while PX4 lacks it, times out CC requests.
+  ekf_origin_timer_ = this->create_wall_timer(
+    std::chrono::milliseconds(500),
+    std::bind(&TelemetryPublisher::on_ekf_origin_timer, this), cb_group_);
+  RCLCPP_INFO(this->get_logger(),
+    "EKF origin: %s, %.7f, %.7f, %.1f m (Control Center can change it)",
+    ekf_origin_auto_set_ ? "auto-set" : "manual only",
+    ekf_origin_lat_deg_, ekf_origin_lon_deg_, static_cast<double>(ekf_origin_alt_m_));
+
   // Periodic heartbeat timer — publishes cached health at a low rate for dashboards
   heartbeat_timer_ = this->create_wall_timer(
     std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -265,6 +304,7 @@ TelemetryPublisher::TelemetryPublisher(const rclcpp::NodeOptions & options)
         mqtt_client_->subscribe("rover/cmd/record", cmd_qos_);
         mqtt_client_->subscribe("rover/cmd/register_mode", cmd_qos_);
         mqtt_client_->subscribe("rover/cmd/unregister_mode", cmd_qos_);
+        mqtt_client_->subscribe("rover/cmd/ekf_origin", cmd_qos_);
       } catch (const mqtt::exception & e) {
         RCLCPP_WARN(this->get_logger(), "MQTT subscribe failed: %s", e.what());
       }
@@ -326,6 +366,7 @@ void TelemetryPublisher::connect_mqtt()
       mqtt_client_->subscribe("rover/cmd/record", cmd_qos_);
       mqtt_client_->subscribe("rover/cmd/register_mode", cmd_qos_);
       mqtt_client_->subscribe("rover/cmd/unregister_mode", cmd_qos_);
+      mqtt_client_->subscribe("rover/cmd/ekf_origin", cmd_qos_);
       RCLCPP_INFO(this->get_logger(), "Subscribed to rover/cmd/* topics (QoS %d)",
         cmd_qos_);
     } catch (const mqtt::exception & e) {
@@ -440,6 +481,9 @@ void TelemetryPublisher::dispatch_command(const std::string & cmd_id, int cmd_ty
     case rover_monitor_proto::CMD_UNREGISTER_MODE:
       handle_unregister_mode(cmd_id, payload);
       break;
+    case rover_monitor_proto::CMD_SET_EKF_ORIGIN:
+      handle_set_ekf_origin(cmd_id, payload);
+      break;
     default:
       RCLCPP_WARN(this->get_logger(), "Unknown command type %d for cmd_id=%s",
         cmd_type, cmd_id.c_str());
@@ -453,6 +497,9 @@ void TelemetryPublisher::dispatch_command(const std::string & cmd_id, int cmd_ty
 // rover logs "Takeoff detected" on arming). param2 = 21196 forces the disarm,
 // which is what a ground rover's Disarm and E-STOP must always do.
 static constexpr float kForceDisarmMagic = 21196.0f;
+// vehicle_status arrives at ~2 Hz or faster; a longer gap means PX4 rebooted
+// or the XRCE link dropped.
+static constexpr auto kPx4StatusGap = std::chrono::seconds(3);
 
 void TelemetryPublisher::handle_arm(const std::string & cmd_id)
 {
@@ -551,8 +598,18 @@ void TelemetryPublisher::finish_disarm(int status, const std::string & message)
 void TelemetryPublisher::on_vehicle_status(
   px4_msgs::msg::VehicleStatus::ConstSharedPtr msg)
 {
+  const auto now = std::chrono::steady_clock::now();
+  // PX4 keeps the EKF origin until it reboots. A reboot (or a lost XRCE link)
+  // shows up as a gap in vehicle_status; assume the origin is gone after one.
+  if (ekf_origin_set_ && px4_status_time_.time_since_epoch().count() != 0 &&
+    now - px4_status_time_ > kPx4StatusGap)
+  {
+    ekf_origin_set_ = false;
+    RCLCPP_WARN(this->get_logger(),
+      "PX4 vehicle_status resumed after a gap: re-sending the EKF origin");
+  }
   px4_armed_ = msg->arming_state == px4_msgs::msg::VehicleStatus::ARMING_STATE_ARMED;
-  px4_status_time_ = std::chrono::steady_clock::now();
+  px4_status_time_ = now;
 }
 
 void TelemetryPublisher::publish_zero_twist()
@@ -1137,14 +1194,136 @@ void TelemetryPublisher::handle_record(const std::string & cmd_id,
     "Record action forwarded to /record/cmd");
 }
 
+void TelemetryPublisher::handle_set_ekf_origin(const std::string & cmd_id,
+  const std::string & payload)
+{
+  rover_monitor_proto::RoverCommand cmd;
+  cmd.ParseFromString(payload);
+  if (!cmd.has_set_ekf_origin()) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_SET_EKF_ORIGIN,
+      rover_monitor_proto::ACK_REJECTED, "Missing set_ekf_origin field");
+    return;
+  }
+
+  const auto & origin = cmd.set_ekf_origin();
+  const double lat = origin.latitude_deg();
+  const double lon = origin.longitude_deg();
+  const float alt = origin.altitude_m();
+  if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(alt) ||
+    lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0 ||
+    alt < -500.0f || alt > 9000.0f)
+  {
+    send_ack(cmd_id, rover_monitor_proto::CMD_SET_EKF_ORIGIN,
+      rover_monitor_proto::ACK_REJECTED,
+      "Origin out of range (lat -90..90, lon -180..180, alt -500..9000 m)");
+    return;
+  }
+
+  // Moving the origin re-references PX4's global position; never while it drives.
+  if (px4_armed_) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_SET_EKF_ORIGIN,
+      rover_monitor_proto::ACK_REJECTED, "Disarm before changing the EKF origin");
+    return;
+  }
+  if (std::chrono::steady_clock::now() - px4_status_time_ > kPx4StatusGap) {
+    send_ack(cmd_id, rover_monitor_proto::CMD_SET_EKF_ORIGIN,
+      rover_monitor_proto::ACK_REJECTED, "PX4 not connected");
+    return;
+  }
+
+  if (!ekf_origin_cmd_id_.empty()) {
+    send_ack(ekf_origin_cmd_id_, rover_monitor_proto::CMD_SET_EKF_ORIGIN,
+      rover_monitor_proto::ACK_FAILED, "Replaced by a newer origin request");
+  }
+
+  RCLCPP_INFO(this->get_logger(),
+    "SET_EKF_ORIGIN command: cmd_id=%s lat=%.7f lon=%.7f alt=%.1f m",
+    cmd_id.c_str(), lat, lon, static_cast<double>(alt));
+  ekf_origin_lat_deg_ = lat;
+  ekf_origin_lon_deg_ = lon;
+  ekf_origin_alt_m_ = alt;
+  ekf_origin_set_ = false;
+  ekf_origin_cmd_id_ = cmd_id;
+  ekf_origin_cmd_started_ = std::chrono::steady_clock::now();
+  send_ekf_origin();
+  send_ack(cmd_id, rover_monitor_proto::CMD_SET_EKF_ORIGIN,
+    rover_monitor_proto::ACK_ACCEPTED, "Origin sent to PX4, waiting for EKF2");
+}
+
+void TelemetryPublisher::send_ekf_origin()
+{
+  publish_vehicle_command(
+    px4_msgs::msg::VehicleCommand::VEHICLE_CMD_SET_GPS_GLOBAL_ORIGIN,
+    0.0f, 0.0f, ekf_origin_lat_deg_, ekf_origin_lon_deg_, ekf_origin_alt_m_);
+  ekf_origin_last_send_ = std::chrono::steady_clock::now();
+  RCLCPP_INFO(this->get_logger(), "Sent EKF origin to PX4: %.7f, %.7f, %.1f m",
+    ekf_origin_lat_deg_, ekf_origin_lon_deg_, static_cast<double>(ekf_origin_alt_m_));
+}
+
+void TelemetryPublisher::on_ekf_origin_timer()
+{
+  const auto now = std::chrono::steady_clock::now();
+
+  if (!ekf_origin_cmd_id_.empty() &&
+    now - ekf_origin_cmd_started_ > std::chrono::duration<double>(ekf_origin_timeout_s_))
+  {
+    finish_ekf_origin_request(rover_monitor_proto::ACK_FAILED,
+      "PX4 did not acknowledge the EKF origin");
+  }
+
+  const bool px4_connected = px4_status_time_.time_since_epoch().count() != 0 &&
+    now - px4_status_time_ <= kPx4StatusGap;
+  const bool wanted = ekf_origin_auto_set_ || !ekf_origin_cmd_id_.empty();
+  if (ekf_origin_set_ || !wanted || !px4_connected || px4_armed_) {
+    return;
+  }
+  if (now - ekf_origin_last_send_ >= std::chrono::duration<double>(ekf_origin_retry_period_s_)) {
+    send_ekf_origin();
+  }
+}
+
+void TelemetryPublisher::on_vehicle_command_ack(
+  px4_msgs::msg::VehicleCommandAck::ConstSharedPtr msg)
+{
+  if (msg->command != px4_msgs::msg::VehicleCommand::VEHICLE_CMD_SET_GPS_GLOBAL_ORIGIN) {
+    return;
+  }
+  if (msg->result == px4_msgs::msg::VehicleCommandAck::VEHICLE_CMD_RESULT_ACCEPTED) {
+    if (!ekf_origin_set_) {
+      RCLCPP_INFO(this->get_logger(), "PX4 accepted the EKF origin %.7f, %.7f, %.1f m",
+        ekf_origin_lat_deg_, ekf_origin_lon_deg_, static_cast<double>(ekf_origin_alt_m_));
+    }
+    ekf_origin_set_ = true;
+    finish_ekf_origin_request(rover_monitor_proto::ACK_COMPLETED,
+      "PX4 accepted the EKF origin");
+    return;
+  }
+  RCLCPP_WARN(this->get_logger(), "PX4 refused the EKF origin (result %u)",
+    static_cast<unsigned>(msg->result));
+  finish_ekf_origin_request(rover_monitor_proto::ACK_FAILED,
+    "PX4 refused the EKF origin (result " + std::to_string(msg->result) + ")");
+}
+
+void TelemetryPublisher::finish_ekf_origin_request(int status, const std::string & message)
+{
+  if (ekf_origin_cmd_id_.empty()) {
+    return;
+  }
+  send_ack(ekf_origin_cmd_id_, rover_monitor_proto::CMD_SET_EKF_ORIGIN, status, message);
+  ekf_origin_cmd_id_.clear();
+}
+
 void TelemetryPublisher::publish_vehicle_command(uint32_t command, float param1,
-  float param2)
+  float param2, double param5, double param6, float param7)
 {
   auto msg = px4_msgs::msg::VehicleCommand();
   msg.timestamp = this->now().nanoseconds() / 1000;  // PX4 uses microseconds
   msg.command = command;
   msg.param1 = param1;
   msg.param2 = param2;
+  msg.param5 = param5;
+  msg.param6 = param6;
+  msg.param7 = param7;
   msg.target_system = 1;
   msg.target_component = 1;
   msg.source_system = 1;
@@ -1224,6 +1403,10 @@ std::string TelemetryPublisher::serialise_health(
   px4->set_error_code(msg.px4.error_code);
   px4->set_error_msg(msg.px4.error_msg);
   px4->set_timestamp(msg.px4.timestamp);
+  px4->set_ekf_origin_set(ekf_origin_set_);
+  px4->set_ekf_origin_lat_deg(ekf_origin_lat_deg_);
+  px4->set_ekf_origin_lon_deg(ekf_origin_lon_deg_);
+  px4->set_ekf_origin_alt_m(ekf_origin_alt_m_);
 
   // Jetson
   auto * jetson = pb.mutable_jetson();
