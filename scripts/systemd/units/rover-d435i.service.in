@@ -1,6 +1,9 @@
 [Unit]
 Description=Rover 5/9: D435i depth camera (after the T265 streams, so its reset can't stall the D435i)
 PartOf=rover-stack.target
+# A T265 (re)start begins with its hardware reset, which stalls a streaming
+# D435i on the shared hub: stop the D435i with it and start it again after.
+PartOf=rover-t265.service
 Requires=rover-container.service rover-usb.service
 Wants=rover-t265.service
 After=rover-usb.service rover-t265.service
@@ -16,6 +19,8 @@ ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /d435i/color/image_ra
 # ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh d435i
 ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh d435i
+# 130/143: stopped by SIGINT/SIGTERM (unit_stop.sh), not a failure.
+SuccessExitStatus=130 143
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=180

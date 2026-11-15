@@ -15,6 +15,8 @@ ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /robot_description st
 # ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh base
 ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh base
+# 130/143: stopped by SIGINT/SIGTERM (unit_stop.sh), not a failure.
+SuccessExitStatus=130 143
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=120

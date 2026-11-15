@@ -20,6 +20,8 @@ ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /px4_modes/announce s
 # ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh px4 20
 ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh px4 20
+# 130/143: stopped by SIGINT/SIGTERM (unit_stop.sh), not a failure.
+SuccessExitStatus=130 143
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=200

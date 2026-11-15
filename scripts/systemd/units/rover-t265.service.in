@@ -17,6 +17,8 @@ ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /t265/odom_base nav_m
 # ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh t265
 ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh t265
+# 130/143: stopped by SIGINT/SIGTERM (unit_stop.sh), not a failure.
+SuccessExitStatus=130 143
 Restart=on-failure
 # The T265 VPU needs a pause between stop and start.
 RestartSec=20
