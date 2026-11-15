@@ -1,0 +1,19 @@
+[Unit]
+Description=Rover 2/9: USB devices present (D435i, T265, Cube, XRCE serial adapter)
+PartOf=rover-stack.target
+After=rover-container.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+Environment="ROVER_USB_DEVICES=d435i=8086:0b3a t265=8087:0b37,03e7:2150 cube=26ac:0011,2dae:1001 xrce_serial=1a86:7523"
+EnvironmentFile=-/etc/default/rover-stack
+ExecStart=@REPO@/scripts/rover_units/wait_for.sh usb $ROVER_USB_DEVICES --timeout 120
+ExecStart=@REPO@/scripts/rover_units/wait_for.sh dev /dev/ttyUSB0 /dev/ttyACM0 --timeout 30
+TimeoutStartSec=180
+
+[Install]
+WantedBy=rover-stack.target

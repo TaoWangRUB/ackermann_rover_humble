@@ -1,0 +1,19 @@
+[Unit]
+Description=Rover: PX4 hardware metrics (MAVLink UDP 14550) to the Control Center over MQTT
+PartOf=rover-stack.target
+After=rover-mavlink.service
+StartLimitIntervalSec=900
+StartLimitBurst=4
+
+[Service]
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+Environment=ROVER_BROKER_HOST=192.168.0.225
+EnvironmentFile=-/etc/default/rover-stack
+ExecStart=/usr/bin/python3 @REPO@/scripts/px4_hw_monitor.py --mqtt-host ${ROVER_BROKER_HOST} --interval 2
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=rover-stack.target

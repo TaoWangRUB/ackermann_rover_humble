@@ -1,0 +1,27 @@
+[Unit]
+Description=Rover 6/9: PX4 link (Micro XRCE-DDS agent on the serial adapter, after the cameras settled the USB bus)
+PartOf=rover-stack.target
+Requires=rover-container.service rover-usb.service
+After=rover-usb.service rover-t265.service rover-d435i.service
+StartLimitIntervalSec=900
+StartLimitBurst=4
+
+[Service]
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+Environment=ROVER_XRCE_DEVICE=/dev/ttyUSB0 ROVER_XRCE_BAUD=921600 ROVER_XRCE_USB_ID=1a86:7523
+EnvironmentFile=-/etc/default/rover-stack
+# Root (+): re-enumerate the CH340 so a wedged adapter starts clean.
+ExecStartPre=+@REPO@/scripts/rover_units/usb_reset.sh ${ROVER_XRCE_USB_ID}
+ExecStartPre=@REPO@/scripts/rover_units/wait_for.sh dev ${ROVER_XRCE_DEVICE} --timeout 20
+ExecStart=@REPO@/scripts/rover_units/unit_exec.sh xrce -- /opt/microxrce/bin/MicroXRCEAgent serial --dev ${ROVER_XRCE_DEVICE} -b ${ROVER_XRCE_BAUD}
+ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /fmu/out/vehicle_status_v2 px4_msgs/msg/VehicleStatus --timeout 60
+ExecStop=@REPO@/scripts/rover_units/unit_stop.sh xrce 10
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=150
+TimeoutStopSec=40
+
+[Install]
+WantedBy=rover-stack.target

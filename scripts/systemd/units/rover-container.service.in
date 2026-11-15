@@ -1,0 +1,18 @@
+[Unit]
+Description=Rover 1/9: dev container up, entrypoint finished
+PartOf=rover-stack.target
+Requires=docker.service
+After=docker.service network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/scripts/rover_units/wait_for.sh container --timeout 300
+TimeoutStartSec=330
+
+[Install]
+WantedBy=rover-stack.target

@@ -34,7 +34,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PythonExpression, TextSubstitution
 from launch_ros.actions import Node
@@ -256,6 +256,21 @@ ARGUMENTS = [
         choices=['true', 'false'],
         description='Launch the rover_monitor health monitoring system.',
     ),
+    # Hardware mode only. The systemd units (scripts/systemd/units) start each
+    # part on its own, in dependency order: the robot description first, then the
+    # cameras one at a time, then RTAB-Map and Nav2 without starting them again.
+    DeclareLaunchArgument(
+        'hw_cameras',
+        default_value='true',
+        choices=['true', 'false'],
+        description='Hardware mode: start the RealSense cameras (and the T265 odom relay).',
+    ),
+    DeclareLaunchArgument(
+        'hw_base',
+        default_value='true',
+        choices=['true', 'false'],
+        description='Hardware mode: start robot_state_publisher and cmd_vel_joint_relay.',
+    ),
 ]
 
 
@@ -287,6 +302,14 @@ def generate_launch_description() -> LaunchDescription:
     use_vins_odom = LaunchConfiguration('use_vins_odom')
     use_cuvslam_odom = LaunchConfiguration('use_cuvslam_odom')
     use_rgbd_odom = LaunchConfiguration('use_rgbd_odom')
+    hw_base_condition = IfCondition(PythonExpression([
+        '"true" if "', use_gazebo, '" != "true" and "',
+        LaunchConfiguration('hw_base'), '" == "true" else "false"'
+    ]))
+    hw_cameras_condition = IfCondition(PythonExpression([
+        '"true" if "', use_gazebo, '" != "true" and "',
+        LaunchConfiguration('hw_cameras'), '" == "true" else "false"'
+    ]))
 
     # The robot_localization EKF that published /odometry/filtered is gone
     # (2026-04), so with no odometry source selected nothing publishes the odom
@@ -379,7 +402,7 @@ def generate_launch_description() -> LaunchDescription:
         package='robot_bringup',
         executable='cmd_vel_joint_relay',
         output='screen',
-        condition=UnlessCondition(use_gazebo),
+        condition=hw_base_condition,
         parameters=[{
             'use_sim_time': use_sim_time,
             'robot_ns': robot_name,
@@ -391,7 +414,7 @@ def generate_launch_description() -> LaunchDescription:
         package='robot_state_publisher',
         executable='robot_state_publisher',
         output='screen',
-        condition=UnlessCondition(use_gazebo),
+        condition=hw_base_condition,
         parameters=[{
             'robot_description': Command([
                 'xacro', ' ', xacro_file, ' ',
@@ -417,7 +440,7 @@ def generate_launch_description() -> LaunchDescription:
         PythonLaunchDescriptionSource(
             os.path.join(realsense_bringup_share, 'launch', 'realsense_camera.launch.py')
         ),
-        condition=UnlessCondition(use_gazebo),
+        condition=hw_cameras_condition,
         launch_arguments={
             'enable_d435i': PythonExpression(['"true" if "', depth_camera, '" == "d435i" else "false"']),
             'enable_l515':  PythonExpression(['"true" if "', depth_camera, '" == "l515"  else "false"']),

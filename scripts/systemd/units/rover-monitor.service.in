@@ -1,0 +1,25 @@
+[Unit]
+Description=Rover: rover_monitor health + Control Center telemetry/commands over MQTT
+PartOf=rover-stack.target
+Requires=rover-container.service
+Wants=rover-t265.service rover-d435i.service
+After=rover-container.service rover-t265.service rover-d435i.service
+StartLimitIntervalSec=900
+StartLimitBurst=4
+
+[Service]
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+Environment=ROVER_BROKER_HOST=192.168.0.225
+EnvironmentFile=-/etc/default/rover-stack
+ExecStart=@REPO@/scripts/rover_units/unit_exec.sh monitor -- ros2 launch rover_monitor monitor.launch.py use_sim_time:=false depth_camera:=d435i tracking_expect_stream:=false enable_telemetry:=true publisher_config_file:=/workspace/src/rover_monitor/config/publisher.yaml broker_host:=${ROVER_BROKER_HOST}
+ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /monitor/health rover_monitor/msg/RoverHealth --timeout 60
+ExecStop=@REPO@/scripts/rover_units/unit_stop.sh monitor
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+TimeoutStopSec=60
+
+[Install]
+WantedBy=rover-stack.target

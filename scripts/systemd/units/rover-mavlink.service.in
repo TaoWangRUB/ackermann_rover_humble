@@ -1,0 +1,20 @@
+[Unit]
+Description=Rover 7/9: MAVLink USB bridge to UDP 14550/14551 (+ PX4 hardware monitor to MQTT)
+PartOf=rover-stack.target
+Requires=rover-usb.service
+After=rover-usb.service rover-xrce.service
+StartLimitIntervalSec=900
+StartLimitBurst=4
+
+[Service]
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+Environment=ROVER_MAVLINK_DEVICE=/dev/ttyACM0
+EnvironmentFile=-/etc/default/rover-stack
+ExecStart=/usr/bin/python3 @REPO@/scripts/mavlink_bridge.py --serial ${ROVER_MAVLINK_DEVICE} --baud 57600 --out 127.0.0.1:14550 --out 127.0.0.1:14551
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=rover-stack.target

@@ -1,0 +1,15 @@
+# The rover stack as one systemd unit per component, started in dependency
+# order with readiness gates (scripts/rover_units/wait_for.sh). Installed by
+# scripts/install_rover_service.sh --mode=units. Never arms the rover.
+#
+#   systemctl list-units 'rover-*'             # state of every component
+#   journalctl -u 'rover-*' -b -f              # all component logs
+#   sudo systemctl restart rover-stack.target  # stop all, start in order
+#   scripts/rover_units/status.sh              # one-line health per component
+[Unit]
+Description=Rover stack (rover-*.service: container, cameras, PX4 link, SLAM, Nav2, monitor)
+Conflicts=rover-stack.service
+After=network-online.target
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+[Unit]
+Description=Rover 5/9: D435i depth camera (after the T265 streams, so its reset can't stall the D435i)
+PartOf=rover-stack.target
+Requires=rover-container.service rover-usb.service
+Wants=rover-t265.service
+After=rover-usb.service rover-t265.service
+StartLimitIntervalSec=900
+StartLimitBurst=4
+
+[Service]
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/scripts/rover_units/unit_exec.sh d435i -- ros2 launch realsense_camera_bringup realsense_camera.launch.py enable_d435i:=true enable_l515:=false enable_t265:=false d435i_enable_hardware_reset:=false d435i_startup_delay_s:=0.0
+ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /d435i/color/image_raw sensor_msgs/msg/Image --timeout 90
+ExecStop=@REPO@/scripts/rover_units/unit_stop.sh d435i
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=180
+TimeoutStopSec=60
+
+[Install]
+WantedBy=rover-stack.target

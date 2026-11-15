@@ -1,0 +1,24 @@
+[Unit]
+Description=Rover 9/9b: Nav2 (after RTAB-Map publishes a map)
+PartOf=rover-stack.target
+Requires=rover-container.service rover-slam.service
+After=rover-slam.service
+StartLimitIntervalSec=900
+StartLimitBurst=4
+
+[Service]
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+Environment=ROVER_NAV2_CONTROLLER=mppi ROVER_REVERSIBLE_DRIVE=true
+EnvironmentFile=-/etc/default/rover-stack
+ExecStart=@REPO@/scripts/rover_units/unit_exec.sh nav2 -- ros2 launch robot_bringup robot_bringup.launch.py use_gazebo:=false use_sim_time:=false depth_camera:=d435i hw_enable_t265:=true use_t265_odom:=true hw_cameras:=false hw_base:=false rtabmap:=false nav2:=true nav2_controller:=${ROVER_NAV2_CONTROLLER} rviz:=false jetson_profile:=true reversible_drive:=${ROVER_REVERSIBLE_DRIVE}
+ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh nav2 --timeout 240
+ExecStop=@REPO@/scripts/rover_units/unit_stop.sh nav2
+Restart=on-failure
+RestartSec=15
+TimeoutStartSec=300
+TimeoutStopSec=60
+
+[Install]
+WantedBy=rover-stack.target

@@ -1,0 +1,22 @@
+[Unit]
+Description=Rover 3/9: robot description and TF (robot_state_publisher, cmd_vel_joint_relay)
+PartOf=rover-stack.target
+Requires=rover-container.service
+After=rover-container.service
+StartLimitIntervalSec=900
+StartLimitBurst=4
+
+[Service]
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/scripts/rover_units/unit_exec.sh base -- ros2 launch robot_bringup robot_bringup.launch.py use_gazebo:=false use_sim_time:=false depth_camera:=d435i hw_enable_t265:=true use_t265_odom:=true hw_cameras:=false rtabmap:=false nav2:=false rviz:=false
+ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /robot_description std_msgs/msg/String --latched --timeout 60
+ExecStop=@REPO@/scripts/rover_units/unit_stop.sh base
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=60
+
+[Install]
+WantedBy=rover-stack.target

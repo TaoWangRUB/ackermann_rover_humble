@@ -1,0 +1,25 @@
+[Unit]
+Description=Rover 4/9: T265 tracking camera (first: its hardware reset re-enumerates the shared USB hub)
+PartOf=rover-stack.target
+Requires=rover-container.service rover-usb.service
+Wants=rover-base.service
+After=rover-usb.service rover-base.service
+StartLimitIntervalSec=900
+StartLimitBurst=4
+
+[Service]
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/scripts/rover_units/unit_exec.sh t265 -- ros2 launch realsense_camera_bringup realsense_camera.launch.py enable_d435i:=false enable_l515:=false enable_t265:=true t265_enable_fisheye:=false t265_relay_publish_tf:=true t265_enable_hardware_reset:=true
+ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /t265/odom nav_msgs/msg/Odometry --timeout 120
+ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /t265/odom_base nav_msgs/msg/Odometry --timeout 30
+ExecStop=@REPO@/scripts/rover_units/unit_stop.sh t265
+Restart=on-failure
+# The T265 VPU needs a pause between stop and start.
+RestartSec=20
+TimeoutStartSec=240
+TimeoutStopSec=60
+
+[Install]
+WantedBy=rover-stack.target

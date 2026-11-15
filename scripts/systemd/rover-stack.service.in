@@ -16,6 +16,8 @@
 [Unit]
 Description=Rover stack (tmux session "jetson": cameras, SLAM, Nav2, PX4 bridge, rover_monitor)
 Requires=docker.service
+# The per-component mode (units/rover-stack.target) runs the same stack.
+Conflicts=rover-stack.target
 After=docker.service network-online.target
 Wants=network-online.target
 
