@@ -170,11 +170,27 @@
 1	1	BAT1_V_DIV	18.54	9
 
 # ── Safety ───────────────────────────────────────────────────────────────────
-# RC + MAVLink joystick (companion computer + RC transmitter)
+# RC + MAVLink joystick (companion computer + RC transmitter).
+# Don't use 4 here: that is the SITL setting (start_px4_sitl.sh) and makes PX4
+# ignore the RC transmitter completely, including the kill switch.
 1	1	COM_RC_IN_MODE	3	6
 
-# Disable manual RC loss failsafe (no RC transmitter on rover)
-1	1	COM_RCL_EXCEPT	4	6
+# RC-loss exceptions (bitmask): 4 = Offboard + 8 = External Mode. Losing the
+# RC link does not interrupt the Jetson / Control Center driving through the
+# external mode RoverManual (user's choice, 2026-11-15). In PX4's own modes
+# (Manual, Hold) RC loss still triggers NAV_RCL_ACT (Hold). Hold needs a global
+# position, which the rover only has once an EKF origin is set; without it PX4
+# falls back to Land: stop, then "Disarmed by landing" (tested 2026-11-15).
+1	1	COM_RCL_EXCEPT	12	6
+
+# RC switches (TBS Tango 2 -> Crossfire Nano RX S.BUS -> RC IN, 2026-11-15).
+# ch6 = arm switch, ch8 = mode switch (Manual / External Mode 1 = RoverManual /
+# Hold); those come from the QGC radio setup. ch7 is the kill switch (up = kill:
+# outputs go to the disarmed value, auto-disarm after COM_KILL_DISARM s). The
+# rover never uses Offboard, so ch7 no longer selects it: that switch would pull
+# PX4 out of RoverManual while the Control Center drives.
+1	1	RC_MAP_KILL_SW	7	6
+1	1	RC_MAP_OFFB_SW	0	6
 
 # ── Speed Controller Tuning (defaults — tune on real HW) ────────────────────
 # These are PX4 firmware defaults for the rover; listed here for reference.

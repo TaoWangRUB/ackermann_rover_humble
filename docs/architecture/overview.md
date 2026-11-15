@@ -500,6 +500,9 @@ cd /px4/build/px4_sitl_default/bin && timeout 5 ./px4-listener vehicle_local_pos
 > `COM_RC_IN_MODE=4` (disables manual RC requirement) via `PX4_PARAM_*` environment
 > variables, which `init.d-posix/rcS` applies after param import and airframe defaults.
 > Without `--vio`, set it manually at `pxh>`: `param set COM_RC_IN_MODE 4`.
+> This is for SITL only. The real Cube Black keeps `COM_RC_IN_MODE=3` (see
+> `cube_black_ackermann.params`): 4 makes PX4 ignore the RC transmitter,
+> including the kill switch, and disables the RC-loss failsafe.
 > Switching to Hold mode (`commander mode auto:loiter`) and setting the EKF origin
 > (`commander set_ekf_origin`) must always be done manually from `pxh>` after the
 > VIO bridge is publishing.
@@ -679,7 +682,7 @@ The script exports `PX4_PARAM_*` environment variables before launching PX4.
 | `EKF2_MAG_TYPE` | 5 | No magnetometer (VIO heading) |
 | `EKF2_EVP/V/A_NOISE` | 0.1 | Vision measurement noise |
 | `EKF2_EV_DELAY` | 50 ms | Vision pipeline latency compensation |
-| `COM_RC_IN_MODE` | 4 | Stick input disabled (autonomous) |
+| `COM_RC_IN_MODE` | 4 | Stick input disabled (SITL only; the real Cube uses 3) |
 
 After boot, once the VIO bridge (`px4_bringup.launch.py`) is publishing, run from `pxh>`:
 

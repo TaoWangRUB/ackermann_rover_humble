@@ -52,8 +52,11 @@ param show SYS_AUTOSTART             # Airframe number (51000 for ackermann)
 param show RA_WHEEL_BASE             # Wheelbase in meters
 param show RA_MAX_STR_ANG            # Max steering angle in degrees
 
-# Disable RC requirement (SITL without joystick)
+# Disable RC requirement: SITL ONLY (no joystick there)
 param set COM_RC_IN_MODE 4
+# Real Cube Black: keep 3 (src/px4_bringup/config/cube_black_ackermann.params).
+# 4 makes PX4 ignore the RC transmitter completely (sticks, arm/mode/kill
+# switches) and disables the RC-loss failsafe.
 
 # EKF2 vision fusion
 param set EKF2_EV_CTRL 15            # Fuse position + velocity + yaw
@@ -216,7 +219,7 @@ listener estimator_innovations         # Check ev_hpos magnitude
 listener offboard_control_mode         # Are offboard commands arriving?
 listener vehicle_status                # Check nav_state, arming_state
 mavlink status                         # Is companion link active?
-param show COM_RC_IN_MODE              # Should be 4 for no-RC mode
+param show COM_RC_IN_MODE              # SITL: 4 (no RC). Real Cube: 3, never 4
 ```
 
 ### High CPU on CubeBlack
