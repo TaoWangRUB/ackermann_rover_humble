@@ -30,5 +30,7 @@ if [[ -f /workspace/install/setup.bash ]]; then
 fi
 
 echo "$$" > "${run_dir}/${name}.pid"
-echo "[${name}] starting (pid $$, DDS profile ${FASTRTPS_DEFAULT_PROFILES_FILE:-none}): $*"
+cmd="$*"
+cmd="${cmd%%$'\n'*}"   # first line only: the recorder's command is a whole script
+echo "[${name}] starting (pid $$, DDS profile ${FASTRTPS_DEFAULT_PROFILES_FILE:-none}): ${cmd:0:160}"
 exec "$@"

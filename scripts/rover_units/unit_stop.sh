@@ -41,7 +41,7 @@ if alive "${pid}"; then
     fi
     for p in ${pid} ${children}; do
         if alive "${p}"; then
-            echo "[${name}] killing leftover pid ${p}: $(tr '\0' ' ' < "/proc/${p}/cmdline" 2>/dev/null | cut -c1-100)" >&2
+            echo "[${name}] killing leftover pid ${p}: $(tr '\0\n' '  ' < "/proc/${p}/cmdline" 2>/dev/null | cut -c1-100)" >&2
             kill -KILL "${p}" 2>/dev/null || true
         fi
     done

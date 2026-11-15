@@ -442,9 +442,7 @@ fi
 
   # SIGTERM the current recorder and wait up to 30s for it to finalize the
   # MCAP + metadata.yaml. Escalates to SIGKILL as a last resort. No-op if
-  # no recorder is running. Waits with 'wait', not a kill -0 poll: inside a
-  # signal trap (Ctrl-C, unit stop) bash does not reap the exited recorder,
-  # so kill -0 kept succeeding on the zombie for the whole 30s.
+  # no recorder is running. 'wait' returns as soon as the recorder exits.
   stop_segment() {
     if [ -n \"\$REC_PID\" ] && kill -0 \$REC_PID 2>/dev/null; then
       kill -TERM \$REC_PID 2>/dev/null || true
@@ -532,9 +530,12 @@ fi
     if [ -n \"\$ECHO_PID\" ] && kill -0 \$ECHO_PID 2>/dev/null; then
       kill -TERM \$ECHO_PID 2>/dev/null || true
     fi
-    pkill -INT -f 'image_transport/republish raw compressed' 2>/dev/null || true
+    # 'republis[h]': this script's own command line (bash -c <script>) holds
+    # the plain pattern, so pkill used to signal this shell itself, re-running
+    # the INT/TERM trap and this cleanup in an endless loop.
+    pkill -INT -f 'image_transport/republis[h] raw compressed' 2>/dev/null || true
     sleep 1
-    pkill -f 'image_transport/republish raw compressed' 2>/dev/null || true
+    pkill -f 'image_transport/republis[h] raw compressed' 2>/dev/null || true
   }
   trap cleanup EXIT INT TERM
 
