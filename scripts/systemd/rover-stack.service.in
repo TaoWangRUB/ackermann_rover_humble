@@ -1,0 +1,41 @@
+# Starts the rover stack at boot: scripts/start_jetson_session.sh in the tmux
+# session "jetson" (XRCE agent, cameras + SLAM + Nav2, PX4 bringup, rover_monitor
+# with Control Center telemetry, MAVLink bridge, recorder window).
+#
+# Installed by scripts/install_rover_service.sh, which fills in @USER@, @GROUP@
+# and @REPO@. Settings live in /etc/default/rover-stack.
+#
+# Never arms: --no-activate is fixed here, so the rover stays disarmed until
+# someone arms it from the Control Center or the RC arm switch.
+#
+#   sudo systemctl status rover-stack     # state
+#   journalctl -u rover-stack -b          # start script output
+#   tmux attach -t jetson                 # the panes (as @USER@)
+#   sudo systemctl restart rover-stack    # stop_all.sh, then a fresh start
+
+[Unit]
+Description=Rover stack (tmux session "jetson": cameras, SLAM, Nav2, PX4 bridge, rover_monitor)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+Environment=ROVER_STACK_START_DELAY_S=20
+Environment="ROVER_STACK_ARGS=--t265-odom --nav2 --with-telemetry"
+EnvironmentFile=-/etc/default/rover-stack
+# USB devices (T265, D435i, the Cube) need time after power-up, and the T265
+# needs a pause after a restart before it streams again.
+ExecStartPre=/bin/sleep ${ROVER_STACK_START_DELAY_S}
+ExecStart=@REPO@/scripts/start_jetson_session.sh --no-attach --no-activate $ROVER_STACK_ARGS
+ExecStop=@REPO@/scripts/stop_all.sh --session=jetson
+TimeoutStartSec=600
+TimeoutStopSec=120
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

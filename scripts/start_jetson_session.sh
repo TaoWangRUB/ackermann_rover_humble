@@ -255,18 +255,34 @@ if [[ "${REVERSIBLE_DRIVE}" == true ]]; then
     PX4_BRINGUP_ARGS+=(--reversible-drive)
 fi
 
-# ── Ensure Docker container is running ────────────────────────────────
-if ! dcomp ps --services --filter status=running 2>/dev/null \
-        | grep -q '^ackermann_slam$'; then
-    echo "Container not running — starting ackermann_slam..."
-    dcomp up -d ackermann_slam
-fi
-
 # ── Kill old ROS nodes before starting new ones ─────────────────────
 "${SCRIPT_DIR}/stop_all.sh" --session="${SESSION}"
 # Brief pause for process cleanup. Camera USB recovery is now handled
 # by hardware_reset() inside the realsense_camera_node itself.
 sleep 5
+
+# ── Ensure Docker container is running and answers ──────────────────
+# Done after the sweep: on a cold start stop_all.sh can take down a
+# container that was only just started (docker "die 137"), and every pane
+# below runs `dcomp exec`, which then fails with
+# 'service "ackermann_slam" is not running' (seen 2026-11-15).
+container_ready=false
+for _ in $(seq 1 60); do
+    if dcomp exec -T ackermann_slam true >/dev/null 2>&1; then
+        container_ready=true
+        break
+    fi
+    if ! dcomp ps --services --filter status=running 2>/dev/null \
+            | grep -q '^ackermann_slam$'; then
+        echo "Container not running — starting ackermann_slam..."
+        dcomp up -d ackermann_slam
+    fi
+    sleep 2
+done
+if [[ "${container_ready}" != true ]]; then
+    echo "ERROR: ackermann_slam container did not come up within 120 s" >&2
+    exit 1
+fi
 
 # ── Create tmux session ──────────────────────────────────────────────
 tmux kill-session -t "${SESSION}" 2>/dev/null || true
