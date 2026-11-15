@@ -9,6 +9,11 @@
 [Unit]
 Description=Rover stack (rover-*.service: container, cameras, PX4 link, SLAM, Nav2, monitor)
 Conflicts=rover-stack.service
+# No default dependencies: otherwise multi-user.target is ordered after this
+# target, and boot never completes while a unit waits for a missing device.
+DefaultDependencies=no
+Conflicts=shutdown.target
+Before=shutdown.target
 After=network-online.target
 
 [Install]

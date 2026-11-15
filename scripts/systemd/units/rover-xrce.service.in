@@ -1,11 +1,11 @@
 [Unit]
 Description=Rover: PX4 link (Micro XRCE-DDS agent on the serial adapter; independent of the cameras)
 PartOf=rover-stack.target
-Requires=rover-container.service rover-usb.service
+Requires=rover-container.service
 # Not ordered after the cameras: a failing camera must not hold up the PX4
-# link. ExecStartPre re-enumerates the adapter, so a camera reset that
-# disturbed it is cleared before the agent opens it.
-After=rover-usb.service
+# link. ExecStartPre waits for its own adapter only, then re-enumerates it, so
+# a camera reset that disturbed it is cleared before the agent opens it.
+After=rover-container.service
 StartLimitIntervalSec=900
 StartLimitBurst=4
 
@@ -15,6 +15,7 @@ Group=@GROUP@
 WorkingDirectory=@REPO@
 Environment=ROVER_XRCE_DEVICE=/dev/ttyUSB0 ROVER_XRCE_BAUD=921600 ROVER_XRCE_USB_ID=1a86:7523
 EnvironmentFile=-/etc/default/rover-stack
+ExecStartPre=@REPO@/scripts/rover_units/wait_for.sh usb xrce_serial=${ROVER_XRCE_USB_ID} --timeout 0
 # Root (+): re-enumerate the CH340 so a wedged adapter starts clean.
 ExecStartPre=+@REPO@/scripts/rover_units/usb_reset.sh ${ROVER_XRCE_USB_ID}
 ExecStartPre=@REPO@/scripts/rover_units/wait_for.sh dev ${ROVER_XRCE_DEVICE} --timeout 20
@@ -27,7 +28,7 @@ ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh xrce 10
 SuccessExitStatus=130 143
 Restart=on-failure
 RestartSec=5
-TimeoutStartSec=210
+TimeoutStartSec=infinity
 TimeoutStopSec=40
 
 [Install]

@@ -1,9 +1,9 @@
 [Unit]
-Description=Rover 4/9: T265 tracking camera (first: its hardware reset re-enumerates the shared USB hub)
+Description=Rover: T265 tracking camera (waits for its own USB device; starts before the D435i, its reset re-enumerates the shared hub)
 PartOf=rover-stack.target
-Requires=rover-container.service rover-usb.service
+Requires=rover-container.service
 Wants=rover-base.service
-After=rover-usb.service rover-base.service
+After=rover-container.service rover-base.service
 # Two attempts, then the D435i and the rest go on without it (each attempt
 # resets the T265, which disturbs the D435i on the shared hub).
 StartLimitIntervalSec=900
@@ -13,6 +13,10 @@ StartLimitBurst=2
 User=@USER@
 Group=@GROUP@
 WorkingDirectory=@REPO@
+# Its own device only (bootloader or firmware ID), with no time limit: a
+# missing or late D435i must not hold up the T265, and a T265 plugged in later
+# starts as soon as it appears.
+ExecStartPre=@REPO@/scripts/rover_units/wait_for.sh usb t265=8087:0b37,03e7:2150 --timeout 0
 ExecStart=@REPO@/scripts/rover_units/unit_exec.sh t265 -- ros2 launch realsense_camera_bringup realsense_camera.launch.py enable_d435i:=false enable_l515:=false enable_t265:=true t265_enable_fisheye:=false t265_relay_publish_tf:=true t265_enable_hardware_reset:=true
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /t265/odom nav_msgs/msg/Odometry --timeout 90
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /t265/odom_base nav_msgs/msg/Odometry --timeout 30
@@ -24,7 +28,8 @@ SuccessExitStatus=130 143
 Restart=on-failure
 # The T265 VPU needs a pause between stop and start.
 RestartSec=20
-TimeoutStartSec=240
+# The device wait has no limit; the readiness checks bound the rest.
+TimeoutStartSec=infinity
 TimeoutStopSec=60
 
 [Install]

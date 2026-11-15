@@ -1,8 +1,6 @@
 [Unit]
-Description=Rover 7/9: MAVLink USB bridge to UDP 14550/14551 (+ PX4 hardware monitor to MQTT)
+Description=Rover: MAVLink USB bridge to UDP 14550/14551 (waits for the Cube's USB serial port)
 PartOf=rover-stack.target
-Requires=rover-usb.service
-After=rover-usb.service
 StartLimitIntervalSec=900
 StartLimitBurst=4
 
@@ -12,9 +10,11 @@ Group=@GROUP@
 WorkingDirectory=@REPO@
 Environment=ROVER_MAVLINK_DEVICE=/dev/ttyACM0
 EnvironmentFile=-/etc/default/rover-stack
+ExecStartPre=@REPO@/scripts/rover_units/wait_for.sh dev ${ROVER_MAVLINK_DEVICE} --timeout 0
 ExecStart=/usr/bin/python3 @REPO@/scripts/mavlink_bridge.py --serial ${ROVER_MAVLINK_DEVICE} --baud 57600 --out 127.0.0.1:14550 --out 127.0.0.1:14551
 Restart=on-failure
 RestartSec=5
+TimeoutStartSec=infinity
 
 [Install]
 WantedBy=rover-stack.target

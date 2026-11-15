@@ -1,5 +1,5 @@
 [Unit]
-Description=Rover 1/9: dev container up, entrypoint finished
+Description=Rover: dev container up, entrypoint finished
 PartOf=rover-stack.target
 StartLimitIntervalSec=900
 StartLimitBurst=5

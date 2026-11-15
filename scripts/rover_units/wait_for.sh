@@ -13,6 +13,9 @@
 #       comma, e.g. the T265 shows up as 03e7:2150 until its firmware boots).
 #   wait_for.sh dev PATH ... [--timeout S]
 #       Wait until device nodes exist (e.g. /dev/ttyUSB0).
+#   For usb and dev, --timeout 0 waits until the device appears, however long:
+#   each unit waits for its own device, so a late or replugged device starts
+#   its component as soon as it shows up.
 #   wait_for.sh topic TOPIC TYPE [--latched] [--timeout S]
 #       Wait until a message actually arrives on TOPIC (not just until the topic
 #       exists). --latched reads transient-local topics such as
@@ -45,6 +48,9 @@ uptime_s() { cut -d. -f1 /proc/uptime; }
 deadline=$(( $(uptime_s) + timeout_s ))
 remaining() { echo $(( deadline - $(uptime_s) )); }
 log() { echo "[wait_for ${check}] $*"; }
+# --timeout 0 (usb, dev): no time limit.
+limit_text() { (( timeout_s > 0 )) && echo "timeout ${timeout_s}s" || echo "no time limit"; }
+expired() { (( timeout_s > 0 && $(remaining) <= 0 )); }
 
 # Run a command in the container with the same environment as the components.
 in_container() {
@@ -91,7 +97,7 @@ container)
 
 usb)
     [[ ${#positional[@]} -gt 0 ]] || { log "no devices given"; exit 2; }
-    log "waiting for USB devices: ${positional[*]} (timeout ${timeout_s}s)"
+    log "waiting for USB devices: ${positional[*]} ($(limit_text))"
     while true; do
         present="$(lsusb 2>/dev/null | awk '{print $6}')"
         missing=()
@@ -108,7 +114,7 @@ usb)
             log "all present"
             exit 0
         fi
-        if (( $(remaining) <= 0 )); then
+        if expired; then
             log "TIMEOUT: missing after ${timeout_s}s: ${missing[*]}"
             exit 1
         fi
@@ -118,7 +124,7 @@ usb)
 
 dev)
     [[ ${#positional[@]} -gt 0 ]] || { log "no paths given"; exit 2; }
-    log "waiting for ${positional[*]} (timeout ${timeout_s}s)"
+    log "waiting for ${positional[*]} ($(limit_text))"
     while true; do
         missing=()
         for path in "${positional[@]}"; do
@@ -128,7 +134,7 @@ dev)
             log "all present"
             exit 0
         fi
-        if (( $(remaining) <= 0 )); then
+        if expired; then
             log "TIMEOUT: missing after ${timeout_s}s: ${missing[*]}"
             exit 1
         fi

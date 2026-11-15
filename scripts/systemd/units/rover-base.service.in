@@ -1,5 +1,5 @@
 [Unit]
-Description=Rover 3/9: robot description and TF (robot_state_publisher, cmd_vel_joint_relay)
+Description=Rover: robot description and TF (robot_state_publisher, cmd_vel_joint_relay)
 PartOf=rover-stack.target
 Requires=rover-container.service
 After=rover-container.service

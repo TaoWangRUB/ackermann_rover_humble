@@ -1,7 +1,10 @@
 [Unit]
-Description=Rover 9/9a: RTAB-Map SLAM (after both cameras deliver data)
+Description=Rover: RTAB-Map SLAM (after both cameras deliver data)
 PartOf=rover-stack.target
-Requires=rover-container.service rover-base.service rover-t265.service rover-d435i.service
+Requires=rover-container.service
+# Wants, not Requires: if a camera's first attempt fails, SLAM's own retries
+# pick the camera up once it recovers (a failed Requires= is never retried).
+Wants=rover-base.service rover-t265.service rover-d435i.service
 After=rover-base.service rover-t265.service rover-d435i.service
 StartLimitIntervalSec=900
 StartLimitBurst=4

@@ -1,9 +1,11 @@
 [Unit]
-Description=Rover 8/9: VO bridge to PX4 and the RoverManual external mode (registers with PX4; never arms)
+Description=Rover: RoverManual external mode and the VO bridge to PX4 (registers with PX4; never arms)
 PartOf=rover-stack.target
 Requires=rover-container.service rover-xrce.service
+# Not ordered after the T265: RoverManual registers without odometry, so the
+# Control Center can still pick a mode and drive when the T265 is missing.
 Wants=rover-t265.service
-After=rover-xrce.service rover-t265.service
+After=rover-xrce.service
 StartLimitIntervalSec=900
 StartLimitBurst=4
 
@@ -14,8 +16,9 @@ WorkingDirectory=@REPO@
 Environment=ROVER_REVERSIBLE_DRIVE=true
 EnvironmentFile=-/etc/default/rover-stack
 ExecStart=@REPO@/scripts/rover_units/unit_exec.sh px4 -- ros2 launch px4_bringup px4_bringup.launch.py enable_mode_node:=true mode_type:=manual enable_vo_bridge:=true odom_topic:=/t265/odom_base enable_vehicle_odometry:=true reversible_drive:=${ROVER_REVERSIBLE_DRIVE}
-ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /fmu/in/vehicle_visual_odometry px4_msgs/msg/VehicleOdometry --timeout 60
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /px4_modes/announce std_msgs/msg/String --latched --timeout 90
+# Informational ("-"): logs whether T265 odometry reaches PX4 yet; never fails the unit.
+ExecStartPost=-@REPO@/scripts/rover_units/wait_for.sh topic /fmu/in/vehicle_visual_odometry px4_msgs/msg/VehicleOdometry --timeout 120
 # SIGINT lets RoverManual unregister from PX4 (else it keeps its External slot).
 # ExecStopPost also runs when the start failed (ExecStop= does not).
 ExecStop=@REPO@/scripts/rover_units/unit_stop.sh px4 20
@@ -24,7 +27,7 @@ ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh px4 20
 SuccessExitStatus=130 143
 Restart=on-failure
 RestartSec=10
-TimeoutStartSec=200
+TimeoutStartSec=260
 TimeoutStopSec=60
 
 [Install]

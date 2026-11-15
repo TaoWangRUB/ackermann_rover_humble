@@ -1,7 +1,8 @@
 [Unit]
-Description=Rover 9/9b: Nav2 (after RTAB-Map publishes a map)
+Description=Rover: Nav2 (after RTAB-Map publishes a map)
 PartOf=rover-stack.target
-Requires=rover-container.service rover-slam.service
+Requires=rover-container.service
+Wants=rover-slam.service
 After=rover-slam.service
 StartLimitIntervalSec=900
 StartLimitBurst=4

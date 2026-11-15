@@ -1,12 +1,12 @@
 [Unit]
-Description=Rover 5/9: D435i depth camera (after the T265 streams, so its reset can't stall the D435i)
+Description=Rover: D435i depth camera (waits for its own USB device; after the T265, so its reset can't stall the D435i)
 PartOf=rover-stack.target
 # A T265 (re)start begins with its hardware reset, which stalls a streaming
 # D435i on the shared hub: stop the D435i with it and start it again after.
 PartOf=rover-t265.service
-Requires=rover-container.service rover-usb.service
+Requires=rover-container.service
 Wants=rover-t265.service
-After=rover-usb.service rover-t265.service
+After=rover-container.service rover-t265.service
 StartLimitIntervalSec=900
 StartLimitBurst=4
 
@@ -14,6 +14,7 @@ StartLimitBurst=4
 User=@USER@
 Group=@GROUP@
 WorkingDirectory=@REPO@
+ExecStartPre=@REPO@/scripts/rover_units/wait_for.sh usb d435i=8086:0b3a --timeout 0
 ExecStart=@REPO@/scripts/rover_units/unit_exec.sh d435i -- ros2 launch realsense_camera_bringup realsense_camera.launch.py enable_d435i:=true enable_l515:=false enable_t265:=false d435i_enable_hardware_reset:=false d435i_startup_delay_s:=0.0
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /d435i/color/image_raw sensor_msgs/msg/Image --timeout 120
 # ExecStopPost also runs when the start failed (ExecStop= does not).
@@ -23,7 +24,7 @@ ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh d435i
 SuccessExitStatus=130 143
 Restart=on-failure
 RestartSec=10
-TimeoutStartSec=210
+TimeoutStartSec=infinity
 TimeoutStopSec=60
 
 [Install]

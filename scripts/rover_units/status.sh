@@ -5,7 +5,7 @@
 #   scripts/rover_units/status.sh
 set -uo pipefail
 
-units=(rover-container rover-usb rover-base rover-t265 rover-d435i rover-xrce
+units=(rover-container rover-base rover-t265 rover-d435i rover-xrce
        rover-mavlink rover-px4-hw-monitor rover-px4-bringup rover-monitor
        rover-slam rover-nav2 rover-recorder)
 
