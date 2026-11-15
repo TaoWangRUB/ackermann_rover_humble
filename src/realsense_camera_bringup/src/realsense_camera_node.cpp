@@ -836,6 +836,24 @@ void RealsenseCameraNode::on_frame(rs2::frame frame)
         });
       }
 
+      // T265 pose inside the frameset. With pipeline sync on (always, see the
+      // enable_sync log line) the T265's pose can arrive bundled in a
+      // frameset like the fisheye pair. This branch used to return without
+      // publishing it: "first frame received" was logged while /t265/odom
+      // stayed silent (2026-11-15). The sync module re-emits the latest
+      // sample in later framesets, so deduplicate by frame number.
+      if (camera_model_ == CameraModel::T265) {
+        fs.foreach_rs([this](rs2::frame f) {
+          if (auto pf = f.as<rs2::pose_frame>()) {
+            const auto fn = pf.get_frame_number();
+            if (fn != last_pose_frame_number_) {
+              last_pose_frame_number_ = fn;
+              publish_pose_frame(pf);
+            }
+          }
+        });
+      }
+
       // Hand off to async alignment worker (if enabled). Drop oldest frame if
       // the worker is behind to bound queue memory usage.
       // Pass the pre-computed color stamp (or a fallback depth stamp) so the

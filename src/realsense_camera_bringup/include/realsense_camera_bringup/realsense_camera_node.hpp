@@ -148,6 +148,7 @@ private:
   // pose/IMU samples (see on_frame).
   unsigned long long last_fisheye1_frame_number_{0};
   unsigned long long last_fisheye2_frame_number_{0};
+  unsigned long long last_pose_frame_number_{0};  // T265 pose arriving inside framesets
 
   // Data-flow watchdog: detects frozen T265 pipeline (VPU started but never
   // delivers frames) and triggers automatic pipeline restart with hardware reset.
