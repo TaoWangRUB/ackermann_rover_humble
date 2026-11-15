@@ -13,6 +13,10 @@
 #   Ctrl-C   finalize current segment (if any) and exit
 # Without a TTY (piped / non-interactive), a single segment auto-starts
 # and runs until SIGINT.
+# --unit=NAME (the rover-recorder systemd unit): no TTY and no auto-start;
+# idles until the Control Center's Record button (start/stop on /record/cmd).
+# Runs through scripts/rover_units/unit_exec.sh NAME, so
+# `scripts/rover_units/unit_stop.sh NAME` finalizes the current segment.
 #
 # Usage:
 #   ./scripts/record_bag.sh                          # D435i + T265 odom
@@ -28,6 +32,7 @@
 #   ./scripts/record_bag.sh --wait-seconds=15        # extra settle after topics appear
 #   ./scripts/record_bag.sh --no-compress-fisheye    # record raw T265 fisheye
 #   ./scripts/record_bag.sh --dry-run                # print, don't run
+#   ./scripts/record_bag.sh --unit=recorder          # systemd: idle until CC Record
 #
 # RTAB-Map readiness gate:
 #   Always blocks until the /rtabmap node is up AND has published on one of
@@ -67,6 +72,7 @@ EXTRA_TOPICS=""
 WAIT_SECONDS="10"
 DRY_RUN=false
 COMPRESS_FISHEYE=true
+UNIT_NAME=""
 
 for arg in "$@"; do
     case "${arg}" in
@@ -82,6 +88,7 @@ for arg in "$@"; do
         --no-compress-fisheye) COMPRESS_FISHEYE=false ;;
         --compress-fisheye)    COMPRESS_FISHEYE=true ;;
         --dry-run)             DRY_RUN=true ;;
+        --unit=*)              UNIT_NAME="${arg#--unit=}" ;;
         *) echo "Unknown arg: ${arg}" >&2; exit 2 ;;
     esac
 done
@@ -411,7 +418,18 @@ RTABMAP_WAIT_CMD="
   echo 'Waiting for RTAB-Map to publish...' && \
   bash -lc 'found=false; for t in /mapData /mapGraph /rtabmap/mapData /rtabmap/mapGraph /rtabmap/info /info; do if ros2 topic info \$t >/dev/null 2>&1 && timeout 30 ros2 topic echo --once \$t >/dev/null 2>&1; then echo \"  got message on \$t\"; found=true; break; fi; done; if [ \$found = false ]; then echo \"  WARNING: /rtabmap up but no messages within 30s (proceeding anyway)\" >&2; fi' && \\"
 
-xdcomp exec ackermann_slam bash -c "
+# How the loop below gets into the container. The rover-recorder unit
+# (--unit=NAME) goes through the units wrapper: the same Fast DDS profile as
+# the other units, and a pidfile so `unit_stop.sh NAME` can finalize the bag.
+if [[ -n "${UNIT_NAME}" ]]; then
+    REMOTE_ONLY=true
+    IN_CONTAINER=("${SCRIPT_DIR}/rover_units/unit_exec.sh" "${UNIT_NAME}" --)
+else
+    REMOTE_ONLY=false
+    IN_CONTAINER=(xdcomp exec ackermann_slam)
+fi
+
+"${IN_CONTAINER[@]}" bash -c "
   source /opt/ros/jazzy/setup.bash
   source /workspace/install/setup.bash
 
@@ -552,7 +570,16 @@ xdcomp exec ackermann_slam bash -c "
       >> \"\$CTRL_FILE\" 2>/dev/null &
   ECHO_PID=\$!
 
-  if [ -t 0 ]; then
+  if [ \"${REMOTE_ONLY}\" = true ]; then
+    # systemd unit: idle until the Control Center sends start/stop/toggle.
+    # unit_stop.sh sends SIGINT: finalize the current segment, then exit.
+    trap 'cleanup; trap - EXIT; exit 0' INT TERM
+    echo '[idle] waiting for Record in the Control Center (/record/cmd)'
+    while :; do
+      sleep 0.5
+      drain_ctrl
+    done
+  elif [ -t 0 ]; then
     echo
     echo '==================================================================='
     echo '  r = START | s = STOP | Ctrl-C = exit | also accepts /record/cmd'

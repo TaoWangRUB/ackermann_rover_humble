@@ -1,0 +1,28 @@
+[Unit]
+Description=Rover: bag recorder, idle until Record is pressed in the Control Center
+PartOf=rover-stack.target
+Requires=rover-container.service
+# record_bag.sh waits for the camera, odometry and RTAB-Map topics itself;
+# starting after SLAM keeps it out of the busy start-up minutes.
+After=rover-container.service rover-slam.service
+StartLimitIntervalSec=900
+StartLimitBurst=4
+
+[Service]
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@REPO@
+EnvironmentFile=-/etc/default/rover-stack
+ExecStart=@REPO@/scripts/record_bag.sh --unit=recorder --depth-camera=d435i --t265-odom
+# 40 s grace: SIGINT finalizes the segment being recorded (MCAP + metadata).
+# ExecStopPost also runs when the start failed (ExecStop= does not).
+ExecStop=@REPO@/scripts/rover_units/unit_stop.sh recorder 40
+ExecStopPost=@REPO@/scripts/rover_units/unit_stop.sh recorder 40
+# 130/143: stopped by SIGINT/SIGTERM (unit_stop.sh), not a failure.
+SuccessExitStatus=130 143
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=60
+
+[Install]
+WantedBy=rover-stack.target
