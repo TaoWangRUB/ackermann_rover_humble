@@ -539,6 +539,14 @@ fi
   trap cleanup EXIT INT TERM
 
   ${REPUBLISH_START}
+  if [ \"${REMOTE_ONLY}\" = true ]; then
+    # systemd unit: no readiness wait. The unit starts after rover-slam,
+    # recording starts only on Record, and ros2 bag record picks up a topic
+    # that appears later. A foreground wait would also hold off the stop:
+    # bash runs a trap only after the running command returns.
+    # unit_stop.sh sends SIGINT: finalize the current segment, then exit.
+    trap 'cleanup; trap - EXIT; exit 0' INT TERM
+  else
   echo 'Waiting for required topics before recording...' && \
   timeout 180 bash -lc '
     for topic in ${READY_TOPICS[*]}; do
@@ -556,6 +564,7 @@ fi
   ' && ${RTABMAP_WAIT_CMD}
   echo 'Topics are ready. Settling for ${WAIT_SECONDS}s...'
   sleep ${WAIT_SECONDS}
+  fi
 
   # Spawn /record/cmd subscriber. Match rover_monitor's QoS (transient_local +
   # reliable) so a 'start' command published before this subscriber comes up
@@ -570,8 +579,6 @@ fi
 
   if [ \"${REMOTE_ONLY}\" = true ]; then
     # systemd unit: idle until the Control Center sends start/stop/toggle.
-    # unit_stop.sh sends SIGINT: finalize the current segment, then exit.
-    trap 'cleanup; trap - EXIT; exit 0' INT TERM
     echo '[idle] waiting for Record in the Control Center (/record/cmd)'
     while :; do
       sleep 0.5
