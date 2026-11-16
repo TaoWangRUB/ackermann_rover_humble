@@ -1,11 +1,12 @@
 [Unit]
-Description=Rover: T265 tracking camera (waits for its own USB device; starts before the D435i, its reset re-enumerates the shared hub)
+Description=Rover: T265 tracking camera (waits for its own USB device; starts before the D435i)
 PartOf=rover-stack.target
 Requires=rover-container.service
 Wants=rover-base.service
 After=rover-container.service rover-base.service
-# Two attempts, then the D435i and the rest go on without it (each attempt
-# resets the T265, which disturbs the D435i on the shared hub).
+# Two attempts, then the D435i and the rest go on without it (with
+# ROVER_T265_HW_RESET=true each attempt also resets the T265, which disturbs
+# the D435i on the shared hub).
 StartLimitIntervalSec=900
 StartLimitBurst=2
 
@@ -17,7 +18,15 @@ WorkingDirectory=@REPO@
 # missing or late D435i must not hold up the T265, and a T265 plugged in later
 # starts as soon as it appears.
 ExecStartPre=@REPO@/scripts/rover_units/wait_for.sh usb t265=8087:0b37,03e7:2150 --timeout 0
-ExecStart=@REPO@/scripts/rover_units/unit_exec.sh t265 -- ros2 launch realsense_camera_bringup realsense_camera.launch.py enable_d435i:=false enable_l515:=false enable_t265:=true t265_enable_fisheye:=false t265_relay_publish_tf:=true t265_enable_hardware_reset:=true
+# No hardware reset at start by default. Tested on the rover 2026-11-16 after
+# a cold boot: with the reset the node failed 3 times out of 3 (at boot the
+# pipeline started but no pose or IMU message followed; 30 s after a clean
+# stop: "failed to set power state"); without it /t265/odom and /t265/imu ran
+# at 200 Hz. ROVER_T265_HW_RESET=true in /etc/default/rover-stack brings the
+# reset back.
+Environment=ROVER_T265_HW_RESET=false
+EnvironmentFile=-/etc/default/rover-stack
+ExecStart=@REPO@/scripts/rover_units/unit_exec.sh t265 -- ros2 launch realsense_camera_bringup realsense_camera.launch.py enable_d435i:=false enable_l515:=false enable_t265:=true t265_enable_fisheye:=false t265_relay_publish_tf:=true t265_enable_hardware_reset:=${ROVER_T265_HW_RESET}
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /t265/odom nav_msgs/msg/Odometry --timeout 90
 ExecStartPost=@REPO@/scripts/rover_units/wait_for.sh topic /t265/odom_base nav_msgs/msg/Odometry --timeout 30
 # ExecStopPost also runs when the start failed (ExecStop= does not).
