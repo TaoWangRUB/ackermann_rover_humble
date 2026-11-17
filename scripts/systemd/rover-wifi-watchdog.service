@@ -1,0 +1,16 @@
+# Installed by scripts/install_wifi_watchdog.sh. Not part of rover-stack.target:
+# it runs whether or not the rover stack is installed, running or stopped.
+[Unit]
+Description=Rover: bring the WiFi back when NetworkManager gives up (keeps the rover on the tailnet)
+Wants=NetworkManager.service
+After=NetworkManager.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/rover-wifi-watchdog
+ExecStart=/usr/local/sbin/rover-wifi-watchdog
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
