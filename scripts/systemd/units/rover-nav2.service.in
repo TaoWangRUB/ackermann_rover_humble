@@ -4,7 +4,11 @@ PartOf=rover-stack.target
 Requires=rover-container.service
 Wants=rover-slam.service
 After=rover-slam.service
-StartLimitIntervalSec=900
+# Four tries within an hour, then it stays failed. One try lasts up to ~4.6 min
+# (240 s readiness check + 15 s pause), so with a 15-minute window the limit
+# never triggered: 186 restarts in 13.5 h while the T265 had no pose in the
+# dark (2026-11-17).
+StartLimitIntervalSec=3600
 StartLimitBurst=4
 
 [Service]

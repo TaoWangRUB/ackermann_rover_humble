@@ -6,7 +6,10 @@ Requires=rover-container.service
 # pick the camera up once it recovers (a failed Requires= is never retried).
 Wants=rover-base.service rover-t265.service rover-d435i.service
 After=rover-base.service rover-t265.service rover-d435i.service
-StartLimitIntervalSec=900
+# Four tries within an hour, then it stays failed (restart the stack once the
+# cameras work, e.g. with the light on). One try lasts up to ~3 min, so a
+# 15-minute window let it retry for as long as the cameras gave no data.
+StartLimitIntervalSec=3600
 StartLimitBurst=4
 
 [Service]
