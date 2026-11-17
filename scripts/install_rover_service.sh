@@ -33,6 +33,7 @@ UNITS_DIR="${SCRIPT_DIR}/systemd/units"
 SYSTEMD_DIR="/etc/systemd/system"
 DEFAULTS_PATH="/etc/default/rover-stack"
 LOGIND_DROPIN="/etc/systemd/logind.conf.d/10-rover-keep-ipc.conf"
+JOURNALD_DROPIN="/etc/systemd/journald.conf.d/10-rover-persistent.conf"
 DEFAULT_ARGS="--t265-odom --nav2 --with-telemetry"
 DEFAULT_BROKER_HOST="192.168.0.225"
 SESSION="jetson"
@@ -97,9 +98,10 @@ remove_units_mode() {
 if [[ "${ACTION}" == "uninstall" ]]; then
     remove_units_mode
     remove_tmux_mode
-    as_root rm -f "${LOGIND_DROPIN}"
+    as_root rm -f "${LOGIND_DROPIN}" "${JOURNALD_DROPIN}"
     as_root systemctl daemon-reload
-    echo "Removed the rover units (both modes) and ${LOGIND_DROPIN}. ${DEFAULTS_PATH} was kept;"
+    echo "Removed the rover units (both modes), ${LOGIND_DROPIN} and ${JOURNALD_DROPIN}."
+    echo "${DEFAULTS_PATH} and the logs in /var/log/journal were kept;"
     echo "lingering for ${SERVICE_USER} was left on (loginctl disable-linger ${SERVICE_USER} turns it off)."
     exit 0
 fi
@@ -150,6 +152,19 @@ as_root mkdir -p "${LOGIND_DROPIN%/*}"
 printf '# Written by scripts/install_rover_service.sh: keep the rover stack'"'"'s Fast DDS\n# shared memory (/dev/shm) when the last login session of its user ends.\n[Login]\nRemoveIPC=no\n' \
     | as_root tee "${LOGIND_DROPIN}" >/dev/null
 echo "Lingering on for ${SERVICE_USER}; ${LOGIND_DROPIN} sets RemoveIPC=no (applies after the next boot)."
+
+# ── Keep the journal across reboots ──────────────────────────────────
+# Without /var/log/journal, journald keeps the log in RAM: lost at every reboot
+# and capped at about 68 MB, roughly 6 hours of this stack (about 12,000 lines,
+# 17 MB, an hour; found 2026-11-17). On disk it is capped at 2 GB and keeps
+# 5 GB of the disk free, about a week. `journalctl -b -1` misses earlier boots
+# on the Xavier; scripts/rover_units/journal_boots.sh lists them.
+as_root mkdir -p "${JOURNALD_DROPIN%/*}" /var/log/journal
+printf '# Written by scripts/install_rover_service.sh: keep the journal on disk, capped.\n[Journal]\nStorage=persistent\nSystemMaxUse=2G\nSystemKeepFree=5G\n' \
+    | as_root tee "${JOURNALD_DROPIN}" >/dev/null
+as_root systemd-tmpfiles --create --prefix /var/log/journal
+as_root journalctl --flush
+echo "${JOURNALD_DROPIN}: journal kept on disk in /var/log/journal (2 GB cap from the next boot)."
 
 # ── Units ────────────────────────────────────────────────────────────
 if [[ "${MODE}" == units ]]; then
