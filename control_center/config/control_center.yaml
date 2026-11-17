@@ -16,7 +16,9 @@ telemetry_cache:
   stale_threshold_s: 15.0
 
 dashboard:
-  host: "0.0.0.0"
+  # Only this machine: the page can arm and drive the rover. The rover's
+  # hw_mode POST arrives through the laptop's Tailscale sidecar on localhost.
+  host: "127.0.0.1"
   port: 8080
   ws_health_rate_hz: 2.0
 
