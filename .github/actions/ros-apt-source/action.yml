@@ -1,0 +1,24 @@
+name: Install the ROS 2 apt source
+description: >-
+  Installs the ros2-apt-source package before ros-tooling/setup-ros runs, so
+  that setup-ros skips its own download. Its download looks the version up
+  through the GitHub API without a token, which is rate limited on hosted
+  runners and then fails with a 404 (ros-tooling/setup-ros#892).
+runs:
+  using: composite
+  steps:
+    - name: Install ros2-apt-source
+      shell: bash
+      run: |
+        set -euo pipefail
+        # The newest release page redirects to .../releases/tag/<version>.
+        latest=$(curl --fail --silent --show-error --location --retry 5 --retry-delay 2 \
+          --output /dev/null --write-out '%{url_effective}' \
+          https://github.com/ros-infrastructure/ros-apt-source/releases/latest)
+        version=${latest##*/}
+        codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+        curl --fail --location --retry 5 --retry-delay 2 -o /tmp/ros2-apt-source.deb \
+          "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${version}/ros2-apt-source_${version}.${codename}_all.deb"
+        sudo dpkg -i /tmp/ros2-apt-source.deb
+        rm -f /tmp/ros2-apt-source.deb
+        sudo apt-get update
