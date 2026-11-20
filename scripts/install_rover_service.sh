@@ -156,15 +156,15 @@ echo "Lingering on for ${SERVICE_USER}; ${LOGIND_DROPIN} sets RemoveIPC=no (appl
 # ── Keep the journal across reboots ──────────────────────────────────
 # Without /var/log/journal, journald keeps the log in RAM: lost at every reboot
 # and capped at about 68 MB, roughly 6 hours of this stack (about 12,000 lines,
-# 17 MB, an hour; found 2026-11-17). On disk it is capped at 2 GB and keeps
-# 5 GB of the disk free, about a week. `journalctl -b -1` misses earlier boots
+# 17 MB, an hour; found 2026-11-17). On disk it is capped at 4 GB and keeps
+# 5 GB of the disk free: about a week (2 GB filled in 3.5 days). `journalctl -b -1` misses earlier boots
 # on the Xavier; scripts/rover_units/journal_boots.sh lists them.
 as_root mkdir -p "${JOURNALD_DROPIN%/*}" /var/log/journal
-printf '# Written by scripts/install_rover_service.sh: keep the journal on disk, capped.\n[Journal]\nStorage=persistent\nSystemMaxUse=2G\nSystemKeepFree=5G\n' \
+printf '# Written by scripts/install_rover_service.sh: keep the journal on disk, capped.\n[Journal]\nStorage=persistent\nSystemMaxUse=4G\nSystemKeepFree=5G\n' \
     | as_root tee "${JOURNALD_DROPIN}" >/dev/null
 as_root systemd-tmpfiles --create --prefix /var/log/journal
 as_root journalctl --flush
-echo "${JOURNALD_DROPIN}: journal kept on disk in /var/log/journal (2 GB cap from the next boot)."
+echo "${JOURNALD_DROPIN}: journal kept on disk in /var/log/journal (4 GB cap; restart systemd-journald or reboot to apply a changed cap)."
 
 # ── Units ────────────────────────────────────────────────────────────
 if [[ "${MODE}" == units ]]; then
